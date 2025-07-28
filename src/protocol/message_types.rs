@@ -211,7 +211,7 @@ pub enum MessageType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SocketMessage {
     /// Message type
-    pub r#type: MessageType,
+    pub message_type: MessageType,
     
     /// Encoded payload
     pub payload: Vec<u8>,
@@ -222,7 +222,7 @@ impl SocketMessage {
     pub fn command(command: SocketCommand) -> Result<Self, serde_json::Error> {
         let payload = serde_json::to_vec(&command)?;
         Ok(Self {
-            r#type: MessageType::Command,
+            message_type: MessageType::Command,
             payload,
         })
     }
@@ -231,14 +231,14 @@ impl SocketMessage {
     pub fn response(response: SocketResponse) -> Result<Self, serde_json::Error> {
         let payload = serde_json::to_vec(&response)?;
         Ok(Self {
-            r#type: MessageType::Response,
+            message_type: MessageType::Response,
             payload,
         })
     }
     
     /// Decode command from payload
     pub fn decode_command(&self) -> Result<SocketCommand, serde_json::Error> {
-        if self.r#type != MessageType::Command {
+        if self.message_type != MessageType::Command {
             return Err(serde_json::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Message is not a command"
@@ -249,7 +249,7 @@ impl SocketMessage {
     
     /// Decode response from payload
     pub fn decode_response(&self) -> Result<SocketResponse, serde_json::Error> {
-        if self.r#type != MessageType::Response {
+        if self.message_type != MessageType::Response {
             return Err(serde_json::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Message is not a response"
@@ -270,7 +270,7 @@ impl SocketMessage {
         }
         
         // Try to decode based on type to ensure payload is valid
-        match self.r#type {
+        match self.message_type {
             MessageType::Command => {
                 let command = self.decode_command()
                     .map_err(|e| SocketError::ValidationFailed(format!("Invalid command payload: {}", e)))?;
@@ -384,7 +384,7 @@ mod tests {
         
         let message = SocketMessage::command(command.clone()).unwrap();
         
-        assert_eq!(message.r#type, MessageType::Command);
+        assert_eq!(message.message_type, MessageType::Command);
         assert!(!message.payload.is_empty());
         
         let decoded_command = message.decode_command().unwrap();
@@ -402,7 +402,7 @@ mod tests {
         
         let message = SocketMessage::response(response.clone()).unwrap();
         
-        assert_eq!(message.r#type, MessageType::Response);
+        assert_eq!(message.message_type, MessageType::Response);
         assert!(!message.payload.is_empty());
         
         let decoded_response = message.decode_response().unwrap();
@@ -424,7 +424,7 @@ mod tests {
         
         // Test invalid message
         let invalid_message = SocketMessage {
-            r#type: MessageType::Command,
+            message_type: MessageType::Command,
             payload: Vec::new(), // Empty payload
         };
         

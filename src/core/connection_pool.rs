@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Connection pool for managing Unix socket connections (exact Swift behavior)
+#[derive(Debug)]
 pub struct ConnectionPool {
     socket_path: String,
     config: UnixSockApiClientConfig,

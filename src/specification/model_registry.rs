@@ -72,6 +72,11 @@ impl ApiSpecification {
     pub fn has_command(&self, channel_id: &str, command_name: &str) -> bool {
         self.get_command_spec(channel_id, command_name).is_some()
     }
+    
+    /// Check if channel exists
+    pub fn has_channel(&self, channel_id: &str) -> bool {
+        self.channels.contains_key(channel_id)
+    }
 }
 
 /// Channel specification

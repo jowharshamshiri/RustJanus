@@ -1,18 +1,45 @@
 use crate::specification::ApiSpecification;
 use crate::config::UnixSockApiClientConfig;
 use crate::error::{UnixSockApiError, Result};
-use crate::protocol::{SocketCommand, SocketResponse, TimeoutHandler};
-use crate::core::SecurityValidator;
+use crate::protocol::{SocketCommand, SocketResponse, SocketMessage, MessageType, TimeoutHandler};
+use crate::core::{SecurityValidator, ConnectionPool, UnixSocketClient};
 use std::collections::HashMap;
 use std::time::Duration;
+use std::sync::Arc;
+use tokio::sync::{Mutex, oneshot};
+use tokio::time::timeout;
+use uuid::Uuid;
+
+/// Command handler type for async command processing
+pub type CommandHandler = Arc<dyn Fn(SocketCommand, Option<HashMap<String, serde_json::Value>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::result::Result<Option<HashMap<String, serde_json::Value>>, UnixSockApiError>> + Send>> + Send + Sync>;
+
+/// Response tracker for stateless commands
+#[derive(Debug)]
+struct ResponseTracker {
+    command_id: String,
+    channel_id: String,
+    sender: oneshot::Sender<SocketResponse>,
+    created_at: std::time::Instant,
+    timeout: Duration,
+}
+
+impl ResponseTracker {
+    fn is_expired(&self) -> bool {
+        self.created_at.elapsed() > self.timeout
+    }
+}
 
 /// Main UnixSockApiClient (exact SwiftUnixSockAPI parity)
-#[derive(Debug)]
 pub struct UnixSockApiClient {
     socket_path: String,
     channel_id: String,
     api_spec: ApiSpecification,
     config: UnixSockApiClientConfig,
+    connection_pool: Arc<ConnectionPool>,
+    command_handlers: Arc<Mutex<HashMap<String, CommandHandler>>>,
+    pending_commands: Arc<Mutex<HashMap<String, oneshot::Sender<SocketResponse>>>>,
+    response_trackers: Arc<Mutex<HashMap<String, ResponseTracker>>>,
+    persistent_connection: Arc<Mutex<Option<UnixSocketClient>>>,
 }
 
 impl UnixSockApiClient {
@@ -32,12 +59,24 @@ impl UnixSockApiClient {
         // Validate configuration
         config.validate()
             .map_err(|e| UnixSockApiError::ValidationError(e))?;
+            
+        // Validate that the channel exists in the API spec
+        if !api_spec.has_channel(&channel_id) {
+            return Err(UnixSockApiError::InvalidChannel(channel_id));
+        }
+        
+        let connection_pool = Arc::new(ConnectionPool::new(socket_path.clone(), config.clone()));
         
         Ok(Self {
             socket_path,
             channel_id,
             api_spec,
             config,
+            connection_pool,
+            command_handlers: Arc::new(Mutex::new(HashMap::new())),
+            pending_commands: Arc::new(Mutex::new(HashMap::new())),
+            response_trackers: Arc::new(Mutex::new(HashMap::new())),
+            persistent_connection: Arc::new(Mutex::new(None)),
         })
     }
     
@@ -46,8 +85,8 @@ impl UnixSockApiClient {
         &self,
         command_name: &str,
         args: Option<HashMap<String, serde_json::Value>>,
-        timeout: Duration,
-        _on_timeout: Option<TimeoutHandler>,
+        timeout_duration: Duration,
+        on_timeout: Option<TimeoutHandler>,
     ) -> Result<SocketResponse> {
         // Validate command name
         SecurityValidator::validate_command_name(command_name, &self.config)?;
@@ -55,21 +94,80 @@ impl UnixSockApiClient {
         // Validate arguments size
         SecurityValidator::validate_args_size(&args, &self.config)?;
         
-        // Create command
+        // Validate command against API spec
+        self.validate_command(command_name, &args)?;
+        
+        // Check pending command limit
+        {
+            let pending = self.pending_commands.lock().await;
+            if pending.len() >= self.config.max_pending_commands {
+                return Err(UnixSockApiError::ResourceLimit(
+                    "Maximum pending commands exceeded".to_string()
+                ));
+            }
+        }
+        
+        let command_id = Uuid::new_v4().to_string();
         let command = SocketCommand::new(
             self.channel_id.clone(),
             command_name.to_string(),
             args,
-            Some(timeout.as_secs_f64()),
+            Some(timeout_duration.as_secs_f64()),
         );
         
-        // For now, return a mock response
-        // TODO: Implement actual command execution
-        Ok(SocketResponse::success(
-            command.id,
-            self.channel_id.clone(),
-            Some(serde_json::json!({"mock": "response"})),
-        ))
+        // Get connection from pool
+        let socket_client = self.connection_pool.borrow_connection().await?;
+        
+        // Create response channel
+        let (tx, rx) = oneshot::channel();
+        
+        // Register pending command
+        {
+            let mut pending = self.pending_commands.lock().await;
+            pending.insert(command_id.clone(), tx);
+        }
+        
+        // Create message
+        let message = SocketMessage {
+            message_type: MessageType::Command,
+            payload: serde_json::to_vec(&command)
+                .map_err(|e| UnixSockApiError::EncodingFailed(e.to_string()))?,
+        };
+        
+        let message_data = serde_json::to_vec(&message)
+            .map_err(|e| UnixSockApiError::EncodingFailed(e.to_string()))?;
+        
+        // Send command and wait for response with timeout
+        let result = timeout(timeout_duration, async {
+            // Send message
+            socket_client.send_message(&message_data).await?;
+            
+            // Wait for response
+            rx.await.map_err(|_| UnixSockApiError::CommandTimeout(
+                command_id.clone(),
+                timeout_duration
+            ))
+        }).await;
+        
+        // Return connection to pool
+        self.connection_pool.return_connection(socket_client).await;
+        
+        // Clean up pending command
+        {
+            let mut pending = self.pending_commands.lock().await;
+            pending.remove(&command_id);
+        }
+        
+        match result {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(e)) => Err(e),
+            Err(_) => {
+                if let Some(handler) = on_timeout {
+                    handler(command_id.clone(), timeout_duration);
+                }
+                Err(UnixSockApiError::CommandTimeout(command_id, timeout_duration))
+            }
+        }
     }
     
     /// Publish a command without waiting for response
@@ -84,7 +182,10 @@ impl UnixSockApiClient {
         // Validate arguments size
         SecurityValidator::validate_args_size(&args, &self.config)?;
         
-        // Create command
+        // Validate command against API spec
+        self.validate_command(command_name, &args)?;
+        
+        let command_id = Uuid::new_v4().to_string();
         let command = SocketCommand::new(
             self.channel_id.clone(),
             command_name.to_string(),
@@ -92,23 +193,77 @@ impl UnixSockApiClient {
             None,
         );
         
-        // TODO: Implement actual command publishing
-        Ok(command.id)
+        // Create ephemeral connection for fire-and-forget
+        let socket_client = UnixSocketClient::new(
+            self.socket_path.clone(),
+            self.config.clone()
+        )?;
+        
+        // Create message
+        let message = SocketMessage {
+            message_type: MessageType::Command,
+            payload: serde_json::to_vec(&command)
+                .map_err(|e| UnixSockApiError::EncodingFailed(e.to_string()))?,
+        };
+        
+        let message_data = serde_json::to_vec(&message)
+            .map_err(|e| UnixSockApiError::EncodingFailed(e.to_string()))?;
+        
+        // Send without waiting for response
+        socket_client.send_message_no_response(&message_data).await?;
+        
+        Ok(command_id)
     }
     
     /// Register a command handler
     pub async fn register_command_handler(
         &self,
-        _command_name: &str,
-        _handler: crate::protocol::CommandHandler,
+        command_name: &str,
+        handler: CommandHandler,
     ) -> Result<()> {
-        // TODO: Implement handler registration
+        // Validate command name
+        SecurityValidator::validate_command_name(command_name, &self.config)?;
+        
+        // Check handler limit
+        {
+            let handlers = self.command_handlers.lock().await;
+            if handlers.len() >= self.config.max_command_handlers {
+                return Err(UnixSockApiError::ResourceLimit(
+                    "Maximum command handlers exceeded".to_string()
+                ));
+            }
+        }
+        
+        // Validate that the command exists in the API spec
+        if !self.api_spec.has_command(&self.channel_id, command_name) {
+            return Err(UnixSockApiError::UnknownCommand(command_name.to_string()));
+        }
+        
+        // Register handler
+        {
+            let mut handlers = self.command_handlers.lock().await;
+            handlers.insert(command_name.to_string(), handler);
+        }
+        
         Ok(())
     }
     
     /// Start listening for commands
     pub async fn start_listening(&self) -> Result<()> {
-        // TODO: Implement persistent listening
+        let socket_client = UnixSocketClient::new(
+            self.socket_path.clone(),
+            self.config.clone()
+        )?;
+        
+        // Store persistent connection
+        {
+            let mut persistent = self.persistent_connection.lock().await;
+            *persistent = Some(socket_client);
+        }
+        
+        // Start message handling loop
+        self.start_message_handling_loop().await?;
+        
         Ok(())
     }
     
@@ -120,5 +275,126 @@ impl UnixSockApiClient {
     /// Get specification
     pub fn specification(&self) -> &ApiSpecification {
         &self.api_spec
+    }
+    
+    /// Validate command against API specification
+    fn validate_command(
+        &self,
+        command_name: &str,
+        _args: &Option<HashMap<String, serde_json::Value>>
+    ) -> Result<()> {
+        if !self.api_spec.has_command(&self.channel_id, command_name) {
+            return Err(UnixSockApiError::UnknownCommand(command_name.to_string()));
+        }
+        
+        // Additional validation could be added here for required arguments
+        // based on the API specification
+        
+        Ok(())
+    }
+    
+    /// Start the message handling loop for persistent listening
+    async fn start_message_handling_loop(&self) -> Result<()> {
+        // This would typically run in a background task
+        // For now, we'll just set up the infrastructure
+        
+        // Clean up expired trackers periodically
+        self.cleanup_expired_trackers().await;
+        
+        Ok(())
+    }
+    
+    /// Clean up expired response trackers
+    async fn cleanup_expired_trackers(&self) {
+        let mut trackers = self.response_trackers.lock().await;
+        let expired_ids: Vec<String> = trackers
+            .iter()
+            .filter(|(_, tracker)| tracker.is_expired())
+            .map(|(id, _)| id.clone())
+            .collect();
+            
+        for id in expired_ids {
+            trackers.remove(&id);
+        }
+    }
+    
+    /// Handle incoming messages from the socket
+    async fn handle_incoming_message(&self, data: &[u8]) -> Result<()> {
+        let message: SocketMessage = serde_json::from_slice(data)
+            .map_err(|e| UnixSockApiError::DecodingFailed(e.to_string()))?;
+            
+        match message.message_type {
+            MessageType::Command => self.handle_incoming_command(&message.payload).await,
+            MessageType::Response => self.handle_incoming_response(&message.payload).await,
+        }
+    }
+    
+    /// Handle incoming command messages
+    async fn handle_incoming_command(&self, payload: &[u8]) -> Result<()> {
+        let command: SocketCommand = serde_json::from_slice(payload)
+            .map_err(|e| UnixSockApiError::DecodingFailed(e.to_string()))?;
+            
+        // Only process commands for our channel
+        if command.channel_id != self.channel_id {
+            return Ok(());
+        }
+        
+        // Check if we have a handler for this command
+        let handler = {
+            let handlers = self.command_handlers.lock().await;
+            handlers.get(&command.command).cloned()
+        };
+        
+        if let Some(handler) = handler {
+            // Execute command handler
+            let result = if let Some(timeout_secs) = command.timeout {
+                let timeout_duration = Duration::from_secs_f64(timeout_secs);
+                timeout(timeout_duration, handler(command.clone(), command.args.clone())).await
+                    .map_err(|_| UnixSockApiError::HandlerTimeout(
+                        command.id.clone(),
+                        timeout_duration
+                    ))?
+            } else {
+                handler(command.clone(), command.args.clone()).await
+            };
+            
+            match result {
+                Ok(_response_data) => {
+                    println!("Command '{}' executed successfully", command.command);
+                    // Response would be sent back via the socket
+                }
+                Err(e) => {
+                    println!("Command '{}' failed: {:?}", command.command, e);
+                    // Error response would be sent back via the socket
+                }
+            }
+        } else {
+            println!("Unknown command '{}' received on channel '{}'", command.command, self.channel_id);
+        }
+        
+        Ok(())
+    }
+    
+    /// Handle incoming response messages
+    async fn handle_incoming_response(&self, payload: &[u8]) -> Result<()> {
+        let response: SocketResponse = serde_json::from_slice(payload)
+            .map_err(|e| UnixSockApiError::DecodingFailed(e.to_string()))?;
+            
+        // Only process responses for our channel
+        if response.channel_id != self.channel_id {
+            return Ok(());
+        }
+        
+        // Route response to the correct pending command
+        let sender = {
+            let mut pending = self.pending_commands.lock().await;
+            pending.remove(&response.command_id)
+        };
+        
+        if let Some(sender) = sender {
+            let _ = sender.send(response);
+        }
+        
+        Ok(())
     }
 }

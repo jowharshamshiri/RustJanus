@@ -97,6 +97,20 @@ pub use serde::{Deserialize, Serialize};
 pub use serde_json::{Value as JsonValue, json};
 pub use chrono::{DateTime, Utc};
 
+/// Prelude module for convenient importing
+pub mod prelude {
+    pub use crate::{
+        UnixSockApiClient, ApiSpecification, UnixSockApiClientConfig,
+        SocketCommand, SocketResponse, SocketMessage, MessageType,
+        UnixSocketClient, ConnectionPool, SecurityValidator,
+        UnixSockApiError, SocketError, Result,
+        ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,
+        CommandHandler, TimeoutHandler,
+        Deserialize, Serialize, JsonValue, json,
+        DateTime, Utc,
+    };
+}
+
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

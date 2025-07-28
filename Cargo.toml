@@ -51,6 +51,14 @@ env_logger = "0.10"
 name = "rs_unix_sock_comms"
 path = "src/lib.rs"
 
+[[bin]]
+name = "server"
+path = "examples/simple_server.rs"
+
+[[bin]]
+name = "client"
+path = "examples/simple_client.rs"
+
 # Benchmarks (to be implemented)
 # [[bench]]
 # name = "performance_benchmarks"
