@@ -10,6 +10,7 @@ pub struct SocketCommand {
     pub id: String,
     
     /// Channel ID for routing
+    #[serde(rename = "channelId")]
     pub channel_id: String,
     
     /// Command name
@@ -99,9 +100,11 @@ impl SocketCommand {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SocketResponse {
     /// Command ID for correlation
+    #[serde(rename = "commandId")]
     pub command_id: String,
     
     /// Channel ID for verification
+    #[serde(rename = "channelId")]
     pub channel_id: String,
     
     /// Success/failure flag

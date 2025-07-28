@@ -2,6 +2,7 @@ use crate::specification::ApiSpecification;
 use crate::config::UnixSockApiClientConfig;
 use crate::error::{UnixSockApiError, Result};
 use crate::protocol::{SocketCommand, SocketResponse, SocketMessage, MessageType, TimeoutHandler};
+use crate::error::SocketError;
 use crate::core::{SecurityValidator, ConnectionPool, UnixSocketClient};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -249,7 +250,58 @@ impl UnixSockApiClient {
     }
     
     /// Start listening for commands
+    /// Logic: if handlers registered -> create server socket, if no handlers -> client mode
     pub async fn start_listening(&self) -> Result<()> {
+        // Check if we have handlers registered (expecting requests mode)
+        let has_handlers = {
+            let handlers = self.command_handlers.lock().await;
+            !handlers.is_empty()
+        };
+        
+        if has_handlers {
+            // Server mode: create Unix domain socket server and listen for connections
+            self.start_server_mode().await
+        } else {
+            // Client mode: connect to existing socket for receiving responses
+            self.start_client_mode().await
+        }
+    }
+    
+    /// Server mode: create Unix domain socket server and listen for connections
+    async fn start_server_mode(&self) -> Result<()> {
+        use tokio::net::UnixListener;
+        
+        // Remove existing socket file if it exists
+        let _ = std::fs::remove_file(&self.socket_path);
+        
+        // Create Unix domain socket listener
+        let listener = UnixListener::bind(&self.socket_path)
+            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to bind server socket: {}", e)))?;
+        
+        // Accept connections in background task
+        let channel_id = self.channel_id.clone();
+        let handlers = self.command_handlers.clone();
+        
+        tokio::spawn(async move {
+            loop {
+                match listener.accept().await {
+                    Ok((stream, _)) => {
+                        let channel_id_clone = channel_id.clone();
+                        let handlers_clone = handlers.clone();
+                        tokio::spawn(async move {
+                            Self::handle_server_connection(stream, channel_id_clone, handlers_clone).await;
+                        });
+                    },
+                    Err(_) => break,
+                }
+            }
+        });
+        
+        Ok(())
+    }
+    
+    /// Client mode: connect to existing socket for receiving responses
+    async fn start_client_mode(&self) -> Result<()> {
         let socket_client = UnixSocketClient::new(
             self.socket_path.clone(),
             self.config.clone()
@@ -265,6 +317,81 @@ impl UnixSockApiClient {
         self.start_message_handling_loop().await?;
         
         Ok(())
+    }
+    
+    /// Handle incoming connections in server mode
+    async fn handle_server_connection(
+        mut stream: tokio::net::UnixStream,
+        channel_id: String,
+        handlers: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, CommandHandler>>>,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use crate::core::message_framing::MessageFrame;
+        
+        loop {
+            // Read framed message
+            let data = match MessageFrame::read_frame(&mut stream).await {
+                Ok(data) => data,
+                Err(_) => break, // Connection closed or error
+            };
+            
+            // Try to parse as SocketCommand directly (Go sends raw commands)
+            match serde_json::from_slice::<SocketCommand>(&data) {
+                Ok(command) => {
+                    // Only process commands for our channel
+                    if command.channel_id == channel_id {
+                        // Get handler
+                        let handler = {
+                                    let handlers_lock = handlers.lock().await;
+                                    handlers_lock.get(&command.command).cloned()
+                        };
+                        
+                        if let Some(handler) = handler {
+                            // Execute handler
+                            let args = command.args.clone();
+                            let result = handler(command.clone(), args).await;
+                            
+                            // Create response
+                            let response = match result {
+                                Ok(Some(result)) => SocketResponse {
+                                    command_id: command.id.clone(),
+                                    channel_id: command.channel_id.clone(),
+                                    success: true,
+                                    result: Some(serde_json::Value::Object(result.into_iter().collect())),
+                                    error: None,
+                                    timestamp: chrono::Utc::now(),
+                                },
+                                Ok(None) => SocketResponse {
+                                    command_id: command.id.clone(),
+                                    channel_id: command.channel_id.clone(),
+                                    success: true,
+                                    result: None,
+                                    error: None,
+                                    timestamp: chrono::Utc::now(),
+                                },
+                                Err(e) => SocketResponse {
+                                    command_id: command.id.clone(),
+                                    channel_id: command.channel_id.clone(),
+                                    success: false,
+                                    result: None,
+                                    error: Some(SocketError::ProcessingError(e.to_string())),
+                                    timestamp: chrono::Utc::now(),
+                                },
+                            };
+                            
+                            // Send response directly (Go expects raw response, not wrapped in SocketMessage)
+                            let response_data = serde_json::to_vec(&response).unwrap_or_default();
+                            
+                            // Write framed response
+                            let _ = MessageFrame::write_frame(&mut stream, &response_data).await;
+                        }
+                    }
+                },
+                Err(_) => {
+                    // Invalid message format, ignore
+                }
+            }
+        }
     }
     
     /// Get configuration

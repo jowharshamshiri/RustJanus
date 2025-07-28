@@ -82,6 +82,10 @@ impl ApiSpecification {
 /// Channel specification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChannelSpec {
+    /// Channel name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    
     /// Channel description
     pub description: String,
     
@@ -93,6 +97,7 @@ impl ChannelSpec {
     /// Create a new channel specification
     pub fn new(description: String) -> Self {
         Self {
+            name: None,
             description,
             commands: HashMap::new(),
         }
@@ -117,10 +122,15 @@ impl ChannelSpec {
 /// Command specification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CommandSpec {
+    /// Command name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    
     /// Command description
     pub description: String,
     
     /// Argument definitions
+    #[serde(default)]
     pub args: HashMap<String, ArgumentSpec>,
     
     /// Response specification
@@ -134,6 +144,7 @@ impl CommandSpec {
     /// Create a new command specification
     pub fn new(description: String, response: ResponseSpec) -> Self {
         Self {
+            name: None,
             description,
             args: HashMap::new(),
             response,

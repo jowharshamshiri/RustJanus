@@ -1,5 +1,6 @@
 use rs_unix_sock_comms::prelude::*;
 use rs_unix_sock_comms::protocol::unix_sock_api_client::CommandHandler;
+use rs_unix_sock_comms::ApiSpecificationParser;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::signal;
@@ -8,7 +9,9 @@ use tokio::signal;
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
-    let socket_path = if args.len() > 2 && args[1] == "--socket-path" {
+    let socket_path = if args.len() > 1 && args[1].starts_with("--socket-path=") {
+        args[1].trim_start_matches("--socket-path=").to_string()
+    } else if args.len() > 2 && args[1] == "--socket-path" {
         args[2].clone()
     } else {
         "/tmp/rust_test_server.sock".to_string()
@@ -19,35 +22,17 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Remove existing socket file
     let _ = std::fs::remove_file(&socket_path);
 
-    // Create API specification
-    let mut spec = ApiSpecification::new("1.0.0".to_string());
-    let mut channel = ChannelSpec::new("Test channel".to_string());
+    // Load API specification from file
+    let spec_path = if args.len() > 1 && args[1].starts_with("--spec=") {
+        args[1].trim_start_matches("--spec=").to_string()
+    } else if args.len() > 3 && args[2] == "--spec" {
+        args[3].clone()
+    } else {
+        "test-api-spec.json".to_string()
+    };
     
-    // Add ping command
-    let ping_response = ResponseSpec::new("object".to_string())
-        .with_properties({
-            let mut props = HashMap::new();
-            props.insert("pong".to_string(), ArgumentSpec::new("boolean".to_string())
-                .with_description("Ping response".to_string()));
-            props.insert("timestamp".to_string(), ArgumentSpec::new("string".to_string())
-                .with_description("Response timestamp".to_string()));
-            props
-        });
-    let ping_cmd = CommandSpec::new("Simple ping command".to_string(), ping_response);
-    channel.commands.insert("ping".to_string(), ping_cmd);
-    
-    // Add echo command
-    let echo_response = ResponseSpec::new("object".to_string())
-        .with_properties({
-            let mut props = HashMap::new();
-            props.insert("echo".to_string(), ArgumentSpec::new("string".to_string())
-                .with_description("Echoed message".to_string()));
-            props
-        });
-    let echo_cmd = CommandSpec::new("Echo back input".to_string(), echo_response);
-    channel.commands.insert("echo".to_string(), echo_cmd);
-    
-    spec.add_channel("test".to_string(), channel);
+    let spec_data = std::fs::read_to_string(&spec_path)?;
+    let spec = ApiSpecificationParser::from_json(&spec_data)?;
 
     // Create configuration
     let config = UnixSockApiClientConfig::default();
