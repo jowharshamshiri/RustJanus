@@ -14,7 +14,7 @@ async fn test_high_concurrency_command_execution() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -75,7 +75,7 @@ async fn test_concurrent_client_creation() {
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
-            UnixSockApiClient::new(
+            UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
                 api_spec_clone,
@@ -108,7 +108,7 @@ async fn test_concurrent_handler_registration() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -153,7 +153,7 @@ async fn test_concurrent_connection_pool_usage() {
     config.max_concurrent_connections = 10; // Limited pool
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -205,7 +205,7 @@ async fn test_concurrent_state_modification() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -248,7 +248,7 @@ async fn test_concurrent_connection_management() {
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
-            let client = UnixSockApiClient::new(
+            let client = UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
                 api_spec_clone,
@@ -285,7 +285,7 @@ async fn test_thread_safety_of_configuration() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -314,7 +314,7 @@ async fn test_thread_safety_of_api_spec_access() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -342,7 +342,7 @@ async fn test_no_deadlock_under_load() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -394,7 +394,7 @@ async fn test_no_deadlock_with_mixed_operations() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -463,7 +463,7 @@ async fn test_memory_safety_under_concurrent_access() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
@@ -519,7 +519,7 @@ async fn test_concurrent_resource_cleanup() {
         
         tasks.push(tokio::spawn(async move {
             // Create client
-            let client = UnixSockApiClient::new(
+            let client = UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 format!("cleanup_channel_{}", i),
                 api_spec_clone,
@@ -563,7 +563,7 @@ async fn test_connection_pool_thread_safety() {
     config.max_concurrent_connections = 5; // Small pool for contention
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiClient::new(
+    let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,

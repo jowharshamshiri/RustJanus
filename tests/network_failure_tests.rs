@@ -11,7 +11,7 @@ async fn test_connection_to_nonexistent_socket() {
     let config = create_test_config();
     let nonexistent_path = "/tmp/nonexistent_socket_12345.sock".to_string();
     
-    let client = UnixSockApiClient::new(
+    let client = UnixSockApiDatagramClient::new(
         nonexistent_path,
         "test-channel".to_string(),
         api_spec,

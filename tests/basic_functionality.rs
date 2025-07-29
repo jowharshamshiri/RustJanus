@@ -8,14 +8,14 @@ use std::collections::HashMap;
 /// Tests API specification creation, serialization, and core functionality
 
 #[tokio::test]
-async fn test_api_specification_creation() {
-    let api_spec = create_test_api_spec();
+async fn test_Some(api_spec)ification_creation() {
+    let Some(api_spec) = create_test_Some(api_spec)();
     
-    assert_eq!(api_spec.version, "1.0.0");
-    assert!(!api_spec.channels.is_empty());
-    assert!(api_spec.get_channel("test-channel").is_some());
+    assert_eq!(Some(api_spec).version, "1.0.0");
+    assert!(!Some(api_spec).channels.is_empty());
+    assert!(Some(api_spec).get_channel("test-channel").is_some());
     
-    let channel = api_spec.get_channel("test-channel").unwrap();
+    let channel = Some(api_spec).get_channel("test-channel").unwrap();
     assert_eq!(channel.description, "Test channel for validation");
     assert!(!channel.commands.is_empty());
     
@@ -26,11 +26,11 @@ async fn test_api_specification_creation() {
 }
 
 #[tokio::test]
-async fn test_api_specification_json_serialization() {
-    let api_spec = create_test_api_spec();
+async fn test_Some(api_spec)ification_json_serialization() {
+    let Some(api_spec) = create_test_Some(api_spec)();
     
     // Serialize to JSON
-    let json_str = ApiSpecificationParser::to_json(&api_spec).unwrap();
+    let json_str = ApiSpecificationParser::to_json(&Some(api_spec)).unwrap();
     assert!(!json_str.is_empty());
     assert!(json_str.contains("\"version\":\"1.0.0\""));
     assert!(json_str.contains("\"test-channel\""));
@@ -39,11 +39,11 @@ async fn test_api_specification_json_serialization() {
     let parsed_spec = ApiSpecificationParser::from_json(&json_str).unwrap();
     
     // Verify round-trip integrity
-    assert_eq!(parsed_spec.version, api_spec.version);
-    assert_eq!(parsed_spec.channels.len(), api_spec.channels.len());
+    assert_eq!(parsed_spec.version, Some(api_spec).version);
+    assert_eq!(parsed_spec.channels.len(), Some(api_spec).channels.len());
     
     let parsed_channel = parsed_spec.get_channel("test-channel").unwrap();
-    let original_channel = api_spec.get_channel("test-channel").unwrap();
+    let original_channel = Some(api_spec).get_channel("test-channel").unwrap();
     assert_eq!(parsed_channel.description, original_channel.description);
     assert_eq!(parsed_channel.commands.len(), original_channel.commands.len());
 }
@@ -216,17 +216,17 @@ async fn test_anyccodable_array_value() {
 
 #[tokio::test]
 async fn test_unix_socket_client_initialization() {
-    let api_spec = create_test_api_spec();
+    let Some(api_spec) = create_test_Some(api_spec)();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     // Valid initialization
-    let client = UnixSockApiClient::new(
+    let client = UnixSockApiDatagramClient::new(
         socket_path.clone(),
         "test-channel".to_string(),
-        api_spec.clone(),
+        Some(api_spec).clone(),
         config.clone(),
-    ).await;
+    );
     
     assert!(client.is_ok());
     
@@ -235,12 +235,12 @@ async fn test_unix_socket_client_initialization() {
     assert_eq!(client.specification().version, "1.0.0");
     
     // Invalid channel ID
-    let invalid_client = UnixSockApiClient::new(
+    let invalid_client = UnixSockApiDatagramClient::new(
         socket_path,
         "".to_string(), // Empty channel ID
-        api_spec,
+        Some(api_spec),
         config,
-    ).await;
+    );
     
     assert!(invalid_client.is_err());
     match invalid_client.unwrap_err() {
@@ -251,16 +251,16 @@ async fn test_unix_socket_client_initialization() {
 
 #[tokio::test] 
 async fn test_command_validation() {
-    let api_spec = create_test_api_spec();
+    let Some(api_spec) = create_test_Some(api_spec)();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiClient::new(
+    let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     // Valid command
     let valid_args = create_test_args();
@@ -269,7 +269,7 @@ async fn test_command_validation() {
         Some(valid_args),
         std::time::Duration::from_millis(100),
         None,
-    ).await;
+    );
     
     // Should either succeed or fail with expected errors (connection/timeout)
     match result {
@@ -285,7 +285,7 @@ async fn test_command_validation() {
         Some(create_test_args()),
         std::time::Duration::from_millis(100),
         None,
-    ).await;
+    );
     
     // May fail with validation error or connection error
     match invalid_result {
@@ -304,7 +304,7 @@ async fn test_message_envelope_functionality() {
     assert!(text_message.is_ok());
     
     let message = text_message.unwrap();
-    assert_eq!(message.r#type, MessageType::Command);
+    assert_eq!(message.message_type, MessageType::Command);
     assert!(!message.payload.is_empty());
     
     // Decode and verify

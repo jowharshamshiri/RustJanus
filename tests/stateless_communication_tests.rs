@@ -12,7 +12,7 @@ async fn test_stateless_command_validation() {
     let socket_path = create_valid_socket_path();
     
     // Command validation should work without connection
-    let client = UnixSockApiClient::new(
+    let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         api_spec,
