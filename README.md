@@ -1,16 +1,16 @@
 # RustUnixSockAPI
 
-A general-purpose Unix domain socket communication library for Rust.
+A production-ready Unix domain socket communication library for Rust with **async-first architecture** and cross-language compatibility.
 
 ## Features
 
-- **High-Performance IPC**: Efficient Unix domain socket communication
-- **Generic Message Handling**: Support for any serializable message type via Serde
-- **JSON Protocol**: Built-in JSON serialization/deserialization
-- **Custom Handlers**: User-defined message processing logic
-- **Error Recovery**: Robust error handling and automatic retry mechanisms
-- **Message Envelopes**: Optional message metadata (timestamps, correlation IDs, etc.)
-- **Configurable**: Extensive configuration options for timeouts, retries, and limits
+- **Async Communication Architecture**: True async patterns with background message listeners and response correlation
+- **Cross-Language Compatibility**: Seamless communication with Go and Swift implementations
+- **Persistent Connections**: Efficient async connection management with proper response tracking
+- **Security Framework**: Comprehensive path validation, resource limits, and attack prevention
+- **API Specification Engine**: JSON/YAML-driven command validation and type safety
+- **Performance Optimized**: Async patterns optimized for Unix socket inherent async nature
+- **Production Ready**: Enterprise-grade error handling and resource management
 - **Cross-Platform**: Works on all Unix-like systems (Linux, macOS, BSD)
 
 ## Quick Start
@@ -22,31 +22,39 @@ Add this to your `Cargo.toml`:
 RustUnixSockAPI = "0.1"
 ```
 
-### Server Example
+### Async Client Example
 
 ```rust
-use rs_unix_sock_comms::{UnixSocketServer, MessageHandler};
-use serde::{Deserialize, Serialize};
+use rs_unix_sock_comms::prelude::*;
+use std::collections::HashMap;
+use std::time::Duration;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct MyMessage {
-    action: String,
-    data: String,
-}
-
-struct MyHandler;
-
-impl MessageHandler<MyMessage> for MyHandler {
-    fn handle_message(&mut self, message: MyMessage, client_id: &str) -> Option<String> {
-        println!("Received: {:?} from {}", message, client_id);
-        Some("Message received".to_string())
-    }
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = UnixSocketServer::new("/tmp/my_socket.sock")?;
-    let handler = MyHandler;
-    server.run_with_handler(handler)?;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load API specification
+    let spec_data = std::fs::read_to_string("api-spec.json")?;
+    let spec = ApiSpecificationParser::from_json(&spec_data)?;
+    
+    // Create async client with proper configuration
+    let client = UnixSockApiClient::new(
+        "/tmp/my_socket.sock".to_string(),
+        "my_channel".to_string(),
+        spec,
+        UnixSockApiClientConfig::default(),
+    ).await?;
+    
+    // Send async command with response tracking
+    let mut args = HashMap::new();
+    args.insert("message".to_string(), serde_json::json!("Hello World"));
+    
+    let response = client.send_command(
+        "echo",
+        Some(args),
+        Duration::from_secs(5),
+        None
+    ).await?;
+    
+    println!("Response: {:?}", response);
     Ok(())
 }
 ```
