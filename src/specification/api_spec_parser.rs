@@ -1042,16 +1042,16 @@ mod tests {
         let number_value = serde_json::Value::Number(serde_json::Number::from(42));
 
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &string_value, "string").is_ok()
+            ApiSpecificationParser::validate_value_type("test", &string_value, "string", None).is_ok()
         );
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &number_value, "number").is_ok()
+            ApiSpecificationParser::validate_value_type("test", &number_value, "number", None).is_ok()
         );
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &string_value, "number").is_err()
+            ApiSpecificationParser::validate_value_type("test", &string_value, "number", None).is_err()
         );
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &number_value, "string").is_err()
+            ApiSpecificationParser::validate_value_type("test", &number_value, "string", None).is_err()
         );
     }
 }

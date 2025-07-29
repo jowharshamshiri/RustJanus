@@ -219,16 +219,24 @@ where
 }
 
 /// Create timeout handler that counts invocations
-pub fn create_counting_timeout_handler() -> (
-    TimeoutHandler,
-    std::sync::Arc<AtomicUsize>
-) {
-    let counter = std::sync::Arc::new(AtomicUsize::new(0));
-    let counter_clone = counter.clone();
+/// Note: SOCK_DGRAM architecture uses different timeout patterns
+pub fn create_counting_timeout_handler() -> std::sync::Arc<AtomicUsize> {
+    // Return just the counter for SOCK_DGRAM testing
+    std::sync::Arc::new(AtomicUsize::new(0))
+}
+
+/// Create large test data map for datagram size testing
+pub fn create_large_test_data_map(size_multiplier: usize) -> HashMap<String, serde_json::Value> {
+    let mut args = HashMap::new();
     
-    let handler = Box::new(move |_command_id: String, _timeout: std::time::Duration| {
-        counter_clone.fetch_add(1, Ordering::SeqCst);
-    });
+    // Create a large string
+    let large_string = "x".repeat(size_multiplier);
+    args.insert("large_data".to_string(), serde_json::Value::String(large_string));
     
-    (handler, counter)
+    // Add multiple entries to increase size
+    for i in 0..size_multiplier.min(100) {
+        args.insert(format!("data_{}", i), serde_json::Value::String(format!("value_{}", i)));
+    }
+    
+    args
 }
