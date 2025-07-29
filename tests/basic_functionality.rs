@@ -70,7 +70,7 @@ async fn test_socket_command_serialization() {
     
     // Verify round-trip integrity
     assert_eq!(parsed_command.id, command.id);
-    assert_eq!(parsed_command.channel_id, command.channel_id);
+    assert_eq!(parsed_command.channelId, command.channelId);
     assert_eq!(parsed_command.command, command.command);
     assert_eq!(parsed_command.args, command.args);
     assert_eq!(parsed_command.timeout, command.timeout);
@@ -88,7 +88,7 @@ async fn test_socket_response_serialization() {
     let json_str = serde_json::to_string(&success_response).unwrap();
     let parsed_response: SocketResponse = serde_json::from_str(&json_str).unwrap();
     
-    assert_eq!(parsed_response.command_id, success_response.command_id);
+    assert_eq!(parsed_response.commandId, success_response.commandId);
     assert_eq!(parsed_response.success, true);
     assert!(parsed_response.error.is_none());
     assert!(parsed_response.result.is_some());
@@ -103,7 +103,7 @@ async fn test_socket_response_serialization() {
     let json_str = serde_json::to_string(&error_response).unwrap();
     let parsed_response: SocketResponse = serde_json::from_str(&json_str).unwrap();
     
-    assert_eq!(parsed_response.command_id, error_response.command_id);
+    assert_eq!(parsed_response.commandId, error_response.commandId);
     assert_eq!(parsed_response.success, false);
     assert!(parsed_response.error.is_some());
     assert!(parsed_response.result.is_none());
@@ -309,7 +309,7 @@ async fn test_message_envelope_functionality() {
     
     // Decode and verify
     let command = message.decode_command().unwrap();
-    assert_eq!(command.channel_id, "test-channel");
+    assert_eq!(command.channelId, "test-channel");
     assert_eq!(command.command, "echo");
     assert!(command.args.is_some());
     
@@ -324,8 +324,8 @@ async fn test_message_envelope_functionality() {
     let response_message = success_message.unwrap();
     let response = response_message.decode_response().unwrap();
     assert!(response.success);
-    assert_eq!(response.command_id, "cmd-123");
-    assert_eq!(response.channel_id, "test-channel");
+    assert_eq!(response.commandId, "cmd-123");
+    assert_eq!(response.channelId, "test-channel");
     
     // Test error response
     let error_message = SocketMessage::simple_error("cmd-456", "test-channel", "Something went wrong");
@@ -334,6 +334,6 @@ async fn test_message_envelope_functionality() {
     let error_response_message = error_message.unwrap();
     let error_response = error_response_message.decode_response().unwrap();
     assert!(!error_response.success);
-    assert_eq!(error_response.command_id, "cmd-456");
+    assert_eq!(error_response.commandId, "cmd-456");
     assert!(error_response.error.is_some());
 }

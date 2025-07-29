@@ -385,8 +385,8 @@ mod tests {
             Some(result),
         );
         
-        assert_eq!(response.command_id, "test-id");
-        assert_eq!(response.channel_id, "test-channel");
+        assert_eq!(response.commandId, "test-id");
+        assert_eq!(response.channelId, "test-channel");
         assert!(response.success);
         assert!(response.result.is_some());
         assert!(response.error.is_none());
@@ -426,7 +426,7 @@ mod tests {
         assert!(!message.payload.is_empty());
         
         let decoded_response = message.decode_response().unwrap();
-        assert_eq!(decoded_response.command_id, response.command_id);
+        assert_eq!(decoded_response.commandId, response.commandId);
         assert_eq!(decoded_response.success, response.success);
     }
     
