@@ -16,9 +16,10 @@ pub type CommandHandler = Arc<dyn Fn(SocketCommand, Option<HashMap<String, serde
 
 /// Response tracker for stateless commands
 #[derive(Debug)]
+#[allow(non_snake_case)]
 struct ResponseTracker {
-    command_id: String,
-    channel_id: String,
+    commandId: String,
+    channelId: String,
     sender: oneshot::Sender<SocketResponse>,
     created_at: std::time::Instant,
     timeout: Duration,
@@ -119,7 +120,7 @@ impl UnixSockApiClient {
         );
         
         // Get connection from pool
-        let socket_client = self.connection_pool.borrow_connection().await?;
+        // Connection will be established when needed
         
         // Create response channel
         let (tx, rx) = oneshot::channel();
@@ -142,8 +143,8 @@ impl UnixSockApiClient {
         
         // Send command and wait for response with timeout
         let result = timeout(timeout_duration, async {
-            // Send message
-            socket_client.send_message(&message_data).await?;
+            // Send message via the persistent connection
+            self.send_message_async(&message_data).await?;
             
             // Wait for response
             rx.await.map_err(|_| UnixSockApiError::CommandTimeout(
@@ -151,9 +152,6 @@ impl UnixSockApiClient {
                 timeout_duration
             ))
         }).await;
-        
-        // Return connection to pool
-        self.connection_pool.return_connection(socket_client).await;
         
         // Clean up pending command
         {
@@ -525,5 +523,77 @@ impl UnixSockApiClient {
         }
         
         Ok(())
+    }
+
+    /// Send message through persistent connection (async)
+    async fn send_message_async(&self, message_data: &[u8]) -> Result<()> {
+        let mut connection = self.persistent_connection.lock().await;
+        
+        // Establish connection if needed
+        if connection.is_none() {
+            let socket_client = self.connection_pool.borrow_connection().await?;
+            
+            // Start message listener
+            let client_clone = self.clone();
+            let socket_path = self.socket_path.clone();
+            tokio::spawn(async move {
+                client_clone.message_listener_loop(socket_path).await;
+            });
+            
+            *connection = Some(socket_client);
+        }
+        
+        if let Some(socket) = connection.as_ref() {
+            socket.send_message_no_response(message_data).await?;
+        }
+        
+        Ok(())
+    }
+
+    /// Background message listener loop
+    async fn message_listener_loop(&self, socket_path: String) {
+        use tokio::net::UnixStream;
+        use crate::core::MessageFrame;
+        
+        loop {
+            match UnixStream::connect(&socket_path).await {
+                Ok(mut stream) => {
+                    loop {
+                        match MessageFrame::read_frame(&mut stream).await {
+                            Ok(data) => {
+                                if let Err(e) = self.handle_incoming_message(&data).await {
+                                    eprintln!("Error handling incoming message: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading frame: {:?}", e);
+                                break; // Reconnect
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to connect for message listening: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+}
+
+// Implement Clone for UnixSockApiClient to enable spawning
+impl Clone for UnixSockApiClient {
+    fn clone(&self) -> Self {
+        Self {
+            socket_path: self.socket_path.clone(),
+            channelId: self.channelId.clone(),
+            api_spec: self.api_spec.clone(),
+            config: self.config.clone(),
+            connection_pool: Arc::clone(&self.connection_pool),
+            command_handlers: Arc::clone(&self.command_handlers),
+            pending_commands: Arc::clone(&self.pending_commands),
+            response_trackers: Arc::clone(&self.response_trackers),
+            persistent_connection: Arc::clone(&self.persistent_connection),
+        }
     }
 }
