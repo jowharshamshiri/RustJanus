@@ -22,7 +22,7 @@ async fn test_connection_to_nonexistent_socket() {
         "test-command",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(100)),
-    );
+    ).await;
     
     assert!(result.is_err());
     match result.unwrap_err() {

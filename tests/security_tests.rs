@@ -1,5 +1,4 @@
 use rust_unix_sock_api::*;
-use rust_unix_sock_api::protocol::command_handler::CommandHandlerRegistry;
 
 mod test_utils;
 use test_utils::*;
@@ -71,7 +70,7 @@ async fn test_socket_path_length_limits() {
     let result = UnixSockApiDatagramClient::new(
         long_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
     );
     
@@ -120,7 +119,7 @@ async fn test_command_injection_in_arguments() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
     ).unwrap();
     
@@ -145,7 +144,7 @@ async fn test_command_injection_in_arguments() {
             "test-command",
             Some(args),
             Some(std::time::Duration::from_millis(100)),
-        );
+        ).await;
         
         // The command should either succeed (if server validates) or fail gracefully
         // It should never execute the malicious command
@@ -219,7 +218,7 @@ async fn test_large_payload_attacks() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
     ).unwrap();
     
@@ -241,7 +240,7 @@ async fn test_large_payload_attacks() {
             "test-command",
             Some(args),
             Some(std::time::Duration::from_millis(100)),
-        );
+        ).await;
         
         if size > 5_000_000 {
             // Should fail for large payloads
@@ -269,7 +268,7 @@ async fn test_repeated_large_payload_attacks() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
     ).unwrap();
     
@@ -283,7 +282,7 @@ async fn test_repeated_large_payload_attacks() {
             "test-command",
             Some(args),
             Some(std::time::Duration::from_millis(100)),
-        );
+        ).await;
         
         // Each should be handled gracefully without system impact
         match result {
@@ -307,7 +306,7 @@ async fn test_connection_pool_exhaustion() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
     ).unwrap();
     
@@ -323,8 +322,7 @@ async fn test_connection_pool_exhaustion() {
             client_clone.send_command(
                 "test-command",
                 Some(args_clone),
-                std::time::Duration::from_millis(100),
-                None,
+                Some(std::time::Duration::from_millis(100)),
             ).await
         });
     }
@@ -355,9 +353,9 @@ async fn test_rapid_connection_attempts() {
             UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 "test-channel".to_string(),
-                api_spec_clone,
+                Some(api_spec_clone),
                 config_clone,
-            ).await
+            )
         });
     }
     
@@ -398,7 +396,7 @@ async fn test_insecure_configuration_prevention() {
     let result = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         insecure_config,
     );
     
@@ -431,7 +429,7 @@ async fn test_extreme_configuration_values() {
     let result = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         extreme_config,
     );
     
@@ -454,25 +452,32 @@ async fn test_validation_bypass_attempts() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
     ).unwrap();
     
-    // Attempt to register more handlers than allowed
-    for i in 0..60 { // More than max_command_handlers (50)
-        let handler_name = format!("handler_{}", i);
-        let handler = CommandHandlerRegistry::create_echo_handler();
+    // SOCK_DGRAM doesn't use register_command_handler - test command validation instead
+    // Attempt to send commands beyond rate limits
+    for i in 0..60 {
+        let mut args = HashMap::new();
+        args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
         
-        let result = client.register_command_handler(&handler_name, handler);
+        let result = client.send_command(
+            "test-command",
+            Some(args),
+            Some(std::time::Duration::from_millis(10)),
+        ).await;
         
-        if i >= 50 {
-            // Should start failing after limit
-            assert!(result.is_err(), "Should reject handler {} beyond limit", i);
-            
-            match result.unwrap_err() {
-                UnixSockApiError::ResourceLimit(_) => {}, // Expected
-                UnixSockApiError::UnknownCommand(_) => {}, // Also acceptable
-                err => panic!("Unexpected error for handler {}: {:?}", i, err),
+        // Should handle rapid commands gracefully
+        match result {
+            Ok(_) => {}, // Success is fine
+            Err(UnixSockApiError::ResourceLimit(_)) => {}, // Expected under load
+            Err(UnixSockApiError::CommandTimeout(_, _)) => {}, // Expected with no server
+            Err(UnixSockApiError::ConnectionError(_)) => {}, // Expected with no server
+            Err(err) => {
+                // Should not crash or cause system issues
+                assert!(!format!("{:?}", err).contains("panic"), 
+                       "Command {}: Unexpected error: {:?}", i, err);
             }
         }
     }

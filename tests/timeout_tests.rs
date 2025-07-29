@@ -21,16 +21,15 @@ async fn test_command_with_timeout() {
         config,
     ).unwrap();
     
-    let (timeout_handler, timeout_counter) = create_counting_timeout_handler();
+    let timeout_counter = create_counting_timeout_handler();
     let args = create_test_args();
     
     // 0.1 second timeout (100ms) - should timeout since no server is running
     let result = client.send_command(
         "test-command",
         Some(args),
-        std::time::Duration::from_millis(100),
-        Some(timeout_handler),
-    );
+        Some(std::time::Duration::from_millis(100)),
+    ).await;
     
     // Should timeout
     assert!(result.is_err());
@@ -70,7 +69,7 @@ async fn test_command_timeout_error_message() {
         "test-command",
         Some(args),
         Some(std::time::Duration::from_millis(50)),
-    );
+    ).await;
     
     match result {
         Err(UnixSockApiError::CommandTimeout(command_id, duration)) => {
@@ -164,7 +163,7 @@ async fn test_multiple_commands_with_different_timeouts() {
                 Some(args.clone()),
                 Some(*timeout),
             )
-        );
+        ).await;
         
         match result {
             Err(UnixSockApiError::CommandTimeout(_, actual_timeout)) => {
@@ -256,7 +255,7 @@ async fn test_default_timeout() {
         "test-command",
         Some(args),
         Some(std::time::Duration::from_secs(30)), // Default timeout
-    );
+    ).await;
     
     let elapsed = start_time.elapsed();
     
@@ -297,16 +296,15 @@ async fn test_concurrent_timeouts() {
         let timeout_counter_clone = timeout_counter.clone();
         
         tasks.push(tokio::spawn(async move {
-            let (timeout_handler, _) = create_counting_timeout_handler();
+            let _timeout_counter = create_counting_timeout_handler();
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("concurrent_{}", i)));
             
             let result = client_clone.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(100),
-                Some(timeout_handler),
-            );
+                Some(std::time::Duration::from_millis(100)),
+            ).await;
             
             match result {
                 Err(UnixSockApiError::CommandTimeout(_, _)) => {

@@ -37,7 +37,7 @@ fn test_validation_error_logging() {
     let result = ApiSpecificationParser::load_and_validate_json(json_missing_version);
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("version is required"));
+    assert!(error.to_string().contains("missing field `version`"));
     
     // Test invalid version format
     let json_invalid_version = r#"{"version": "invalid", "channels": {"test": {"description": "Test", "commands": {"ping": {"description": "Ping", "response": {"type": "object"}}}}}}"#;

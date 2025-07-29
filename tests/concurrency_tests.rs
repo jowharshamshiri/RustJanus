@@ -366,7 +366,7 @@ async fn test_no_deadlock_under_load() {
                         Some(std::time::Duration::from_millis(100)),
                     ).await
                 }
-            );
+            ).await;
             
             match timeout {
                 Ok(result) => result,
