@@ -5,6 +5,12 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging for better error diagnostics
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "debug");
+    }
+    env_logger::init();
+    
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
     let socket_path = if args.len() > 1 && args[1].starts_with("--socket-path=") {
@@ -26,8 +32,37 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "test-api-spec.json".to_string()
     };
     
-    let spec_data = std::fs::read_to_string(&spec_path)?;
-    let spec = ApiSpecificationParser::from_json(&spec_data)?;
+    // Load and validate API specification with enhanced error logging
+    let spec = match std::fs::read_to_string(&spec_path) {
+        Ok(spec_data) => {
+            println!("Loaded API specification file: {} ({} bytes)", spec_path, spec_data.len());
+            
+            // Parse and validate the specification
+            match ApiSpecificationParser::load_and_validate_json(&spec_data) {
+                Ok(spec) => {
+                    println!("✓ API specification parsed and validated successfully");
+                    println!("  Version: {}", spec.version);
+                    println!("  Channels: {}", spec.channels.len());
+                    spec
+                },
+                Err(e) => {
+                    eprintln!("✗ Failed to parse API specification: {}", e);
+                    
+                    // Try to provide a validation summary for diagnostic purposes
+                    if let Ok(partial_spec) = ApiSpecificationParser::from_json(&spec_data) {
+                        let summary = ApiSpecificationParser::get_validation_summary(&partial_spec);
+                        eprintln!("Validation summary:\n{}", summary);
+                    }
+                    
+                    return Err(e.into());
+                }
+            }
+        },
+        Err(e) => {
+            eprintln!("✗ Failed to read API specification file '{}': {}", spec_path, e);
+            return Err(e.into());
+        }
+    };
 
     // Create configuration
     let config = UnixSockApiClientConfig::default();
