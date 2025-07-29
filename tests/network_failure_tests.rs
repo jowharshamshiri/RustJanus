@@ -14,16 +14,15 @@ async fn test_connection_to_nonexistent_socket() {
     let client = UnixSockApiDatagramClient::new(
         nonexistent_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let result = client.send_command(
         "test-command",
         Some(create_test_args()),
-        std::time::Duration::from_millis(100),
-        None,
-    ).await;
+        Some(std::time::Duration::from_millis(100)),
+    );
     
     assert!(result.is_err());
     match result.unwrap_err() {

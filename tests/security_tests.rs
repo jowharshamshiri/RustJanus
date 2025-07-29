@@ -1,4 +1,5 @@
 use rust_unix_sock_api::*;
+use rust_unix_sock_api::protocol::command_handler::CommandHandlerRegistry;
 
 mod test_utils;
 use test_utils::*;
@@ -18,9 +19,9 @@ async fn test_path_traversal_attack() {
         let result = UnixSockApiDatagramClient::new(
             malicious_path.clone(),
             "test-channel".to_string(),
-            api_spec.clone(),
+            Some(api_spec.clone()),
             config.clone(),
-        ).await;
+        );
         
         assert!(result.is_err(), "Should reject malicious path: {}", malicious_path);
         
@@ -51,9 +52,9 @@ async fn test_invalid_socket_path_characters() {
         let result = UnixSockApiDatagramClient::new(
             invalid_path.to_string(),
             "test-channel".to_string(),
-            api_spec.clone(),
+            Some(api_spec.clone()),
             config.clone(),
-        ).await;
+        );
         
         assert!(result.is_err(), "Should reject path with null bytes: {}", invalid_path);
     }
@@ -72,7 +73,7 @@ async fn test_socket_path_length_limits() {
         "test-channel".to_string(),
         api_spec,
         config,
-    ).await;
+    );
     
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -95,9 +96,9 @@ async fn test_channel_id_injection_attacks() {
         let result = UnixSockApiDatagramClient::new(
             socket_path.clone(),
             malicious_id.clone(),
-            api_spec.clone(),
+            Some(api_spec.clone()),
             config.clone(),
-        ).await;
+        );
         
         assert!(result.is_err(), "Should reject malicious channel ID: {}", malicious_id);
         
@@ -121,7 +122,7 @@ async fn test_command_injection_in_arguments() {
         "test-channel".to_string(),
         api_spec,
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let malicious_arguments = vec![
         "'; rm -rf /; --",           // SQL + command injection
@@ -143,9 +144,8 @@ async fn test_command_injection_in_arguments() {
         let result = client.send_command(
             "test-command",
             Some(args),
-            std::time::Duration::from_millis(100),
-            None,
-        ).await;
+            Some(std::time::Duration::from_millis(100)),
+        );
         
         // The command should either succeed (if server validates) or fail gracefully
         // It should never execute the malicious command
@@ -192,9 +192,9 @@ async fn test_unicode_normalization_attacks() {
         let result = UnixSockApiDatagramClient::new(
             socket_path.clone(),
             unicode_channel.to_string(),
-            api_spec.clone(),
+            Some(api_spec.clone()),
             config.clone(),
-        ).await;
+        );
         
         // Should either accept valid Unicode or reject with proper error
         match result {
@@ -221,7 +221,7 @@ async fn test_large_payload_attacks() {
         "test-channel".to_string(),
         api_spec,
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let payload_sizes = vec![
         1_000,      // 1KB - should be fine
@@ -240,9 +240,8 @@ async fn test_large_payload_attacks() {
         let result = client.send_command(
             "test-command",
             Some(args),
-            std::time::Duration::from_millis(100),
-            None,
-        ).await;
+            Some(std::time::Duration::from_millis(100)),
+        );
         
         if size > 5_000_000 {
             // Should fail for large payloads
@@ -272,7 +271,7 @@ async fn test_repeated_large_payload_attacks() {
         "test-channel".to_string(),
         api_spec,
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     // Attempt 5 large payload attacks
     for i in 0..5 {
@@ -283,9 +282,8 @@ async fn test_repeated_large_payload_attacks() {
         let result = client.send_command(
             "test-command",
             Some(args),
-            std::time::Duration::from_millis(100),
-            None,
-        ).await;
+            Some(std::time::Duration::from_millis(100)),
+        );
         
         // Each should be handled gracefully without system impact
         match result {
@@ -311,7 +309,7 @@ async fn test_connection_pool_exhaustion() {
         "test-channel".to_string(),
         api_spec,
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     // Try to exceed connection pool
     let args = create_test_args();
@@ -385,7 +383,7 @@ async fn test_insecure_configuration_prevention() {
     let socket_path = create_valid_socket_path();
     
     // Test with insecure configuration values
-    let insecure_config = UnixSockApiDatagramClientConfig {
+    let insecure_config = UnixSockApiClientConfig {
         max_concurrent_connections: 0,  // Invalid
         max_message_size: 0,            // Invalid
         connection_timeout: std::time::Duration::from_secs(0), // Invalid
@@ -402,7 +400,7 @@ async fn test_insecure_configuration_prevention() {
         "test-channel".to_string(),
         api_spec,
         insecure_config,
-    ).await;
+    );
     
     assert!(result.is_err(), "Should reject insecure configuration");
     
@@ -418,7 +416,7 @@ async fn test_extreme_configuration_values() {
     let socket_path = create_valid_socket_path();
     
     // Test with extreme but valid configuration values
-    let extreme_config = UnixSockApiDatagramClientConfig {
+    let extreme_config = UnixSockApiClientConfig {
         max_concurrent_connections: 1_000_000,
         max_message_size: u32::MAX as usize,
         connection_timeout: std::time::Duration::from_secs(86400), // 24 hours
@@ -435,7 +433,7 @@ async fn test_extreme_configuration_values() {
         "test-channel".to_string(),
         api_spec,
         extreme_config,
-    ).await;
+    );
     
     // Should handle extreme values gracefully
     match result {
@@ -458,14 +456,14 @@ async fn test_validation_bypass_attempts() {
         "test-channel".to_string(),
         api_spec,
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     // Attempt to register more handlers than allowed
     for i in 0..60 { // More than max_command_handlers (50)
         let handler_name = format!("handler_{}", i);
         let handler = CommandHandlerRegistry::create_echo_handler();
         
-        let result = client.register_command_handler(&handler_name, handler).await;
+        let result = client.register_command_handler(&handler_name, handler);
         
         if i >= 50 {
             // Should start failing after limit

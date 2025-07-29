@@ -2,53 +2,17 @@ use crate::core::{UnixDatagramClient, SecurityValidator};
 use crate::error::UnixSockApiError;
 use crate::config::UnixSockApiClientConfig;
 use crate::specification::ApiSpecification;
+use crate::protocol::message_types::{SocketCommand, SocketResponse};
 use std::collections::HashMap;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Socket command for SOCK_DGRAM communication
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SocketCommand {
-    pub id: String,
-    #[serde(rename = "channelId")]
-    pub channel_id: String,
-    pub command: String,
-    #[serde(rename = "reply_to", skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub args: Option<HashMap<String, serde_json::Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<f64>,
-    pub timestamp: String,
-}
-
-/// Socket response for SOCK_DGRAM communication
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SocketResponse {
-    #[serde(rename = "commandId")]
-    pub command_id: String,
-    #[serde(rename = "channelId")]
-    pub channel_id: String,
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<HashMap<String, serde_json::Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<SocketError>,
-    pub timestamp: String,
-}
-
-/// Socket error information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SocketError {
-    pub code: String,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<String>,
-}
+// Note: SocketCommand, SocketResponse, and SocketError types are imported from message_types module
+// This ensures cross-language parity and eliminates type duplication
 
 /// High-level API client for SOCK_DGRAM Unix socket communication
 /// Connectionless implementation with command validation and response correlation
+#[derive(Debug)]
 pub struct UnixSockApiDatagramClient {
     socket_path: String,
     channel_id: String,
@@ -93,12 +57,12 @@ impl UnixSockApiDatagramClient {
         // Create socket command
         let socket_command = SocketCommand {
             id: command_id.clone(),
-            channel_id: self.channel_id.clone(),
+            channelId: self.channel_id.clone(),
             command: command.to_string(),
             reply_to: Some(response_socket_path.clone()),
             args,
             timeout: timeout.map(|d| d.as_secs_f64()),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         };
         
         // Validate command against API specification
@@ -128,24 +92,24 @@ impl UnixSockApiDatagramClient {
             })?;
         
         // Validate response correlation
-        if response.command_id != command_id {
+        if response.commandId != command_id {
             return Err(UnixSockApiError::ProtocolError { 
                 file: "unix_sock_api_datagram_client.rs".to_string(), 
                 line: 129, 
                 message: format!(
                     "Response correlation mismatch: expected {}, got {}",
-                    command_id, response.command_id
+                    command_id, response.commandId
                 ) 
             });
         }
         
-        if response.channel_id != self.channel_id {
+        if response.channelId != self.channel_id {
             return Err(UnixSockApiError::ProtocolError { 
                 file: "unix_sock_api_datagram_client.rs".to_string(), 
                 line: 136, 
                 message: format!(
                     "Channel mismatch: expected {}, got {}",
-                    self.channel_id, response.channel_id
+                    self.channel_id, response.channelId
                 ) 
             });
         }
@@ -165,12 +129,12 @@ impl UnixSockApiDatagramClient {
         // Create socket command (no reply_to field)
         let socket_command = SocketCommand {
             id: command_id,
-            channel_id: self.channel_id.clone(),
+            channelId: self.channel_id.clone(),
             command: command.to_string(),
             reply_to: None,
             args,
             timeout: None,
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         };
         
         // Validate command against API specification
@@ -205,10 +169,10 @@ impl UnixSockApiDatagramClient {
     ) -> Result<(), UnixSockApiError> {
         // Implementation would validate command against spec
         // For now, just check if channel exists
-        if !spec.channels.contains_key(&command.channel_id) {
+        if !spec.channels.contains_key(&command.channelId) {
             return Err(UnixSockApiError::ValidationError(format!(
                 "Channel {} not found in API specification",
-                command.channel_id
+                command.channelId
             )));
         }
         
@@ -227,6 +191,16 @@ impl UnixSockApiDatagramClient {
     
     /// Get API specification
     pub fn api_specification(&self) -> Option<&ApiSpecification> {
+        self.api_spec.as_ref()
+    }
+    
+    /// Get configuration for backward compatibility
+    pub fn configuration(&self) -> &UnixSockApiClientConfig {
+        &self.config
+    }
+    
+    /// Get specification for backward compatibility  
+    pub fn specification(&self) -> Option<&ApiSpecification> {
         self.api_spec.as_ref()
     }
 }

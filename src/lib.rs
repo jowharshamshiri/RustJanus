@@ -71,7 +71,7 @@ pub use core::{UnixDatagramClient, SecurityValidator};
 
 // Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
-    SocketCommand, SocketResponse, SocketMessage, MessageType, SocketError,
+    SocketCommand, SocketResponse, SocketMessage, MessageType,
     UnixSockApiDatagramClient, TimeoutManager
 };
 
@@ -86,7 +86,7 @@ pub use specification::{
 pub use config::UnixSockApiClientConfig;
 
 // Error exports
-pub use error::UnixSockApiError;
+pub use error::{UnixSockApiError, SocketError};
 
 // Result type alias
 pub type Result<T> = std::result::Result<T, UnixSockApiError>;

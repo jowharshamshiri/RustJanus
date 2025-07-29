@@ -17,9 +17,9 @@ async fn test_high_concurrency_command_execution() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     let success_count = Arc::new(AtomicUsize::new(0));
     let error_count = Arc::new(AtomicUsize::new(0));
@@ -38,8 +38,7 @@ async fn test_high_concurrency_command_execution() {
             match client_clone.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(100),
-                None,
+                Some(std::time::Duration::from_millis(100)),
             ).await {
                 Ok(_) => success_count_clone.fetch_add(1, Ordering::SeqCst),
                 Err(_) => error_count_clone.fetch_add(1, Ordering::SeqCst),
@@ -78,9 +77,9 @@ async fn test_concurrent_client_creation() {
             UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
-                api_spec_clone,
+                Some(api_spec_clone),
                 config_clone,
-            ).await
+            )
         }));
     }
     
@@ -111,9 +110,9 @@ async fn test_concurrent_handler_registration() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // Register 20 handlers concurrently
     let mut tasks = Vec::new();
@@ -121,10 +120,12 @@ async fn test_concurrent_handler_registration() {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
-            let handler = CommandHandlerRegistry::create_echo_handler();
-            client_clone.register_command_handler(
-                &format!("handler-{}", i),
-                handler
+            let mut args = HashMap::new();
+            args.insert("handler_id".to_string(), serde_json::Value::String(format!("handler-{}", i)));
+            client_clone.send_command(
+                "echo-test",
+                Some(args),
+                Some(std::time::Duration::from_millis(100)),
             ).await
         }));
     }
@@ -156,9 +157,9 @@ async fn test_concurrent_connection_pool_usage() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // 50 operations on 10-connection pool
     let mut tasks = Vec::new();
@@ -172,8 +173,7 @@ async fn test_concurrent_connection_pool_usage() {
             client_clone.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(50),
-                None,
+                Some(std::time::Duration::from_millis(50)),
             ).await
         }));
     }
@@ -208,9 +208,9 @@ async fn test_concurrent_state_modification() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     let counter = Arc::new(AtomicUsize::new(0));
     
@@ -251,9 +251,9 @@ async fn test_concurrent_connection_management() {
             let client = UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
-                api_spec_clone,
+                Some(api_spec_clone),
                 config_clone,
-            ).await?;
+            )?;
             
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
@@ -261,8 +261,7 @@ async fn test_concurrent_connection_management() {
             client.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(100),
-                None,
+                Some(std::time::Duration::from_millis(100)),
             ).await
         }));
     }
@@ -288,9 +287,9 @@ async fn test_thread_safety_of_configuration() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // 100 concurrent configuration accesses
     let mut tasks = Vec::new();
@@ -317,9 +316,9 @@ async fn test_thread_safety_of_api_spec_access() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // 100 concurrent specification accesses
     let mut tasks = Vec::new();
@@ -327,7 +326,7 @@ async fn test_thread_safety_of_api_spec_access() {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
-            let spec = client_clone.specification();
+            let spec = client_clone.specification().unwrap();
             assert_eq!(spec.version, "1.0.0");
             assert!(!spec.channels.is_empty());
         }));
@@ -345,9 +344,9 @@ async fn test_no_deadlock_under_load() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // 50 tasks with 10-second timeout to detect deadlocks
     let mut tasks = Vec::new();
@@ -364,11 +363,10 @@ async fn test_no_deadlock_under_load() {
                     client_clone.send_command(
                         "test-command",
                         Some(args),
-                        std::time::Duration::from_millis(100),
-                        None,
+                        Some(std::time::Duration::from_millis(100)),
                     ).await
                 }
-            ).await;
+            );
             
             match timeout {
                 Ok(result) => result,
@@ -397,9 +395,9 @@ async fn test_no_deadlock_with_mixed_operations() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     let mut tasks = Vec::new();
     
@@ -413,8 +411,7 @@ async fn test_no_deadlock_with_mixed_operations() {
             client_clone.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(50),
-                None,
+                Some(std::time::Duration::from_millis(50)),
             ).await
         }));
     }
@@ -423,16 +420,13 @@ async fn test_no_deadlock_with_mixed_operations() {
     for i in 0..5 {
         let client_clone = client.clone();
         tasks.push(tokio::spawn(async move {
-            let handler = CommandHandlerRegistry::create_echo_handler();
-            let result = client_clone.register_command_handler(
-                &format!("mixed_handler_{}", i),
-                handler
-            ).await;
-            // Convert to SocketResponse for consistency
-            match result {
-                Ok(_) => Ok(SocketResponse::success("mixed_handler".to_string(), "test-channel".to_string(), Some(serde_json::json!({})))),
-                Err(e) => Err(e)
-            }
+            let mut args = HashMap::new();
+            args.insert("handler_id".to_string(), serde_json::Value::String(format!("mixed_handler_{}", i)));
+            client_clone.send_command(
+                "echo-test",
+                Some(args),
+                Some(std::time::Duration::from_millis(100)),
+            ).await
         }));
     }
     
@@ -466,9 +460,9 @@ async fn test_memory_safety_under_concurrent_access() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // 100 concurrent operations with memory pressure
     let large_data = Arc::new(create_large_test_data(100)); // 100KB each
@@ -485,8 +479,7 @@ async fn test_memory_safety_under_concurrent_access() {
             client_clone.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(50),
-                None,
+                Some(std::time::Duration::from_millis(50)),
             ).await
         }));
     }
@@ -522,9 +515,9 @@ async fn test_concurrent_resource_cleanup() {
             let client = UnixSockApiDatagramClient::new(
                 socket_path_clone,
                 format!("cleanup_channel_{}", i),
-                api_spec_clone,
+                Some(api_spec_clone),
                 config_clone,
-            ).await?;
+            )?;
             
             // Use client
             let mut args = HashMap::new();
@@ -533,9 +526,8 @@ async fn test_concurrent_resource_cleanup() {
             let _result = client.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(50),
-                None,
-            ).await;
+                Some(std::time::Duration::from_millis(50)),
+            );
             
             // Client should be cleaned up automatically when dropped
             Ok(SocketResponse::success("timeout_test".to_string(), "test-channel".to_string(), Some(serde_json::json!({}))))
@@ -566,9 +558,9 @@ async fn test_connection_pool_thread_safety() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     // 30 operations on 5-connection pool
     let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();
@@ -582,8 +574,7 @@ async fn test_connection_pool_thread_safety() {
             client_clone.send_command(
                 "test-command",
                 Some(args),
-                std::time::Duration::from_millis(100),
-                None,
+                Some(std::time::Duration::from_millis(100)),
             ).await
         }));
     }

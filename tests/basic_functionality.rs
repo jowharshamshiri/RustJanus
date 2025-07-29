@@ -8,14 +8,14 @@ use std::collections::HashMap;
 /// Tests API specification creation, serialization, and core functionality
 
 #[tokio::test]
-async fn test_Some(api_spec)ification_creation() {
-    let Some(api_spec) = create_test_Some(api_spec)();
+async fn test_api_specification_creation() {
+    let api_spec = create_test_api_spec();
     
-    assert_eq!(Some(api_spec).version, "1.0.0");
-    assert!(!Some(api_spec).channels.is_empty());
-    assert!(Some(api_spec).get_channel("test-channel").is_some());
+    assert_eq!(api_spec.version, "1.0.0");
+    assert!(!api_spec.channels.is_empty());
+    assert!(api_spec.get_channel("test-channel").is_some());
     
-    let channel = Some(api_spec).get_channel("test-channel").unwrap();
+    let channel = api_spec.get_channel("test-channel").unwrap();
     assert_eq!(channel.description, "Test channel for validation");
     assert!(!channel.commands.is_empty());
     
@@ -26,11 +26,11 @@ async fn test_Some(api_spec)ification_creation() {
 }
 
 #[tokio::test]
-async fn test_Some(api_spec)ification_json_serialization() {
-    let Some(api_spec) = create_test_Some(api_spec)();
+async fn test_api_specification_json_serialization() {
+    let api_spec = create_test_api_spec();
     
     // Serialize to JSON
-    let json_str = ApiSpecificationParser::to_json(&Some(api_spec)).unwrap();
+    let json_str = ApiSpecificationParser::to_json(&api_spec).unwrap();
     assert!(!json_str.is_empty());
     assert!(json_str.contains("\"version\":\"1.0.0\""));
     assert!(json_str.contains("\"test-channel\""));
@@ -39,11 +39,11 @@ async fn test_Some(api_spec)ification_json_serialization() {
     let parsed_spec = ApiSpecificationParser::from_json(&json_str).unwrap();
     
     // Verify round-trip integrity
-    assert_eq!(parsed_spec.version, Some(api_spec).version);
-    assert_eq!(parsed_spec.channels.len(), Some(api_spec).channels.len());
+    assert_eq!(parsed_spec.version, api_spec.version);
+    assert_eq!(parsed_spec.channels.len(), api_spec.channels.len());
     
     let parsed_channel = parsed_spec.get_channel("test-channel").unwrap();
-    let original_channel = Some(api_spec).get_channel("test-channel").unwrap();
+    let original_channel = api_spec.get_channel("test-channel").unwrap();
     assert_eq!(parsed_channel.description, original_channel.description);
     assert_eq!(parsed_channel.commands.len(), original_channel.commands.len());
 }
@@ -216,7 +216,7 @@ async fn test_anyccodable_array_value() {
 
 #[tokio::test]
 async fn test_unix_socket_client_initialization() {
-    let Some(api_spec) = create_test_Some(api_spec)();
+    let api_spec = create_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -224,7 +224,7 @@ async fn test_unix_socket_client_initialization() {
     let client = UnixSockApiDatagramClient::new(
         socket_path.clone(),
         "test-channel".to_string(),
-        Some(api_spec).clone(),
+        Some(api_spec.clone()),
         config.clone(),
     );
     
@@ -251,7 +251,7 @@ async fn test_unix_socket_client_initialization() {
 
 #[tokio::test] 
 async fn test_command_validation() {
-    let Some(api_spec) = create_test_Some(api_spec)();
+    let api_spec = create_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -267,12 +267,11 @@ async fn test_command_validation() {
     let result = client.send_command(
         "test-command",
         Some(valid_args),
-        std::time::Duration::from_millis(100),
-        None,
+        Some(std::time::Duration::from_millis(100)),
     );
     
     // Should either succeed or fail with expected errors (connection/timeout)
-    match result {
+    match result.await {
         Ok(_) => {},
         Err(UnixSockApiError::ConnectionError(_)) => {},
         Err(UnixSockApiError::CommandTimeout(_, _)) => {},
@@ -283,12 +282,11 @@ async fn test_command_validation() {
     let invalid_result = client.send_command(
         "nonexistent-command",
         Some(create_test_args()),
-        std::time::Duration::from_millis(100),
-        None,
+        Some(std::time::Duration::from_millis(100)),
     );
     
     // May fail with validation error or connection error
-    match invalid_result {
+    match invalid_result.await {
         Ok(_) => {},
         Err(UnixSockApiError::UnknownCommand(_)) => {},
         Err(UnixSockApiError::ConnectionError(_)) => {},

@@ -15,16 +15,15 @@ async fn test_stateless_command_validation() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     // Validation happens before connection attempt
     let result = client.send_command(
         "test-command",
         Some(create_test_args()),
-        std::time::Duration::from_millis(100),
-        None,
+        Some(std::time::Duration::from_millis(100)),
     ).await;
     
     // Should fail at connection, not validation

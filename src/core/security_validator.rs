@@ -4,6 +4,7 @@ use std::path::Path;
 use regex::Regex;
 
 /// Security validation framework matching SwiftUnixSockAPI exactly
+#[derive(Debug)]
 pub struct SecurityValidator;
 
 impl SecurityValidator {

@@ -17,9 +17,9 @@ async fn test_command_with_timeout() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let (timeout_handler, timeout_counter) = create_counting_timeout_handler();
     let args = create_test_args();
@@ -30,7 +30,7 @@ async fn test_command_with_timeout() {
         Some(args),
         std::time::Duration::from_millis(100),
         Some(timeout_handler),
-    ).await;
+    );
     
     // Should timeout
     assert!(result.is_err());
@@ -60,18 +60,17 @@ async fn test_command_timeout_error_message() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let args = create_test_args();
     
     let result = client.send_command(
         "test-command",
         Some(args),
-        std::time::Duration::from_millis(50),
-        None,
-    ).await;
+        Some(std::time::Duration::from_millis(50)),
+    );
     
     match result {
         Err(UnixSockApiError::CommandTimeout(command_id, duration)) => {
@@ -100,9 +99,9 @@ async fn test_uuid_generation() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let args = create_test_args();
     
@@ -113,8 +112,7 @@ async fn test_uuid_generation() {
         match client.send_command(
             "test-command",
             Some(args.clone()),
-            std::time::Duration::from_millis(10),
-            None,
+            Some(std::time::Duration::from_millis(10)),
         ).await {
             Err(UnixSockApiError::CommandTimeout(command_id, _)) => {
                 // Validate UUID format (36 characters with hyphens)
@@ -146,9 +144,9 @@ async fn test_multiple_commands_with_different_timeouts() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     // Test 3 different timeouts (0.05s, 0.1s, 0.15s)
     let timeouts = vec![
@@ -164,10 +162,9 @@ async fn test_multiple_commands_with_different_timeouts() {
             client.send_command(
                 "test-command",
                 Some(args.clone()),
-                *timeout,
-                None,
+                Some(*timeout),
             )
-        ).await;
+        );
         
         match result {
             Err(UnixSockApiError::CommandTimeout(_, actual_timeout)) => {
@@ -246,9 +243,9 @@ async fn test_default_timeout() {
     let client = UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap();
+    ).unwrap();
     
     let args = create_test_args();
     
@@ -258,9 +255,8 @@ async fn test_default_timeout() {
     let result = client.send_command(
         "test-command",
         Some(args),
-        std::time::Duration::from_secs(30), // Default timeout
-        None,
-    ).await;
+        Some(std::time::Duration::from_secs(30)), // Default timeout
+    );
     
     let elapsed = start_time.elapsed();
     
@@ -288,9 +284,9 @@ async fn test_concurrent_timeouts() {
     let client = Arc::new(UnixSockApiDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
-        api_spec,
+        Some(api_spec),
         config,
-    ).await.unwrap());
+    ).unwrap());
     
     let timeout_counter = Arc::new(AtomicUsize::new(0));
     
@@ -310,7 +306,7 @@ async fn test_concurrent_timeouts() {
                 Some(args),
                 std::time::Duration::from_millis(100),
                 Some(timeout_handler),
-            ).await;
+            );
             
             match result {
                 Err(UnixSockApiError::CommandTimeout(_, _)) => {
