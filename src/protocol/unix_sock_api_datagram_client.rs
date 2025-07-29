@@ -1,7 +1,7 @@
 use crate::core::{UnixDatagramClient, SecurityValidator};
 use crate::error::UnixSockApiError;
 use crate::config::UnixSockApiClientConfig;
-use crate::specification::{APISpecification, SpecificationError};
+use crate::specification::ApiSpecification;
 use std::collections::HashMap;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
@@ -52,7 +52,7 @@ pub struct SocketError {
 pub struct UnixSockApiDatagramClient {
     socket_path: String,
     channel_id: String,
-    api_spec: Option<APISpecification>,
+    api_spec: Option<ApiSpecification>,
     config: UnixSockApiClientConfig,
     datagram_client: UnixDatagramClient,
     validator: SecurityValidator,
@@ -63,7 +63,7 @@ impl UnixSockApiDatagramClient {
     pub fn new(
         socket_path: String,
         channel_id: String,
-        api_spec: Option<APISpecification>,
+        api_spec: Option<ApiSpecification>,
         config: UnixSockApiClientConfig,
     ) -> Result<Self, UnixSockApiError> {
         let datagram_client = UnixDatagramClient::new(socket_path.clone(), config.clone())?;
@@ -108,7 +108,11 @@ impl UnixSockApiDatagramClient {
         
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| UnixSockApiError::SerializationError(format!("Failed to serialize command: {}", e)))?;
+            .map_err(|e| UnixSockApiError::SerializationError { 
+                file: "unix_sock_api_datagram_client.rs".to_string(), 
+                line: 111, 
+                message: format!("Failed to serialize command: {}", e) 
+            })?;
         
         // Send datagram and wait for response
         let response_data = self.datagram_client
@@ -117,21 +121,33 @@ impl UnixSockApiDatagramClient {
         
         // Deserialize response
         let response: SocketResponse = serde_json::from_slice(&response_data)
-            .map_err(|e| UnixSockApiError::SerializationError(format!("Failed to deserialize response: {}", e)))?;
+            .map_err(|e| UnixSockApiError::SerializationError { 
+                file: "unix_sock_api_datagram_client.rs".to_string(), 
+                line: 124, 
+                message: format!("Failed to deserialize response: {}", e) 
+            })?;
         
         // Validate response correlation
         if response.command_id != command_id {
-            return Err(UnixSockApiError::ProtocolError(format!(
-                "Response correlation mismatch: expected {}, got {}",
-                command_id, response.command_id
-            )));
+            return Err(UnixSockApiError::ProtocolError { 
+                file: "unix_sock_api_datagram_client.rs".to_string(), 
+                line: 129, 
+                message: format!(
+                    "Response correlation mismatch: expected {}, got {}",
+                    command_id, response.command_id
+                ) 
+            });
         }
         
         if response.channel_id != self.channel_id {
-            return Err(UnixSockApiError::ProtocolError(format!(
-                "Channel mismatch: expected {}, got {}",
-                self.channel_id, response.channel_id
-            )));
+            return Err(UnixSockApiError::ProtocolError { 
+                file: "unix_sock_api_datagram_client.rs".to_string(), 
+                line: 136, 
+                message: format!(
+                    "Channel mismatch: expected {}, got {}",
+                    self.channel_id, response.channel_id
+                ) 
+            });
         }
         
         Ok(response)
@@ -164,7 +180,11 @@ impl UnixSockApiDatagramClient {
         
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| UnixSockApiError::SerializationError(format!("Failed to serialize command: {}", e)))?;
+            .map_err(|e| UnixSockApiError::SerializationError { 
+                file: "unix_sock_api_datagram_client.rs".to_string(), 
+                line: 167, 
+                message: format!("Failed to serialize command: {}", e) 
+            })?;
         
         // Send datagram without waiting for response
         self.datagram_client.send_datagram_no_response(&command_data).await?;
@@ -180,7 +200,7 @@ impl UnixSockApiDatagramClient {
     /// Validate command against API specification
     fn validate_command_against_spec(
         &self,
-        spec: &APISpecification,
+        spec: &ApiSpecification,
         command: &SocketCommand,
     ) -> Result<(), UnixSockApiError> {
         // Implementation would validate command against spec
@@ -206,7 +226,7 @@ impl UnixSockApiDatagramClient {
     }
     
     /// Get API specification
-    pub fn api_specification(&self) -> Option<&APISpecification> {
+    pub fn api_specification(&self) -> Option<&ApiSpecification> {
         self.api_spec.as_ref()
     }
 }

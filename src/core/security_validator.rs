@@ -7,6 +7,10 @@ use regex::Regex;
 pub struct SecurityValidator;
 
 impl SecurityValidator {
+    /// Create a new SecurityValidator instance
+    pub fn new() -> Self {
+        SecurityValidator
+    }
     /// Validate socket path for security (exact Swift implementation)
     pub fn validate_socket_path(path: &str) -> Result<(), UnixSockApiError> {
         // Must be absolute path

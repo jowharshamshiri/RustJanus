@@ -53,6 +53,15 @@ pub enum UnixSockApiError {
     
     #[error("Validation error: {0}")]
     ValidationError(String),
+    
+    #[error("Serialization error in {file}:{line}: {message}")]
+    SerializationError { file: String, line: u32, message: String },
+    
+    #[error("Protocol error in {file}:{line}: {message}")]
+    ProtocolError { file: String, line: u32, message: String },
+    
+    #[error("Specification error in {file}:{line}: {message}")]
+    SpecificationError { file: String, line: u32, message: String },
 }
 
 impl From<std::io::Error> for UnixSockApiError {

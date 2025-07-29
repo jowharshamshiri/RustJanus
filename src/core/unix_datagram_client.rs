@@ -2,8 +2,6 @@ use crate::core::SecurityValidator;
 use crate::error::UnixSockApiError;
 use crate::config::UnixSockApiClientConfig;
 use tokio::net::UnixDatagram;
-use std::time::Duration;
-use std::path::Path;
 
 /// Low-level Unix domain datagram socket client (SOCK_DGRAM)
 /// Connectionless implementation for cross-language compatibility
@@ -39,7 +37,6 @@ impl UnixDatagramClient {
         
         // Create response socket for receiving replies
         let response_socket = UnixDatagram::bind(response_socket_path)
-            .await
             .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to bind response socket: {}", e)))?;
         
         // Set timeout for response

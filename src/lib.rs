@@ -66,14 +66,13 @@ pub mod config;
 pub mod error;
 pub mod utils;
 
-// Core exports (low-level socket communication)
-pub use core::{UnixSocketClient, ConnectionPool, MessageFrame, SecurityValidator};
+// Core exports (low-level SOCK_DGRAM socket communication)
+pub use core::{UnixDatagramClient, SecurityValidator};
 
-// Protocol exports (API communication layer)
+// Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
-    SocketCommand, SocketResponse, SocketMessage, MessageType,
-    UnixSockApiClient, TimeoutManager, TimeoutHandler,
-    CommandHandler, CommandHandlerRegistry
+    SocketCommand, SocketResponse, SocketMessage, MessageType, SocketError,
+    UnixSockApiDatagramClient, TimeoutManager
 };
 
 // Specification exports (API definition layer)
@@ -87,7 +86,10 @@ pub use specification::{
 pub use config::UnixSockApiClientConfig;
 
 // Error exports
-pub use error::{UnixSockApiError, SocketError, Result};
+pub use error::UnixSockApiError;
+
+// Result type alias
+pub type Result<T> = std::result::Result<T, UnixSockApiError>;
 
 // Utility exports
 pub use utils::{PathUtils, UuidUtils, JsonUtils};
@@ -100,12 +102,11 @@ pub use chrono::{DateTime, Utc};
 /// Prelude module for convenient importing
 pub mod prelude {
     pub use crate::{
-        UnixSockApiClient, ApiSpecification, UnixSockApiClientConfig,
+        UnixDatagramClient, UnixSockApiDatagramClient, ApiSpecification, UnixSockApiClientConfig,
         SocketCommand, SocketResponse, SocketMessage, MessageType,
-        UnixSocketClient, ConnectionPool, SecurityValidator,
+        SecurityValidator, TimeoutManager,
         UnixSockApiError, SocketError, Result,
         ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,
-        CommandHandler, TimeoutHandler,
         Deserialize, Serialize, JsonValue, json,
         DateTime, Utc,
     };
