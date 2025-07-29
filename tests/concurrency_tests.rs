@@ -1,4 +1,4 @@
-use rs_unix_sock_comms::*;
+use rust_unix_sock_api::*;
 mod test_utils;
 use test_utils::*;
 use std::sync::Arc;

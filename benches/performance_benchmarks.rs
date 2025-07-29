@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rs_unix_sock_comms::prelude::*;
+use rust_unix_sock_api::prelude::*;
 use std::collections::HashMap;
 
 fn benchmark_message_serialization(c: &mut Criterion) {

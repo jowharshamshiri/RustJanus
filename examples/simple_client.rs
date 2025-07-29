@@ -1,5 +1,5 @@
-use rs_unix_sock_comms::prelude::*;
-use rs_unix_sock_comms::ApiSpecificationParser;
+use rust_unix_sock_api::prelude::*;
+use rust_unix_sock_api::ApiSpecificationParser;
 use std::collections::HashMap;
 use std::time::Duration;
 

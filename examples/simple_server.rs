@@ -1,6 +1,6 @@
-use rs_unix_sock_comms::prelude::*;
-use rs_unix_sock_comms::protocol::unix_sock_api_client::CommandHandler;
-use rs_unix_sock_comms::ApiSpecificationParser;
+use rust_unix_sock_api::prelude::*;
+use rust_unix_sock_api::protocol::unix_sock_api_client::CommandHandler;
+use rust_unix_sock_api::ApiSpecificationParser;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::signal;

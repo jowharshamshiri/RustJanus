@@ -25,7 +25,7 @@ RustUnixSockAPI = "0.1"
 ### Async Client Example
 
 ```rust
-use rs_unix_sock_comms::prelude::*;
+use rust_unix_sock_api::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Client Example
 
 ```rust
-use rs_unix_sock_comms::UnixSocketClient;
+use rust_unix_sock_api::UnixSocketClient;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -93,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Use message envelopes for additional metadata:
 
 ```rust
-use rs_unix_sock_comms::{MessageEnvelope, UnixSocketClient};
+use rust_unix_sock_api::{MessageEnvelope, UnixSocketClient};
 
 let message = MyMessage { /* ... */ };
 let envelope = MessageEnvelope::with_priority(message, 1);
@@ -105,7 +105,7 @@ let response = client.send_envelope(envelope)?;
 ### Custom Configuration
 
 ```rust
-use rs_unix_sock_comms::{UnixSocketServer, ServerConfig, ClientConfig};
+use rust_unix_sock_api::{UnixSocketServer, ServerConfig, ClientConfig};
 
 // Server configuration
 let server_config = ServerConfig {
@@ -131,7 +131,7 @@ let client = UnixSocketClient::with_config("/tmp/socket.sock", client_config);
 The library provides several built-in message types:
 
 ```rust
-use rs_unix_sock_comms::{TextMessage, CommandMessage, ResponseMessage, JsonMessage};
+use rust_unix_sock_api::{TextMessage, CommandMessage, ResponseMessage, JsonMessage};
 
 // Simple text message
 let text_msg = TextMessage::new("Hello, World!");
@@ -159,7 +159,7 @@ let json_msg = JsonMessage::new(serde_json::json!({
 The library provides comprehensive error handling:
 
 ```rust
-use rs_unix_sock_comms::{SocketError, Result};
+use rust_unix_sock_api::{SocketError, Result};
 
 fn send_message() -> Result<String> {
     let mut client = UnixSocketClient::new("/tmp/socket.sock");
@@ -184,7 +184,7 @@ fn send_message() -> Result<String> {
 ## Utility Functions
 
 ```rust
-use rs_unix_sock_comms::utils::{
+use rust_unix_sock_api::utils::{
     ensure_socket_dir, 
     cleanup_socket_file, 
     is_socket_in_use,

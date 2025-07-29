@@ -16,7 +16,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use rs_unix_sock_comms::{UnixSockApiClient, ApiSpecification, UnixSockApiClientConfig};
+//! use rust_unix_sock_api::{UnixSockApiClient, ApiSpecification, UnixSockApiClientConfig};
 //! use std::collections::HashMap;
 //! use serde_json::json;
 //! use std::time::Duration;
