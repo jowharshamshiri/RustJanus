@@ -5,13 +5,13 @@ use crate::error::SocketError;
 
 /// Socket command structure (exact SwiftUnixSockAPI parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(non_snake_case)]
 pub struct SocketCommand {
     /// Unique identifier for command tracking
     pub id: String,
     
     /// Channel ID for routing
-    #[serde(rename = "channelId")]
-    pub channel_id: String,
+    pub channelId: String,
     
     /// Command name
     pub command: String,
@@ -28,15 +28,16 @@ pub struct SocketCommand {
 
 impl SocketCommand {
     /// Create a new socket command with UUID
+    #[allow(non_snake_case)]
     pub fn new(
-        channel_id: String,
+        channelId: String,
         command: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<f64>,
     ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
-            channel_id,
+            channelId,
             command,
             args,
             timeout,
@@ -45,16 +46,17 @@ impl SocketCommand {
     }
     
     /// Create command with specific ID (for testing)
+    #[allow(non_snake_case)]
     pub fn with_id(
         id: String,
-        channel_id: String,
+        channelId: String,
         command: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<f64>,
     ) -> Self {
         Self {
             id,
-            channel_id,
+            channelId,
             command,
             args,
             timeout,
@@ -78,7 +80,7 @@ impl SocketCommand {
             return Err(SocketError::ValidationFailed("Command ID cannot be empty".to_string()));
         }
         
-        if self.channel_id.is_empty() {
+        if self.channelId.is_empty() {
             return Err(SocketError::ValidationFailed("Channel ID cannot be empty".to_string()));
         }
         
@@ -98,14 +100,13 @@ impl SocketCommand {
 
 /// Socket response structure (exact SwiftUnixSockAPI parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(non_snake_case)]
 pub struct SocketResponse {
     /// Command ID for correlation
-    #[serde(rename = "commandId")]
-    pub command_id: String,
+    pub commandId: String,
     
     /// Channel ID for verification
-    #[serde(rename = "channelId")]
-    pub channel_id: String,
+    pub channelId: String,
     
     /// Success/failure flag
     pub success: bool,
@@ -122,14 +123,15 @@ pub struct SocketResponse {
 
 impl SocketResponse {
     /// Create successful response
+    #[allow(non_snake_case)]
     pub fn success(
-        command_id: String,
-        channel_id: String,
+        commandId: String,
+        channelId: String,
         result: Option<serde_json::Value>,
     ) -> Self {
         Self {
-            command_id,
-            channel_id,
+            commandId,
+            channelId,
             success: true,
             result,
             error: None,
@@ -138,14 +140,15 @@ impl SocketResponse {
     }
     
     /// Create error response
+    #[allow(non_snake_case)]
     pub fn error(
-        command_id: String,
-        channel_id: String,
+        commandId: String,
+        channelId: String,
         error: SocketError,
     ) -> Self {
         Self {
-            command_id,
-            channel_id,
+            commandId,
+            channelId,
             success: false,
             result: None,
             error: Some(error),
@@ -154,38 +157,40 @@ impl SocketResponse {
     }
     
     /// Create internal error response
+    #[allow(non_snake_case)]
     pub fn internal_error(
-        command_id: String,
-        channel_id: String,
+        commandId: String,
+        channelId: String,
         message: String,
     ) -> Self {
         Self::error(
-            command_id,
-            channel_id,
+            commandId,
+            channelId,
             SocketError::InternalError(message),
         )
     }
     
     /// Create timeout error response
+    #[allow(non_snake_case)]
     pub fn timeout_error(
-        command_id: String,
-        channel_id: String,
+        commandId: String,
+        channelId: String,
         timeout_seconds: f64,
     ) -> Self {
         Self::error(
-            command_id.clone(),
-            channel_id,
-            SocketError::HandlerTimeout(command_id, timeout_seconds),
+            commandId.clone(),
+            channelId,
+            SocketError::HandlerTimeout(commandId, timeout_seconds),
         )
     }
     
     /// Validate response structure
     pub fn validate(&self) -> Result<(), SocketError> {
-        if self.command_id.is_empty() {
+        if self.commandId.is_empty() {
             return Err(SocketError::ValidationFailed("Command ID cannot be empty".to_string()));
         }
         
-        if self.channel_id.is_empty() {
+        if self.channelId.is_empty() {
             return Err(SocketError::ValidationFailed("Channel ID cannot be empty".to_string()));
         }
         

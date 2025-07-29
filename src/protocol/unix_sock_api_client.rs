@@ -31,9 +31,10 @@ impl ResponseTracker {
 }
 
 /// Main UnixSockApiClient (exact SwiftUnixSockAPI parity)
+#[allow(non_snake_case)]
 pub struct UnixSockApiClient {
     socket_path: String,
-    channel_id: String,
+    channelId: String,
     api_spec: ApiSpecification,
     config: UnixSockApiClientConfig,
     connection_pool: Arc<ConnectionPool>,
@@ -45,9 +46,10 @@ pub struct UnixSockApiClient {
 
 impl UnixSockApiClient {
     /// Create a new UnixSockApiClient
+    #[allow(non_snake_case)]
     pub async fn new(
         socket_path: String,
-        channel_id: String,
+        channelId: String,
         api_spec: ApiSpecification,
         config: UnixSockApiClientConfig,
     ) -> Result<Self> {
@@ -55,22 +57,22 @@ impl UnixSockApiClient {
         SecurityValidator::validate_socket_path(&socket_path)?;
         
         // Validate channel ID
-        SecurityValidator::validate_channel_id(&channel_id, &config)?;
+        SecurityValidator::validate_channel_id(&channelId, &config)?;
         
         // Validate configuration
         config.validate()
             .map_err(|e| UnixSockApiError::ValidationError(e))?;
             
         // Validate that the channel exists in the API spec
-        if !api_spec.has_channel(&channel_id) {
-            return Err(UnixSockApiError::InvalidChannel(channel_id));
+        if !api_spec.has_channel(&channelId) {
+            return Err(UnixSockApiError::InvalidChannel(channelId));
         }
         
         let connection_pool = Arc::new(ConnectionPool::new(socket_path.clone(), config.clone()));
         
         Ok(Self {
             socket_path,
-            channel_id,
+            channelId,
             api_spec,
             config,
             connection_pool,
@@ -110,7 +112,7 @@ impl UnixSockApiClient {
         
         let command_id = Uuid::new_v4().to_string();
         let command = SocketCommand::new(
-            self.channel_id.clone(),
+            self.channelId.clone(),
             command_name.to_string(),
             args,
             Some(timeout_duration.as_secs_f64()),
@@ -188,7 +190,7 @@ impl UnixSockApiClient {
         
         let command_id = Uuid::new_v4().to_string();
         let command = SocketCommand::new(
-            self.channel_id.clone(),
+            self.channelId.clone(),
             command_name.to_string(),
             args,
             None,
@@ -236,7 +238,7 @@ impl UnixSockApiClient {
         }
         
         // Validate that the command exists in the API spec
-        if !self.api_spec.has_command(&self.channel_id, command_name) {
+        if !self.api_spec.has_command(&self.channelId, command_name) {
             return Err(UnixSockApiError::UnknownCommand(command_name.to_string()));
         }
         
@@ -279,7 +281,7 @@ impl UnixSockApiClient {
             .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to bind server socket: {}", e)))?;
         
         // Accept connections in background task
-        let channel_id = self.channel_id.clone();
+        let channel_id = self.channelId.clone();
         let handlers = self.command_handlers.clone();
         
         tokio::spawn(async move {
@@ -325,7 +327,7 @@ impl UnixSockApiClient {
         channel_id: String,
         handlers: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, CommandHandler>>>,
     ) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        // Removed unused AsyncReadExt and AsyncWriteExt imports
         use crate::core::message_framing::MessageFrame;
         
         loop {
@@ -339,7 +341,7 @@ impl UnixSockApiClient {
             match serde_json::from_slice::<SocketCommand>(&data) {
                 Ok(command) => {
                     // Only process commands for our channel
-                    if command.channel_id == channel_id {
+                    if command.channelId == channel_id {
                         // Get handler
                         let handler = {
                                     let handlers_lock = handlers.lock().await;
@@ -354,24 +356,24 @@ impl UnixSockApiClient {
                             // Create response
                             let response = match result {
                                 Ok(Some(result)) => SocketResponse {
-                                    command_id: command.id.clone(),
-                                    channel_id: command.channel_id.clone(),
+                                    commandId: command.id.clone(),
+                                    channelId: command.channelId.clone(),
                                     success: true,
                                     result: Some(serde_json::Value::Object(result.into_iter().collect())),
                                     error: None,
                                     timestamp: chrono::Utc::now(),
                                 },
                                 Ok(None) => SocketResponse {
-                                    command_id: command.id.clone(),
-                                    channel_id: command.channel_id.clone(),
+                                    commandId: command.id.clone(),
+                                    channelId: command.channelId.clone(),
                                     success: true,
                                     result: None,
                                     error: None,
                                     timestamp: chrono::Utc::now(),
                                 },
                                 Err(e) => SocketResponse {
-                                    command_id: command.id.clone(),
-                                    channel_id: command.channel_id.clone(),
+                                    commandId: command.id.clone(),
+                                    channelId: command.channelId.clone(),
                                     success: false,
                                     result: None,
                                     error: Some(SocketError::ProcessingError(e.to_string())),
@@ -410,7 +412,7 @@ impl UnixSockApiClient {
         command_name: &str,
         _args: &Option<HashMap<String, serde_json::Value>>
     ) -> Result<()> {
-        if !self.api_spec.has_command(&self.channel_id, command_name) {
+        if !self.api_spec.has_command(&self.channelId, command_name) {
             return Err(UnixSockApiError::UnknownCommand(command_name.to_string()));
         }
         
@@ -462,7 +464,7 @@ impl UnixSockApiClient {
             .map_err(|e| UnixSockApiError::DecodingFailed(e.to_string()))?;
             
         // Only process commands for our channel
-        if command.channel_id != self.channel_id {
+        if command.channelId != self.channelId {
             return Ok(());
         }
         
@@ -496,7 +498,7 @@ impl UnixSockApiClient {
                 }
             }
         } else {
-            println!("Unknown command '{}' received on channel '{}'", command.command, self.channel_id);
+            println!("Unknown command '{}' received on channel '{}'", command.command, self.channelId);
         }
         
         Ok(())
@@ -508,14 +510,14 @@ impl UnixSockApiClient {
             .map_err(|e| UnixSockApiError::DecodingFailed(e.to_string()))?;
             
         // Only process responses for our channel
-        if response.channel_id != self.channel_id {
+        if response.channelId != self.channelId {
             return Ok(());
         }
         
         // Route response to the correct pending command
         let sender = {
             let mut pending = self.pending_commands.lock().await;
-            pending.remove(&response.command_id)
+            pending.remove(&response.commandId)
         };
         
         if let Some(sender) = sender {
