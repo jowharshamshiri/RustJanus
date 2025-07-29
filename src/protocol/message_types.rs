@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use crate::error::SocketError;
 
-/// Socket command structure (exact SwiftUnixSockAPI parity)
+/// Socket command structure (exact cross-language parity with Go/Swift/TypeScript)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[allow(non_snake_case)]
 pub struct SocketCommand {
@@ -16,14 +16,18 @@ pub struct SocketCommand {
     /// Command name
     pub command: String,
     
+    /// Reply-to socket path for connectionless communication (SOCK_DGRAM)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    
     /// Command arguments (optional)
     pub args: Option<HashMap<String, serde_json::Value>>,
     
     /// Timeout in seconds (optional)
     pub timeout: Option<f64>,
     
-    /// Creation timestamp
-    pub timestamp: DateTime<Utc>,
+    /// Creation timestamp (Unix timestamp as f64)
+    pub timestamp: f64,
 }
 
 impl SocketCommand {
@@ -39,9 +43,10 @@ impl SocketCommand {
             id: uuid::Uuid::new_v4().to_string(),
             channelId,
             command,
+            reply_to: None,
             args,
             timeout,
-            timestamp: Utc::now(),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         }
     }
     
@@ -58,10 +63,17 @@ impl SocketCommand {
             id,
             channelId,
             command,
+            reply_to: None,
             args,
             timeout,
-            timestamp: Utc::now(),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         }
+    }
+    
+    /// Set reply-to socket path for SOCK_DGRAM response routing
+    pub fn with_reply_to(mut self, reply_to: String) -> Self {
+        self.reply_to = Some(reply_to);
+        self
     }
     
     /// Get timeout as Duration
@@ -117,8 +129,8 @@ pub struct SocketResponse {
     /// Error information (optional)
     pub error: Option<SocketError>,
     
-    /// Response timestamp
-    pub timestamp: DateTime<Utc>,
+    /// Response timestamp (Unix timestamp as f64)
+    pub timestamp: f64,
 }
 
 impl SocketResponse {
@@ -135,7 +147,7 @@ impl SocketResponse {
             success: true,
             result,
             error: None,
-            timestamp: Utc::now(),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         }
     }
     
@@ -152,7 +164,7 @@ impl SocketResponse {
             success: false,
             result: None,
             error: Some(error),
-            timestamp: Utc::now(),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         }
     }
     
@@ -356,7 +368,7 @@ mod tests {
         );
         
         assert!(!command.id.is_empty());
-        assert_eq!(command.channel_id, "test-channel");
+        assert_eq!(command.channelId, "test-channel");
         assert_eq!(command.command, "test-command");
         assert!(command.args.is_some());
         assert_eq!(command.timeout, Some(30.0));
@@ -396,7 +408,7 @@ mod tests {
         assert!(!message.payload.is_empty());
         
         let decoded_command = message.decode_command().unwrap();
-        assert_eq!(decoded_command.channel_id, command.channel_id);
+        assert_eq!(decoded_command.channelId, command.channelId);
         assert_eq!(decoded_command.command, command.command);
     }
     

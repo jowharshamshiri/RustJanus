@@ -2,10 +2,11 @@ use clap::{Arg, Command};
 use serde_json;
 use std::os::unix::net::UnixDatagram;
 use std::path::Path;
-use std::{fs, time::SystemTime};
+use std::fs;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+// Removed chrono import - using std::time for Unix timestamps
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SocketCommand {
@@ -17,7 +18,7 @@ struct SocketCommand {
     reply_to: Option<String>,
     args: Option<HashMap<String, serde_json::Value>>,
     timeout: Option<f64>,
-    timestamp: SystemTime,
+    timestamp: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,7 +30,7 @@ struct SocketResponse {
     success: bool,
     result: Option<HashMap<String, serde_json::Value>>,
     error: Option<SocketError>,
-    timestamp: SystemTime,
+    timestamp: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -146,7 +147,7 @@ async fn send_datagram(target_socket: &str, command: &str, message: &str) -> Res
         reply_to: Some(response_socket.clone()),
         args: Some(args),
         timeout: Some(5.0),
-        timestamp: SystemTime::now(),
+        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
     };
     
     let cmd_data = serde_json::to_vec(&cmd)?;
@@ -218,7 +219,7 @@ fn send_response(
         success,
         result,
         error: None,
-        timestamp: SystemTime::now(),
+        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
     };
     
     let response_data = serde_json::to_vec(&response)?;
@@ -231,9 +232,5 @@ fn send_response(
 }
 
 fn generate_id() -> String {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-        .to_string()
+    uuid::Uuid::new_v4().to_string()
 }
