@@ -77,6 +77,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("Message to send")
                 .default_value("hello"),
         )
+        .arg(
+            Arg::new("spec")
+                .long("spec")
+                .value_name("PATH")
+                .help("API specification file (required for validation)"),
+        )
+        .arg(
+            Arg::new("channel")
+                .long("channel")
+                .value_name("CHANNEL")
+                .help("Channel ID for command routing")
+                .default_value("test"),
+        )
         .get_matches();
 
     let socket_path = matches.get_one::<String>("socket").unwrap();
@@ -204,6 +217,49 @@ fn send_response(
             result.insert("implementation".to_string(), serde_json::Value::String("Rust".to_string()));
             result.insert("version".to_string(), serde_json::Value::String("1.0.0".to_string()));
             result.insert("protocol".to_string(), serde_json::Value::String("SOCK_DGRAM".to_string()));
+            (Some(result), true)
+        }
+        "validate" => {
+            let mut result = std::collections::HashMap::new();
+            if let Some(args) = args {
+                if let Some(message) = args.get("message") {
+                    if let Some(message_str) = message.as_str() {
+                        match serde_json::from_str::<serde_json::Value>(message_str) {
+                            Ok(json_data) => {
+                                result.insert("valid".to_string(), serde_json::Value::Bool(true));
+                                result.insert("data".to_string(), json_data);
+                            }
+                            Err(e) => {
+                                result.insert("valid".to_string(), serde_json::Value::Bool(false));
+                                result.insert("error".to_string(), serde_json::Value::String("Invalid JSON format".to_string()));
+                                result.insert("reason".to_string(), serde_json::Value::String(e.to_string()));
+                            }
+                        }
+                    } else {
+                        result.insert("valid".to_string(), serde_json::Value::Bool(false));
+                        result.insert("error".to_string(), serde_json::Value::String("Message must be a string".to_string()));
+                    }
+                } else {
+                    result.insert("valid".to_string(), serde_json::Value::Bool(false));
+                    result.insert("error".to_string(), serde_json::Value::String("No message provided for validation".to_string()));
+                }
+            } else {
+                result.insert("valid".to_string(), serde_json::Value::Bool(false));
+                result.insert("error".to_string(), serde_json::Value::String("No arguments provided".to_string()));
+            }
+            (Some(result), true)
+        }
+        "slow_process" => {
+            // Simulate a slow process that might timeout
+            std::thread::sleep(std::time::Duration::from_secs(2)); // 2 second delay
+            let mut result = std::collections::HashMap::new();
+            result.insert("processed".to_string(), serde_json::Value::Bool(true));
+            result.insert("delay".to_string(), serde_json::Value::String("2000ms".to_string()));
+            if let Some(args) = args {
+                if let Some(message) = args.get("message") {
+                    result.insert("message".to_string(), message.clone());
+                }
+            }
             (Some(result), true)
         }
         _ => {

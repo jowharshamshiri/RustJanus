@@ -66,7 +66,17 @@ impl UnixDatagramClient {
         // Send datagram to server
         client_socket.send_to(message, &self.socket_path)
             .await
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to send datagram: {}", e)))?;
+            .map_err(|e| {
+                // Check for message too long error
+                if e.to_string().contains("message too long") || e.to_string().contains("Message too long") {
+                    UnixSockApiError::PayloadTooLarge(format!(
+                        "payload too large for SOCK_DGRAM (size: {} bytes): Unix domain datagram sockets have system-imposed size limits, typically around 64KB. Consider reducing payload size or using chunked messages", 
+                        message.len()
+                    ))
+                } else {
+                    UnixSockApiError::ConnectionError(format!("Failed to send datagram: {}", e))
+                }
+            })?;
         
         // Receive response
         let mut buffer = vec![0u8; self.config.max_message_size];
@@ -93,7 +103,17 @@ impl UnixDatagramClient {
         // Send datagram to server
         client_socket.send_to(message, &self.socket_path)
             .await
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to send datagram: {}", e)))?;
+            .map_err(|e| {
+                // Check for message too long error
+                if e.to_string().contains("message too long") || e.to_string().contains("Message too long") {
+                    UnixSockApiError::PayloadTooLarge(format!(
+                        "payload too large for SOCK_DGRAM (size: {} bytes): Unix domain datagram sockets have system-imposed size limits, typically around 64KB. Consider reducing payload size or using chunked messages", 
+                        message.len()
+                    ))
+                } else {
+                    UnixSockApiError::ConnectionError(format!("Failed to send datagram: {}", e))
+                }
+            })?;
         
         Ok(())
     }

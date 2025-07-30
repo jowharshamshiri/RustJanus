@@ -45,6 +45,9 @@ pub enum UnixSockApiError {
     #[error("Message too large: {0} bytes (limit: {1} bytes)")]
     MessageTooLarge(usize, usize),
     
+    #[error("Payload too large: {0}")]
+    PayloadTooLarge(String),
+    
     #[error("Connection error: {0}")]
     ConnectionError(String),
     
