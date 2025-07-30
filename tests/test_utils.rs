@@ -1,5 +1,5 @@
 use rust_unix_sock_api::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::collections::HashMap;
 use tempfile::TempDir;
 use std::path::PathBuf;

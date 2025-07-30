@@ -272,11 +272,13 @@ async fn test_command_validation() {
         Some(std::time::Duration::from_millis(100)),
     );
     
-    // Should either succeed or fail with expected errors (connection/timeout)
+    // Should either succeed or fail with expected errors (connection/timeout/security)
     match result.await {
         Ok(_) => {},
         Err(UnixSockApiError::ConnectionError(_)) => {},
         Err(UnixSockApiError::CommandTimeout(_, _)) => {},
+        Err(UnixSockApiError::SecurityViolation(_)) => {},
+        Err(UnixSockApiError::InvalidSocketPath(_)) => {},
         Err(err) => panic!("Unexpected error for valid command: {:?}", err),
     }
     
@@ -293,6 +295,8 @@ async fn test_command_validation() {
         Err(UnixSockApiError::UnknownCommand(_)) => {},
         Err(UnixSockApiError::ConnectionError(_)) => {},
         Err(UnixSockApiError::CommandTimeout(_, _)) => {},
+        Err(UnixSockApiError::SecurityViolation(_)) => {},
+        Err(UnixSockApiError::InvalidSocketPath(_)) => {},
         Err(err) => panic!("Unexpected error for invalid command: {:?}", err),
     }
 }

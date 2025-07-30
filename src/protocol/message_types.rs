@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
+// Note: chrono types removed as they are not used in current SOCK_DGRAM implementation
 use crate::error::SocketError;
 
 /// Socket command structure (exact cross-language parity with Go/Swift/TypeScript)

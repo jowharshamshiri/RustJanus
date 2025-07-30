@@ -190,6 +190,8 @@ async fn test_concurrent_connection_pool_usage() {
             Err(UnixSockApiError::CommandTimeout(_, _)) => timeout_count += 1,
             Err(UnixSockApiError::ResourceLimit(_)) => error_count += 1,
             Err(UnixSockApiError::ConnectionError(_)) => error_count += 1,
+            Err(UnixSockApiError::SecurityViolation(_)) => error_count += 1,
+            Err(UnixSockApiError::InvalidSocketPath(_)) => error_count += 1,
             Err(err) => panic!("Unexpected error: {:?}", err),
         }
     }

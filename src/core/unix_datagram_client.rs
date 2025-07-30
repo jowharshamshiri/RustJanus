@@ -134,12 +134,18 @@ impl UnixDatagramClient {
     
     /// Generate unique response socket path
     pub fn generate_response_socket_path(&self) -> String {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let pid = std::process::id();
-        format!("/tmp/rust_datagram_client_{}_{}.sock", pid, timestamp)
+        let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let thread_id = std::thread::current().id();
+        
+        format!("/tmp/rust_datagram_client_{}_{}_{:?}_{}.sock", pid, timestamp, thread_id, counter)
     }
     
     /// Get socket path

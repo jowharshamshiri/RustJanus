@@ -64,6 +64,7 @@ pub mod specification;
 pub mod config;
 pub mod error;
 pub mod utils;
+pub mod server;
 
 // Core exports (low-level SOCK_DGRAM socket communication)
 pub use core::{UnixDatagramClient, SecurityValidator};
@@ -73,6 +74,9 @@ pub use protocol::{
     SocketCommand, SocketResponse, SocketMessage, MessageType,
     UnixSockApiDatagramClient, TimeoutManager
 };
+
+// High-level API exports (simple one-line usage)
+pub use server::{UnixDatagramServer, DatagramCommandHandler};
 
 // Specification exports (API definition layer)
 pub use specification::{
@@ -102,6 +106,7 @@ pub use chrono::{DateTime, Utc};
 pub mod prelude {
     pub use crate::{
         UnixDatagramClient, UnixSockApiDatagramClient, ApiSpecification, UnixSockApiClientConfig,
+        // Connection-based classes removed
         SocketCommand, SocketResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
         UnixSockApiError, SocketError, Result,

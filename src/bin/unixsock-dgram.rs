@@ -1,7 +1,7 @@
 use clap::{Arg, Command};
 use serde_json;
 use std::os::unix::net::UnixDatagram;
-use std::path::Path;
+// Note: std::path::Path not needed in current SOCK_DGRAM implementation
 use std::fs;
 
 use serde::{Deserialize, Serialize};

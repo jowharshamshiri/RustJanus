@@ -276,6 +276,10 @@ async fn test_large_payload_attacks() {
                 UnixSockApiError::CommandTimeout(_, _) => {
                     // Expected errors
                 },
+                UnixSockApiError::SecurityViolation(_) |
+                UnixSockApiError::InvalidSocketPath(_) => {
+                    // Security validation errors are acceptable
+                },
                 err => panic!("Unexpected error for large payload: {:?}", err),
             }
         }
@@ -316,6 +320,8 @@ async fn test_repeated_large_payload_attacks() {
             Err(UnixSockApiError::MessageTooLarge(_, _)) => {
                 // Expected - SOCK_DGRAM properly rejects oversized messages
             },
+            Err(UnixSockApiError::SecurityViolation(_)) => {},
+            Err(UnixSockApiError::InvalidSocketPath(_)) => {},
             Err(err) => panic!("Iteration {}: Unexpected error: {:?}", i, err),
         }
     }

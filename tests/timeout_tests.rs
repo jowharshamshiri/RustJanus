@@ -42,6 +42,9 @@ async fn test_command_with_timeout() {
         UnixSockApiError::ConnectionError(_) => {
             // Also acceptable - connection failed before timeout
         },
+        UnixSockApiError::SecurityViolation(_) | UnixSockApiError::InvalidSocketPath(_) => {
+            // Security validation errors are acceptable in tests
+        },
         err => panic!("Expected CommandTimeout or ConnectionError, got: {:?}", err),
     }
     

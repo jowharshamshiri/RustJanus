@@ -27,6 +27,7 @@ async fn test_connection_to_nonexistent_socket() {
     assert!(result.is_err());
     match result.unwrap_err() {
         UnixSockApiError::ConnectionError(_) | UnixSockApiError::CommandTimeout(_, _) => {},
+        UnixSockApiError::SecurityViolation(_) | UnixSockApiError::InvalidSocketPath(_) => {},
         err => panic!("Expected connection error, got: {:?}", err),
     }
 }

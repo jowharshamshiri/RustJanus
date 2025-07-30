@@ -19,7 +19,7 @@ pub struct UnixSockApiDatagramClient {
     api_spec: Option<ApiSpecification>,
     config: UnixSockApiClientConfig,
     datagram_client: UnixDatagramClient,
-    validator: SecurityValidator,
+    // Note: SecurityValidator is used via static methods, no instance needed
 }
 
 impl UnixSockApiDatagramClient {
@@ -31,7 +31,6 @@ impl UnixSockApiDatagramClient {
         config: UnixSockApiClientConfig,
     ) -> Result<Self, UnixSockApiError> {
         let datagram_client = UnixDatagramClient::new(socket_path.clone(), config.clone())?;
-        let validator = SecurityValidator::new();
         
         Ok(Self {
             socket_path,
@@ -39,7 +38,6 @@ impl UnixSockApiDatagramClient {
             api_spec,
             config,
             datagram_client,
-            validator,
         })
     }
     
@@ -69,6 +67,9 @@ impl UnixSockApiDatagramClient {
         if let Some(ref spec) = self.api_spec {
             self.validate_command_against_spec(spec, &socket_command)?;
         }
+        
+        // Apply security validation
+        SecurityValidator::validate_socket_path(&response_socket_path)?;
         
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
@@ -202,5 +203,14 @@ impl UnixSockApiDatagramClient {
     /// Get specification for backward compatibility  
     pub fn specification(&self) -> Option<&ApiSpecification> {
         self.api_spec.as_ref()
+    }
+    
+    /// Send a ping command and return success/failure
+    /// Convenience method for testing connectivity with a simple ping command
+    pub async fn ping(&self) -> bool {
+        match self.send_command("ping", None, None).await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
     }
 }
