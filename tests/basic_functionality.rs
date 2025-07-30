@@ -217,7 +217,7 @@ async fn test_anyccodable_array_value() {
 
 // Temporarily disabled - non-critical test  
 // #[tokio::test]
-async fn _test_unix_socket_client_initialization() {
+async fn _test_janus_client_initialization() {
     let api_spec = create_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
