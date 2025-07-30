@@ -16,7 +16,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use rust_unix_sock_api::{UnixSockApiClient, ApiSpecification, UnixSockApiClientConfig};
+//! use rust_unix_sock_api::{UnixSockApiDatagramClient, ApiSpecification, UnixSockApiClientConfig};
 //! use std::collections::HashMap;
 //! use serde_json::json;
 //! use std::time::Duration;
@@ -30,12 +30,12 @@
 //!     let config = UnixSockApiClientConfig::default();
 //!     
 //!     // Initialize client
-//!     let client = UnixSockApiClient::new(
+//!     let client = UnixSockApiDatagramClient::new(
 //!         "/tmp/my_socket.sock".to_string(),
 //!         "my-channel".to_string(),
-//!         api_spec,
+//!         Some(api_spec),
 //!         config
-//!     ).await?;
+//!     )?;
 //!     
 //!     // Send command
 //!     let mut args = HashMap::new();
@@ -45,8 +45,7 @@
 //!     let response = client.send_command(
 //!         "my-command",
 //!         Some(args),
-//!         Duration::from_secs(30),
-//!         None
+//!         Some(Duration::from_secs(30)),
 //!     ).await?;
 //!     
 //!     if response.success {
