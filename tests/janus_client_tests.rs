@@ -2,7 +2,7 @@ use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 
-/// Unix Socket API Datagram Client Tests - SOCK_DGRAM parity  
+/// Janus Datagram Client Tests - SOCK_DGRAM parity  
 /// Tests high-level datagram client functionality, command execution
 
 #[tokio::test]
