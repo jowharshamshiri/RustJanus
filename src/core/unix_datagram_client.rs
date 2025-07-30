@@ -1,6 +1,6 @@
 use crate::core::SecurityValidator;
-use crate::error::UnixSockApiError;
-use crate::config::UnixSockApiClientConfig;
+use crate::error::JanusError;
+use crate::config::JanusClientConfig;
 use tokio::net::UnixDatagram;
 
 /// Low-level Unix domain datagram socket client (SOCK_DGRAM)
@@ -8,18 +8,18 @@ use tokio::net::UnixDatagram;
 #[derive(Debug)]
 pub struct UnixDatagramClient {
     socket_path: String,
-    config: UnixSockApiClientConfig,
+    config: JanusClientConfig,
 }
 
 impl UnixDatagramClient {
     /// Create a new Unix datagram client
-    pub fn new(socket_path: String, config: UnixSockApiClientConfig) -> Result<Self, UnixSockApiError> {
+    pub fn new(socket_path: String, config: JanusClientConfig) -> Result<Self, JanusError> {
         // Validate socket path for security
         SecurityValidator::validate_socket_path(&socket_path)?;
         
         // Validate configuration
         config.validate()
-            .map_err(|e| UnixSockApiError::ValidationError(e))?;
+            .map_err(|e| JanusError::ValidationError(e))?;
         
         Ok(Self {
             socket_path,
@@ -28,7 +28,7 @@ impl UnixDatagramClient {
     }
     
     /// Send a datagram and receive response (connectionless communication)
-    pub async fn send_datagram(&self, message: &[u8], response_socket_path: &str) -> Result<Vec<u8>, UnixSockApiError> {
+    pub async fn send_datagram(&self, message: &[u8], response_socket_path: &str) -> Result<Vec<u8>, JanusError> {
         // Validate message size
         SecurityValidator::validate_message_size(message.len(), &self.config)?;
         
@@ -37,7 +37,7 @@ impl UnixDatagramClient {
         
         // Create response socket for receiving replies
         let response_socket = UnixDatagram::bind(response_socket_path)
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to bind response socket: {}", e)))?;
+            .map_err(|e| JanusError::ConnectionError(format!("Failed to bind response socket: {}", e)))?;
         
         // Set timeout for response
         let timeout = tokio::time::timeout(
@@ -46,7 +46,7 @@ impl UnixDatagramClient {
         );
         
         let result = timeout.await
-            .map_err(|_| UnixSockApiError::CommandTimeout(
+            .map_err(|_| JanusError::CommandTimeout(
                 "datagram_send_receive".to_string(), 
                 self.config.connection_timeout
             ))?;
@@ -58,10 +58,10 @@ impl UnixDatagramClient {
     }
     
     /// Internal method to send datagram and receive response
-    async fn send_and_receive(&self, message: &[u8], response_socket: &UnixDatagram) -> Result<Vec<u8>, UnixSockApiError> {
+    async fn send_and_receive(&self, message: &[u8], response_socket: &UnixDatagram) -> Result<Vec<u8>, JanusError> {
         // Create client socket for sending
         let client_socket = UnixDatagram::unbound()
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to create client socket: {}", e)))?;
+            .map_err(|e| JanusError::ConnectionError(format!("Failed to create client socket: {}", e)))?;
         
         // Send datagram to server
         client_socket.send_to(message, &self.socket_path)
@@ -69,12 +69,12 @@ impl UnixDatagramClient {
             .map_err(|e| {
                 // Check for message too long error
                 if e.to_string().contains("message too long") || e.to_string().contains("Message too long") {
-                    UnixSockApiError::PayloadTooLarge(format!(
+                    JanusError::PayloadTooLarge(format!(
                         "payload too large for SOCK_DGRAM (size: {} bytes): Unix domain datagram sockets have system-imposed size limits, typically around 64KB. Consider reducing payload size or using chunked messages", 
                         message.len()
                     ))
                 } else {
-                    UnixSockApiError::ConnectionError(format!("Failed to send datagram: {}", e))
+                    JanusError::ConnectionError(format!("Failed to send datagram: {}", e))
                 }
             })?;
         
@@ -82,14 +82,14 @@ impl UnixDatagramClient {
         let mut buffer = vec![0u8; self.config.max_message_size];
         let (len, _) = response_socket.recv_from(&mut buffer)
             .await
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to receive response: {}", e)))?;
+            .map_err(|e| JanusError::ConnectionError(format!("Failed to receive response: {}", e)))?;
         
         buffer.truncate(len);
         Ok(buffer)
     }
     
     /// Send datagram without expecting response (fire-and-forget)
-    pub async fn send_datagram_no_response(&self, message: &[u8]) -> Result<(), UnixSockApiError> {
+    pub async fn send_datagram_no_response(&self, message: &[u8]) -> Result<(), JanusError> {
         // Validate message size
         SecurityValidator::validate_message_size(message.len(), &self.config)?;
         
@@ -98,7 +98,7 @@ impl UnixDatagramClient {
         
         // Create client socket for sending
         let client_socket = UnixDatagram::unbound()
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to create client socket: {}", e)))?;
+            .map_err(|e| JanusError::ConnectionError(format!("Failed to create client socket: {}", e)))?;
         
         // Send datagram to server
         client_socket.send_to(message, &self.socket_path)
@@ -106,12 +106,12 @@ impl UnixDatagramClient {
             .map_err(|e| {
                 // Check for message too long error
                 if e.to_string().contains("message too long") || e.to_string().contains("Message too long") {
-                    UnixSockApiError::PayloadTooLarge(format!(
+                    JanusError::PayloadTooLarge(format!(
                         "payload too large for SOCK_DGRAM (size: {} bytes): Unix domain datagram sockets have system-imposed size limits, typically around 64KB. Consider reducing payload size or using chunked messages", 
                         message.len()
                     ))
                 } else {
-                    UnixSockApiError::ConnectionError(format!("Failed to send datagram: {}", e))
+                    JanusError::ConnectionError(format!("Failed to send datagram: {}", e))
                 }
             })?;
         
@@ -119,15 +119,15 @@ impl UnixDatagramClient {
     }
     
     /// Test connectivity to server socket
-    pub async fn test_connection(&self) -> Result<(), UnixSockApiError> {
+    pub async fn test_connection(&self) -> Result<(), JanusError> {
         // Try to create client socket and send test message
         let client_socket = UnixDatagram::unbound()
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Failed to create test socket: {}", e)))?;
+            .map_err(|e| JanusError::ConnectionError(format!("Failed to create test socket: {}", e)))?;
         
         let test_message = b"test";
         client_socket.send_to(test_message, &self.socket_path)
             .await
-            .map_err(|e| UnixSockApiError::ConnectionError(format!("Connection test failed: {}", e)))?;
+            .map_err(|e| JanusError::ConnectionError(format!("Connection test failed: {}", e)))?;
         
         Ok(())
     }

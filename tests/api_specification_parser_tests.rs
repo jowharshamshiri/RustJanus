@@ -1,8 +1,8 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 
-/// API Specification Parser Tests (12 tests) - SwiftUnixSockAPI parity
+/// API Specification Parser Tests (12 tests) - SwiftJanus parity
 /// Tests JSON/YAML parsing, validation, error handling
 
 #[tokio::test]

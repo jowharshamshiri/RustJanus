@@ -1,11 +1,11 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-/// Timeout Tests (9 tests) - Exact SwiftUnixSockAPI parity
+/// Timeout Tests (9 tests) - Exact SwiftJanus parity
 /// Tests bilateral timeout handling, cleanup, recovery, and error propagation
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn test_command_with_timeout() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -35,14 +35,14 @@ async fn test_command_with_timeout() {
     assert!(result.is_err());
     
     match result.unwrap_err() {
-        UnixSockApiError::CommandTimeout(command_id, duration) => {
+        JanusError::CommandTimeout(command_id, duration) => {
             assert!(!command_id.is_empty());
             assert_eq!(duration, std::time::Duration::from_millis(100));
         },
-        UnixSockApiError::ConnectionError(_) => {
+        JanusError::ConnectionError(_) => {
             // Also acceptable - connection failed before timeout
         },
-        UnixSockApiError::SecurityViolation(_) | UnixSockApiError::InvalidSocketPath(_) => {
+        JanusError::SecurityViolation(_) | JanusError::InvalidSocketPath(_) => {
             // Security validation errors are acceptable in tests
         },
         err => panic!("Expected CommandTimeout or ConnectionError, got: {:?}", err),
@@ -59,7 +59,7 @@ async fn test_command_timeout_error_message() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -75,14 +75,14 @@ async fn test_command_timeout_error_message() {
     ).await;
     
     match result {
-        Err(UnixSockApiError::CommandTimeout(command_id, duration)) => {
+        Err(JanusError::CommandTimeout(command_id, duration)) => {
             // Validate error message format
-            let error_message = format!("{}", UnixSockApiError::CommandTimeout(command_id.clone(), duration));
+            let error_message = format!("{}", JanusError::CommandTimeout(command_id.clone(), duration));
             assert!(error_message.contains(&command_id));
             assert!(error_message.contains("timed out"));
             assert!(error_message.contains("50ms") || error_message.contains("0.05"));
         },
-        Err(UnixSockApiError::ConnectionError(_)) => {
+        Err(JanusError::ConnectionError(_)) => {
             // Connection error is also acceptable
         },
         other => {
@@ -98,7 +98,7 @@ async fn test_uuid_generation() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -116,7 +116,7 @@ async fn test_uuid_generation() {
             Some(args.clone()),
             Some(std::time::Duration::from_millis(10)),
         ).await {
-            Err(UnixSockApiError::CommandTimeout(command_id, _)) => {
+            Err(JanusError::CommandTimeout(command_id, _)) => {
                 // Validate UUID format (36 characters with hyphens)
                 assert_eq!(command_id.len(), 36);
                 assert_eq!(command_id.chars().filter(|&c| c == '-').count(), 4);
@@ -125,7 +125,7 @@ async fn test_uuid_generation() {
                 assert!(!command_ids.contains(&command_id), "UUIDs should be unique");
                 command_ids.push(command_id);
             },
-            Err(UnixSockApiError::ConnectionError(_)) => {
+            Err(JanusError::ConnectionError(_)) => {
                 // Connection errors don't provide command IDs, skip
             },
             other => {
@@ -143,7 +143,7 @@ async fn test_multiple_commands_with_different_timeouts() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -169,7 +169,7 @@ async fn test_multiple_commands_with_different_timeouts() {
         ).await;
         
         match result {
-            Err(UnixSockApiError::CommandTimeout(_, actual_timeout)) => {
+            Err(JanusError::CommandTimeout(_, actual_timeout)) => {
                 assert_eq!(actual_timeout, *timeout, "Timeout {} should match expected", i);
                 
                 // Timing should be approximately correct (within 50ms tolerance)
@@ -181,7 +181,7 @@ async fn test_multiple_commands_with_different_timeouts() {
                 assert!(timing_diff < std::time::Duration::from_millis(50), 
                        "Timeout {} timing should be accurate", i);
             },
-            Err(UnixSockApiError::ConnectionError(_)) => {
+            Err(JanusError::ConnectionError(_)) => {
                 // Connection errors happen faster than timeout
                 assert!(elapsed_time < *timeout, "Connection error should be faster than timeout");
             },
@@ -242,7 +242,7 @@ async fn test_default_timeout() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -263,12 +263,12 @@ async fn test_default_timeout() {
     let elapsed = start_time.elapsed();
     
     match result {
-        Err(UnixSockApiError::ConnectionError(_)) => {
+        Err(JanusError::ConnectionError(_)) => {
             // Connection should fail quickly (much faster than 30 seconds)
             assert!(elapsed < std::time::Duration::from_secs(5), 
                    "Connection error should be fast");
         },
-        Err(UnixSockApiError::CommandTimeout(_, timeout)) => {
+        Err(JanusError::CommandTimeout(_, timeout)) => {
             assert_eq!(timeout, std::time::Duration::from_secs(30));
         },
         other => {
@@ -283,7 +283,7 @@ async fn test_concurrent_timeouts() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -310,10 +310,10 @@ async fn test_concurrent_timeouts() {
             ).await;
             
             match result {
-                Err(UnixSockApiError::CommandTimeout(_, _)) => {
+                Err(JanusError::CommandTimeout(_, _)) => {
                     timeout_counter_clone.fetch_add(1, Ordering::SeqCst);
                 },
-                Err(UnixSockApiError::ConnectionError(_)) => {
+                Err(JanusError::ConnectionError(_)) => {
                     // Connection errors are also expected
                 },
                 other => {
@@ -366,8 +366,8 @@ async fn test_command_handler_timeout_error() {
 
 #[tokio::test]
 async fn test_handler_timeout_api_error() {
-    // Test UnixSockApiError::HandlerTimeout structure
-    let api_timeout_error = UnixSockApiError::HandlerTimeout(
+    // Test JanusError::HandlerTimeout structure
+    let api_timeout_error = JanusError::HandlerTimeout(
         "test-handler-456".to_string(),
         std::time::Duration::from_secs(10),
     );
@@ -380,7 +380,7 @@ async fn test_handler_timeout_api_error() {
     
     // Test error type matching
     match api_timeout_error {
-        UnixSockApiError::HandlerTimeout(command_id, duration) => {
+        JanusError::HandlerTimeout(command_id, duration) => {
             assert_eq!(command_id, "test-handler-456");
             assert_eq!(duration, std::time::Duration::from_secs(10));
         },

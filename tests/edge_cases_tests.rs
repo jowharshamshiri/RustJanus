@@ -1,8 +1,8 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 
-/// Edge Cases Tests (10 tests) - SwiftUnixSockAPI parity
+/// Edge Cases Tests (10 tests) - SwiftJanus parity
 /// Tests null values, nested data, large values, special characters
 
 #[tokio::test]

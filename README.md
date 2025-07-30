@@ -1,4 +1,4 @@
-# RustUnixSockAPI
+# RustJanus
 
 A production-ready Unix domain socket communication library for Rust with **async-first architecture** and cross-language compatibility.
 
@@ -19,13 +19,13 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-RustUnixSockAPI = "0.1"
+RustJanus = "0.1"
 ```
 
 ### Async Client Example
 
 ```rust
-use rust_unix_sock_api::prelude::*;
+use rust_janus::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -36,11 +36,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = ApiSpecificationParser::from_json(&spec_data)?;
     
     // Create async client with proper configuration
-    let client = UnixSockApiClient::new(
+    let client = JanusClient::new(
         "/tmp/my_socket.sock".to_string(),
         "my_channel".to_string(),
         spec,
-        UnixSockApiClientConfig::default(),
+        JanusClientConfig::default(),
     ).await?;
     
     // Send async command with response tracking
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Client Example
 
 ```rust
-use rust_unix_sock_api::UnixSocketClient;
+use rust_janus::JanusClient;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -72,7 +72,7 @@ struct MyMessage {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = UnixSocketClient::new("/tmp/my_socket.sock");
+    let mut client = JanusClient::new("/tmp/my_socket.sock");
     
     let message = MyMessage {
         action: "test".to_string(),
@@ -93,19 +93,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Use message envelopes for additional metadata:
 
 ```rust
-use rust_unix_sock_api::{MessageEnvelope, UnixSocketClient};
+use rust_janus::{MessageEnvelope, JanusClient};
 
 let message = MyMessage { /* ... */ };
 let envelope = MessageEnvelope::with_priority(message, 1);
 
-let mut client = UnixSocketClient::new("/tmp/socket.sock");
+let mut client = JanusClient::new("/tmp/socket.sock");
 let response = client.send_envelope(envelope)?;
 ```
 
 ### Custom Configuration
 
 ```rust
-use rust_unix_sock_api::{UnixSocketServer, ServerConfig, ClientConfig};
+use rust_janus::{JanusServer, ServerConfig, ClientConfig};
 
 // Server configuration
 let server_config = ServerConfig {
@@ -114,7 +114,7 @@ let server_config = ServerConfig {
     auto_cleanup: true,
     ..Default::default()
 };
-let mut server = UnixSocketServer::with_config("/tmp/socket.sock", server_config)?;
+let mut server = JanusServer::with_config("/tmp/socket.sock", server_config)?;
 
 // Client configuration
 let client_config = ClientConfig {
@@ -123,7 +123,7 @@ let client_config = ClientConfig {
     auto_correlation: true,
     ..Default::default()
 };
-let client = UnixSocketClient::with_config("/tmp/socket.sock", client_config);
+let client = JanusClient::with_config("/tmp/socket.sock", client_config);
 ```
 
 ### Built-in Message Types
@@ -131,7 +131,7 @@ let client = UnixSocketClient::with_config("/tmp/socket.sock", client_config);
 The library provides several built-in message types:
 
 ```rust
-use rust_unix_sock_api::{TextMessage, CommandMessage, ResponseMessage, JsonMessage};
+use rust_janus::{TextMessage, CommandMessage, ResponseMessage, JsonMessage};
 
 // Simple text message
 let text_msg = TextMessage::new("Hello, World!");
@@ -159,10 +159,10 @@ let json_msg = JsonMessage::new(serde_json::json!({
 The library provides comprehensive error handling:
 
 ```rust
-use rust_unix_sock_api::{SocketError, Result};
+use rust_janus::{SocketError, Result};
 
 fn send_message() -> Result<String> {
-    let mut client = UnixSocketClient::new("/tmp/socket.sock");
+    let mut client = JanusClient::new("/tmp/socket.sock");
     
     match client.send_message(message) {
         Ok(response) => Ok(response),
@@ -184,7 +184,7 @@ fn send_message() -> Result<String> {
 ## Utility Functions
 
 ```rust
-use rust_unix_sock_api::utils::{
+use rust_janus::utils::{
     ensure_socket_dir, 
     cleanup_socket_file, 
     is_socket_in_use,

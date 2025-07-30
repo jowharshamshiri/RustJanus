@@ -110,7 +110,7 @@ impl SocketCommand {
     }
 }
 
-/// Socket response structure (exact SwiftUnixSockAPI parity)
+/// Socket response structure (exact SwiftJanus parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[allow(non_snake_case)]
 pub struct SocketResponse {
@@ -227,7 +227,7 @@ pub enum MessageType {
     Response,
 }
 
-/// Message envelope for framing (exact SwiftUnixSockAPI parity)
+/// Message envelope for framing (exact SwiftJanus parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SocketMessage {
     /// Message type

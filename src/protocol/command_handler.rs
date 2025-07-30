@@ -1,9 +1,9 @@
-use crate::error::{UnixSockApiError, SocketError};
+use crate::error::{JanusError, SocketError};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Command handler function type (exact SwiftUnixSockAPI parity)
+/// Command handler function type (exact SwiftJanus parity)
 pub type CommandHandler = Arc<dyn Fn(HashMap<String, serde_json::Value>) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> + Send + Sync>;
 
 /// Command handler registry for managing registered handlers
@@ -26,12 +26,12 @@ impl CommandHandlerRegistry {
         &self,
         command_name: String,
         handler: CommandHandler,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let mut handlers = self.handlers.write().await;
         
         // Check handler limit
         if handlers.len() >= self.max_handlers {
-            return Err(UnixSockApiError::ResourceLimit(
+            return Err(JanusError::ResourceLimit(
                 format!("Maximum command handlers ({}) exceeded", self.max_handlers)
             ));
         }
@@ -309,11 +309,11 @@ impl ContextualCommandHandlerRegistry {
         &self,
         command_name: String,
         handler: ContextualCommandHandler,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let mut handlers = self.handlers.write().await;
         
         if handlers.len() >= self.max_handlers {
-            return Err(UnixSockApiError::ResourceLimit(
+            return Err(JanusError::ResourceLimit(
                 format!("Maximum command handlers ({}) exceeded", self.max_handlers)
             ));
         }
@@ -408,7 +408,7 @@ mod tests {
         assert!(result.is_err());
         
         match result.unwrap_err() {
-            UnixSockApiError::ResourceLimit(_) => {},
+            JanusError::ResourceLimit(_) => {},
             _ => panic!("Expected ResourceLimit error"),
         }
     }

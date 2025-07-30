@@ -1,14 +1,14 @@
-use crate::error::UnixSockApiError;
+use crate::error::JanusError;
 use crate::specification::ApiSpecification;
 use log::{debug, error, info, warn};
 use tokio::fs;
 
-/// API specification parser for JSON and YAML formats (exact SwiftUnixSockAPI parity)
+/// API specification parser for JSON and YAML formats (exact SwiftJanus parity)
 pub struct ApiSpecificationParser;
 
 impl ApiSpecificationParser {
     /// Parse API specification from JSON string
-    pub fn from_json(json_str: &str) -> Result<ApiSpecification, UnixSockApiError> {
+    pub fn from_json(json_str: &str) -> Result<ApiSpecification, JanusError> {
         Self::from_json_with_context(json_str, None)
     }
 
@@ -16,7 +16,7 @@ impl ApiSpecificationParser {
     pub fn from_json_with_context(
         json_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, UnixSockApiError> {
+    ) -> Result<ApiSpecification, JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -29,7 +29,7 @@ impl ApiSpecificationParser {
         // Validate JSON string is not empty
         if json_str.trim().is_empty() {
             error!("API specification JSON string is empty{}", context);
-            return Err(UnixSockApiError::DecodingFailed(format!(
+            return Err(JanusError::DecodingFailed(format!(
                 "JSON parsing error{}: input string is empty",
                 context
             )));
@@ -89,14 +89,14 @@ impl ApiSpecificationParser {
                     }
                 };
 
-                Err(UnixSockApiError::DecodingFailed(detailed_error))
+                Err(JanusError::DecodingFailed(detailed_error))
             }
         }
     }
 
     /// Parse API specification from YAML string
     #[cfg(feature = "yaml-support")]
-    pub fn from_yaml(yaml_str: &str) -> Result<ApiSpecification, UnixSockApiError> {
+    pub fn from_yaml(yaml_str: &str) -> Result<ApiSpecification, JanusError> {
         Self::from_yaml_with_context(yaml_str, None)
     }
 
@@ -105,7 +105,7 @@ impl ApiSpecificationParser {
     pub fn from_yaml_with_context(
         yaml_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, UnixSockApiError> {
+    ) -> Result<ApiSpecification, JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -118,7 +118,7 @@ impl ApiSpecificationParser {
         // Validate YAML string is not empty
         if yaml_str.trim().is_empty() {
             error!("API specification YAML string is empty{}", context);
-            return Err(UnixSockApiError::DecodingFailed(format!(
+            return Err(JanusError::DecodingFailed(format!(
                 "YAML parsing error{}: input string is empty",
                 context
             )));
@@ -161,19 +161,19 @@ impl ApiSpecificationParser {
                     format!("YAML parsing error{}: {}", context, e)
                 };
 
-                Err(UnixSockApiError::DecodingFailed(detailed_error))
+                Err(JanusError::DecodingFailed(detailed_error))
             }
         }
     }
 
     /// Parse API specification from file (auto-detect format based on extension)
-    pub async fn from_file(path: &str) -> Result<ApiSpecification, UnixSockApiError> {
+    pub async fn from_file(path: &str) -> Result<ApiSpecification, JanusError> {
         info!("Loading API specification from file: {}", path);
 
         // Validate file path
         if path.trim().is_empty() {
             error!("API specification file path is empty");
-            return Err(UnixSockApiError::IoError(
+            return Err(JanusError::IoError(
                 "File path cannot be empty".to_string(),
             ));
         }
@@ -196,7 +196,7 @@ impl ApiSpecificationParser {
             }
             Err(e) => {
                 error!("Cannot access API specification file '{}': {}", path, e);
-                return Err(UnixSockApiError::IoError(format!(
+                return Err(JanusError::IoError(format!(
                     "Failed to access file {}: {}",
                     path, e
                 )));
@@ -211,7 +211,7 @@ impl ApiSpecificationParser {
             }
             Err(e) => {
                 error!("Failed to read API specification file '{}': {}", path, e);
-                return Err(UnixSockApiError::IoError(format!(
+                return Err(JanusError::IoError(format!(
                     "Failed to read file {}: {}",
                     path, e
                 )));
@@ -228,7 +228,7 @@ impl ApiSpecificationParser {
             #[cfg(not(feature = "yaml-support"))]
             {
                 error!("YAML support not enabled for file: {}", path);
-                Err(UnixSockApiError::DecodingFailed(format!(
+                Err(JanusError::DecodingFailed(format!(
                     "YAML support not enabled (file: {}). Enable 'yaml-support' feature.",
                     path
                 )))
@@ -262,26 +262,26 @@ impl ApiSpecificationParser {
     }
 
     /// Serialize API specification to JSON string
-    pub fn to_json(api_spec: &ApiSpecification) -> Result<String, UnixSockApiError> {
+    pub fn to_json(api_spec: &ApiSpecification) -> Result<String, JanusError> {
         debug!("Serializing API specification to JSON");
         serde_json::to_string_pretty(api_spec).map_err(|e| {
             error!("Failed to serialize API specification to JSON: {}", e);
-            UnixSockApiError::EncodingFailed(format!("JSON serialization error: {}", e))
+            JanusError::EncodingFailed(format!("JSON serialization error: {}", e))
         })
     }
 
     /// Serialize API specification to YAML string
     #[cfg(feature = "yaml-support")]
-    pub fn to_yaml(api_spec: &ApiSpecification) -> Result<String, UnixSockApiError> {
+    pub fn to_yaml(api_spec: &ApiSpecification) -> Result<String, JanusError> {
         debug!("Serializing API specification to YAML");
         serde_yaml::to_string(api_spec).map_err(|e| {
             error!("Failed to serialize API specification to YAML: {}", e);
-            UnixSockApiError::EncodingFailed(format!("YAML serialization error: {}", e))
+            JanusError::EncodingFailed(format!("YAML serialization error: {}", e))
         })
     }
 
     /// Write API specification to file (format based on extension)
-    pub async fn to_file(api_spec: &ApiSpecification, path: &str) -> Result<(), UnixSockApiError> {
+    pub async fn to_file(api_spec: &ApiSpecification, path: &str) -> Result<(), JanusError> {
         let content = if path.ends_with(".yaml") || path.ends_with(".yml") {
             #[cfg(feature = "yaml-support")]
             {
@@ -289,7 +289,7 @@ impl ApiSpecificationParser {
             }
             #[cfg(not(feature = "yaml-support"))]
             {
-                return Err(UnixSockApiError::EncodingFailed(
+                return Err(JanusError::EncodingFailed(
                     "YAML support not enabled. Enable 'yaml-support' feature.".to_string(),
                 ));
             }
@@ -298,14 +298,14 @@ impl ApiSpecificationParser {
         };
 
         fs::write(path, content).await.map_err(|e| {
-            UnixSockApiError::IoError(format!("Failed to write file {}: {}", path, e))
+            JanusError::IoError(format!("Failed to write file {}: {}", path, e))
         })?;
 
         Ok(())
     }
 
     /// Validate API specification structure and content
-    pub fn validate(api_spec: &ApiSpecification) -> Result<(), UnixSockApiError> {
+    pub fn validate(api_spec: &ApiSpecification) -> Result<(), JanusError> {
         Self::validate_with_context(api_spec, None)
     }
 
@@ -313,7 +313,7 @@ impl ApiSpecificationParser {
     pub fn validate_with_context(
         api_spec: &ApiSpecification,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -326,7 +326,7 @@ impl ApiSpecificationParser {
                 "API specification validation failed{}: version is required",
                 context
             );
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "API specification version is required{}",
                 context
             )));
@@ -338,7 +338,7 @@ impl ApiSpecificationParser {
                 "API specification validation failed{}: invalid version format '{}'",
                 context, api_spec.version
             );
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "Invalid version format: {}{}",
                 api_spec.version, context
             )));
@@ -351,7 +351,7 @@ impl ApiSpecificationParser {
                 "API specification validation failed{}: no channels defined",
                 context
             );
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "API specification must define at least one channel{}",
                 context
             )));
@@ -404,7 +404,7 @@ impl ApiSpecificationParser {
     }
 
     /// Load and validate API specification from file in one step
-    pub async fn load_and_validate(path: &str) -> Result<ApiSpecification, UnixSockApiError> {
+    pub async fn load_and_validate(path: &str) -> Result<ApiSpecification, JanusError> {
         info!("Loading and validating API specification from: {}", path);
 
         // Load the specification
@@ -421,7 +421,7 @@ impl ApiSpecificationParser {
     }
 
     /// Load and validate API specification from JSON string in one step
-    pub fn load_and_validate_json(json_str: &str) -> Result<ApiSpecification, UnixSockApiError> {
+    pub fn load_and_validate_json(json_str: &str) -> Result<ApiSpecification, JanusError> {
         Self::load_and_validate_json_with_context(json_str, None)
     }
 
@@ -429,7 +429,7 @@ impl ApiSpecificationParser {
     pub fn load_and_validate_json_with_context(
         json_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, UnixSockApiError> {
+    ) -> Result<ApiSpecification, JanusError> {
         let context = file_path
             .map(|p| format!(" from file: {}", p))
             .unwrap_or_default();
@@ -453,7 +453,7 @@ impl ApiSpecificationParser {
 
     /// Load and validate API specification from YAML string in one step
     #[cfg(feature = "yaml-support")]
-    pub fn load_and_validate_yaml(yaml_str: &str) -> Result<ApiSpecification, UnixSockApiError> {
+    pub fn load_and_validate_yaml(yaml_str: &str) -> Result<ApiSpecification, JanusError> {
         Self::load_and_validate_yaml_with_context(yaml_str, None)
     }
 
@@ -462,7 +462,7 @@ impl ApiSpecificationParser {
     pub fn load_and_validate_yaml_with_context(
         yaml_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, UnixSockApiError> {
+    ) -> Result<ApiSpecification, JanusError> {
         let context = file_path
             .map(|p| format!(" from file: {}", p))
             .unwrap_or_default();
@@ -546,7 +546,7 @@ impl ApiSpecificationParser {
         channel_name: &str,
         channel_spec: &crate::specification::ChannelSpec,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -560,7 +560,7 @@ impl ApiSpecificationParser {
         // Channel name validation
         if channel_name.is_empty() {
             error!("Channel validation failed{}: name cannot be empty", context);
-            return Err(UnixSockApiError::InvalidChannel(format!(
+            return Err(JanusError::InvalidChannel(format!(
                 "Channel name cannot be empty{}",
                 context
             )));
@@ -575,7 +575,7 @@ impl ApiSpecificationParser {
                 "Channel validation failed{}: invalid name format '{}'",
                 context, channel_name
             );
-            return Err(UnixSockApiError::InvalidChannel(format!(
+            return Err(JanusError::InvalidChannel(format!(
                 "Invalid channel name format: {}{}",
                 channel_name, context
             )));
@@ -587,7 +587,7 @@ impl ApiSpecificationParser {
                 "Channel validation failed{}: '{}' must have a description",
                 context, channel_name
             );
-            return Err(UnixSockApiError::InvalidChannel(format!(
+            return Err(JanusError::InvalidChannel(format!(
                 "Channel '{}' must have a description{}",
                 channel_name, context
             )));
@@ -599,7 +599,7 @@ impl ApiSpecificationParser {
                 "Channel validation failed{}: '{}' must define at least one command",
                 context, channel_name
             );
-            return Err(UnixSockApiError::InvalidChannel(format!(
+            return Err(JanusError::InvalidChannel(format!(
                 "Channel '{}' must define at least one command{}",
                 channel_name, context
             )));
@@ -635,13 +635,13 @@ impl ApiSpecificationParser {
         command_name: &str,
         command_spec: &crate::specification::CommandSpec,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Command name validation
         if command_name.is_empty() {
-            return Err(UnixSockApiError::UnknownCommand(format!(
+            return Err(JanusError::UnknownCommand(format!(
                 "Command name cannot be empty{}",
                 context
             )));
@@ -652,7 +652,7 @@ impl ApiSpecificationParser {
             .chars()
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
         {
-            return Err(UnixSockApiError::UnknownCommand(format!(
+            return Err(JanusError::UnknownCommand(format!(
                 "Invalid command name format: {}{}",
                 command_name, context
             )));
@@ -660,7 +660,7 @@ impl ApiSpecificationParser {
 
         // Description validation
         if command_spec.description.is_empty() {
-            return Err(UnixSockApiError::UnknownCommand(format!(
+            return Err(JanusError::UnknownCommand(format!(
                 "Command '{}' in channel '{}' must have a description{}",
                 command_name, channel_name, context
             )));
@@ -689,13 +689,13 @@ impl ApiSpecificationParser {
         arg_name: &str,
         arg_spec: &crate::specification::ArgumentSpec,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Argument name validation
         if arg_name.is_empty() {
-            return Err(UnixSockApiError::InvalidArgument(
+            return Err(JanusError::InvalidArgument(
                 "argument".to_string(),
                 format!("Argument name cannot be empty{}", context),
             ));
@@ -704,7 +704,7 @@ impl ApiSpecificationParser {
         // Type validation
         let valid_types = ["string", "integer", "number", "boolean", "array", "object"];
         if !valid_types.contains(&arg_spec.r#type.as_str()) {
-            return Err(UnixSockApiError::InvalidArgument(
+            return Err(JanusError::InvalidArgument(
                 arg_name.to_string(),
                 format!("Invalid argument type: {}{}", arg_spec.r#type, context),
             ));
@@ -728,14 +728,14 @@ impl ApiSpecificationParser {
         arg_name: &str,
         validation_spec: &crate::specification::ValidationSpec,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Range validation
         if let (Some(min), Some(max)) = (validation_spec.minimum, validation_spec.maximum) {
             if min > max {
-                return Err(UnixSockApiError::InvalidArgument(
+                return Err(JanusError::InvalidArgument(
                     arg_name.to_string(),
                     format!(
                         "Minimum value cannot be greater than maximum value{}",
@@ -750,7 +750,7 @@ impl ApiSpecificationParser {
             (validation_spec.min_length, validation_spec.max_length)
         {
             if min_len > max_len {
-                return Err(UnixSockApiError::InvalidArgument(
+                return Err(JanusError::InvalidArgument(
                     arg_name.to_string(),
                     format!(
                         "Minimum length cannot be greater than maximum length{}",
@@ -763,7 +763,7 @@ impl ApiSpecificationParser {
         // Pattern validation
         if let Some(pattern) = &validation_spec.pattern {
             regex::Regex::new(pattern).map_err(|e| {
-                UnixSockApiError::InvalidArgument(
+                JanusError::InvalidArgument(
                     arg_name.to_string(),
                     format!("Invalid regex pattern: {}{}", e, context),
                 )
@@ -773,7 +773,7 @@ impl ApiSpecificationParser {
         // Enum validation
         if let Some(enum_values) = &validation_spec.r#enum {
             if enum_values.is_empty() {
-                return Err(UnixSockApiError::InvalidArgument(
+                return Err(JanusError::InvalidArgument(
                     arg_name.to_string(),
                     format!("Enum values cannot be empty{}", context),
                 ));
@@ -787,14 +787,14 @@ impl ApiSpecificationParser {
     fn validate_response_spec(
         response_spec: &crate::specification::ResponseSpec,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Response type validation
         let valid_types = ["string", "integer", "number", "boolean", "array", "object"];
         if !valid_types.contains(&response_spec.r#type.as_str()) {
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "Invalid response type: {}{}",
                 response_spec.r#type, context
             )));
@@ -817,19 +817,19 @@ impl ApiSpecificationParser {
         error_name: &str,
         error_spec: &crate::specification::ErrorCodeSpec,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         if error_name.is_empty() {
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "Error code name cannot be empty{}",
                 context
             )));
         }
 
         if error_spec.message.is_empty() {
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "Error code '{}' must have a message{}",
                 error_name, context
             )));
@@ -837,7 +837,7 @@ impl ApiSpecificationParser {
 
         // Validate HTTP status code range
         if !(100..=599).contains(&error_spec.code) {
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "Invalid HTTP status code: {}{}",
                 error_spec.code, context
             )));
@@ -852,13 +852,13 @@ impl ApiSpecificationParser {
         model_spec: &crate::specification::ModelSpec,
         _api_spec: &ApiSpecification,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Model name validation
         if model_name.is_empty() {
-            return Err(UnixSockApiError::MalformedData(format!(
+            return Err(JanusError::MalformedData(format!(
                 "Model name cannot be empty{}",
                 context
             )));
@@ -873,7 +873,7 @@ impl ApiSpecificationParser {
         if let Some(required_fields) = &model_spec.required {
             for required_field in required_fields {
                 if !model_spec.properties.contains_key(required_field) {
-                    return Err(UnixSockApiError::MalformedData(format!(
+                    return Err(JanusError::MalformedData(format!(
                         "Required field '{}' not found in model '{}'{}",
                         required_field, model_name, context
                     )));
@@ -890,7 +890,7 @@ impl ApiSpecificationParser {
         value: &serde_json::Value,
         expected_type: &str,
         file_path: Option<&str>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -905,7 +905,7 @@ impl ApiSpecificationParser {
         };
 
         if !matches {
-            return Err(UnixSockApiError::InvalidArgument(
+            return Err(JanusError::InvalidArgument(
                 arg_name.to_string(),
                 format!(
                     "Value type mismatch: expected {}, got {}{}",

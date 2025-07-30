@@ -1,10 +1,10 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 
 mod test_utils;
 use test_utils::*;
 use std::collections::HashMap;
 
-/// Basic Functionality Tests (11 tests) - Exact SwiftUnixSockAPI parity
+/// Basic Functionality Tests (11 tests) - Exact SwiftJanus parity
 /// Tests API specification creation, serialization, and core functionality
 
 #[tokio::test]
@@ -223,7 +223,7 @@ async fn _test_unix_socket_client_initialization() {
     let socket_path = create_valid_socket_path();
     
     // Valid initialization
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path.clone(),
         "test-channel".to_string(),
         Some(api_spec.clone()),
@@ -237,7 +237,7 @@ async fn _test_unix_socket_client_initialization() {
     assert_eq!(client.specification().unwrap().version, "1.0.0");
     
     // Invalid channel ID
-    let invalid_client = UnixSockApiDatagramClient::new(
+    let invalid_client = JanusDatagramClient::new(
         socket_path,
         "".to_string(), // Empty channel ID
         Some(api_spec),
@@ -246,7 +246,7 @@ async fn _test_unix_socket_client_initialization() {
     
     assert!(invalid_client.is_err());
     match invalid_client.unwrap_err() {
-        UnixSockApiError::InvalidChannel(_) => {},
+        JanusError::InvalidChannel(_) => {},
         err => panic!("Expected InvalidChannel, got: {:?}", err),
     }
 }
@@ -257,7 +257,7 @@ async fn test_command_validation() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -275,10 +275,10 @@ async fn test_command_validation() {
     // Should either succeed or fail with expected errors (connection/timeout/security)
     match result.await {
         Ok(_) => {},
-        Err(UnixSockApiError::ConnectionError(_)) => {},
-        Err(UnixSockApiError::CommandTimeout(_, _)) => {},
-        Err(UnixSockApiError::SecurityViolation(_)) => {},
-        Err(UnixSockApiError::InvalidSocketPath(_)) => {},
+        Err(JanusError::ConnectionError(_)) => {},
+        Err(JanusError::CommandTimeout(_, _)) => {},
+        Err(JanusError::SecurityViolation(_)) => {},
+        Err(JanusError::InvalidSocketPath(_)) => {},
         Err(err) => panic!("Unexpected error for valid command: {:?}", err),
     }
     
@@ -292,11 +292,11 @@ async fn test_command_validation() {
     // May fail with validation error or connection error
     match invalid_result.await {
         Ok(_) => {},
-        Err(UnixSockApiError::UnknownCommand(_)) => {},
-        Err(UnixSockApiError::ConnectionError(_)) => {},
-        Err(UnixSockApiError::CommandTimeout(_, _)) => {},
-        Err(UnixSockApiError::SecurityViolation(_)) => {},
-        Err(UnixSockApiError::InvalidSocketPath(_)) => {},
+        Err(JanusError::UnknownCommand(_)) => {},
+        Err(JanusError::ConnectionError(_)) => {},
+        Err(JanusError::CommandTimeout(_, _)) => {},
+        Err(JanusError::SecurityViolation(_)) => {},
+        Err(JanusError::InvalidSocketPath(_)) => {},
         Err(err) => panic!("Unexpected error for invalid command: {:?}", err),
     }
 }

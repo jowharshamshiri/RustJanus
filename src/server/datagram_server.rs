@@ -7,10 +7,10 @@ use serde_json;
 use std::fs;
 
 use crate::protocol::message_types::{SocketCommand, SocketResponse};
-use crate::error::UnixSockApiError;
+use crate::error::JanusError;
 
 /// Command handler function type for SOCK_DGRAM server
-pub type DatagramCommandHandler = Box<dyn Fn(SocketCommand) -> Result<serde_json::Value, UnixSockApiError> + Send + Sync>;
+pub type DatagramCommandHandler = Box<dyn Fn(SocketCommand) -> Result<serde_json::Value, JanusError> + Send + Sync>;
 
 /// High-level SOCK_DGRAM Unix socket server
 /// Handles command routing and response generation for connectionless communication
@@ -33,7 +33,7 @@ impl UnixDatagramServer {
     /// Register a command handler
     pub async fn register_handler<F>(&mut self, command: &str, handler: F)
     where
-        F: Fn(SocketCommand) -> Result<serde_json::Value, UnixSockApiError> + Send + Sync + 'static,
+        F: Fn(SocketCommand) -> Result<serde_json::Value, JanusError> + Send + Sync + 'static,
     {
         let mut handlers = self.handlers.lock().await;
         handlers.insert(command.to_string(), Box::new(handler));
@@ -41,7 +41,7 @@ impl UnixDatagramServer {
 
     /// Start listening on the specified socket path using SOCK_DGRAM
     /// Returns immediately, runs server in background task
-    pub async fn start_listening(&mut self, socket_path: &str) -> Result<(), UnixSockApiError> {
+    pub async fn start_listening(&mut self, socket_path: &str) -> Result<(), JanusError> {
         self.socket_path = Some(socket_path.to_string());
         self.is_running.store(true, Ordering::SeqCst);
 
@@ -80,16 +80,16 @@ impl UnixDatagramServer {
         socket_path: String,
         handlers: Arc<Mutex<HashMap<String, DatagramCommandHandler>>>,
         is_running: Arc<AtomicBool>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         // Remove existing socket
         let _ = fs::remove_file(&socket_path);
 
         let socket = UnixDatagram::bind(&socket_path)
-            .map_err(|e| UnixSockApiError::IoError(format!("Failed to bind socket: {}", e)))?;
+            .map_err(|e| JanusError::IoError(format!("Failed to bind socket: {}", e)))?;
 
         // Set non-blocking mode for graceful shutdown
         socket.set_nonblocking(true)
-            .map_err(|e| UnixSockApiError::IoError(format!("Failed to set non-blocking: {}", e)))?;
+            .map_err(|e| JanusError::IoError(format!("Failed to set non-blocking: {}", e)))?;
 
         println!("SOCK_DGRAM server listening on: {}", socket_path);
 

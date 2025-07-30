@@ -1,11 +1,11 @@
 [package]
-name = "RustUnixSockAPI"
+name = "RustJanus"
 version = "2.0.0"
 edition = "2021"
 authors = ["Bahram Joharshamshiri"]
-description = "Enterprise-grade Unix domain socket API communication library (SwiftUnixSockAPI parity)"
+description = "Enterprise-grade Unix domain socket API communication library (SwiftJanus parity)"
 license = "MIT"
-repository = "https://github.com/jowharshamshiri/RustUnixSockAPI"
+repository = "https://github.com/jowharshamshiri/RustJanus"
 keywords = ["unix", "socket", "ipc", "api", "security"]
 categories = ["network-programming", "os::unix-apis", "api-bindings"]
 
@@ -50,12 +50,12 @@ criterion = { version = "0.5", features = ["html_reports"] }
 # Test environment
 
 [lib]
-name = "rust_unix_sock_api"
+name = "rust_janus"
 path = "src/lib.rs"
 
 [[bin]]
-name = "unixsock-dgram"
-path = "src/bin/unixsock-dgram.rs"
+name = "janus"
+path = "src/bin/janus.rs"
 required-features = []
 
 [[bench]]

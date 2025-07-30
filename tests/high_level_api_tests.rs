@@ -2,8 +2,8 @@ use std::time::Duration;
 use tokio::time::timeout;
 use serde_json::json;
 
-use rust_unix_sock_api::{UnixDatagramServer, UnixSockApiDatagramClient, UnixSockApiClientConfig};
-use rust_unix_sock_api::error::UnixSockApiError;
+use rust_janus::{UnixDatagramServer, JanusDatagramClient, JanusClientConfig};
+use rust_janus::error::JanusError;
 
 #[tokio::test]
 async fn test_datagram_server_creation() {
@@ -68,8 +68,8 @@ async fn test_datagram_client_server_communication() {
     tokio::time::sleep(Duration::from_millis(100)).await;
     
     // Create client
-    let config = UnixSockApiClientConfig::default();
-    let client = UnixSockApiDatagramClient::new(
+    let config = JanusClientConfig::default();
+    let client = JanusDatagramClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
         None, // No API spec for this test
@@ -94,12 +94,12 @@ async fn test_datagram_client_server_communication() {
                 assert_eq!(result["echo"], "Hello Server!");
             }
         }
-        Ok(Err(UnixSockApiError::SecurityViolation(_))) => {
+        Ok(Err(JanusError::SecurityViolation(_))) => {
             // Security validation errors are acceptable in tests
             println!("Test skipped due to security validation");
             return;
         }
-        Ok(Err(UnixSockApiError::InvalidSocketPath(_))) => {
+        Ok(Err(JanusError::InvalidSocketPath(_))) => {
             // Socket path validation errors are acceptable in tests  
             println!("Test skipped due to socket path validation");
             return;
@@ -139,8 +139,8 @@ async fn test_datagram_default_ping_handler() {
     tokio::time::sleep(Duration::from_millis(100)).await;
     
     // Create client
-    let config = UnixSockApiClientConfig::default();
-    let client = UnixSockApiDatagramClient::new(
+    let config = JanusClientConfig::default();
+    let client = JanusDatagramClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
         None,
@@ -162,12 +162,12 @@ async fn test_datagram_default_ping_handler() {
                 assert!(result.get("timestamp").is_some());
             }
         }
-        Ok(Err(UnixSockApiError::SecurityViolation(_))) => {
+        Ok(Err(JanusError::SecurityViolation(_))) => {
             // Security validation errors are acceptable in tests
             println!("Test skipped due to security validation");
             return;
         }
-        Ok(Err(UnixSockApiError::InvalidSocketPath(_))) => {
+        Ok(Err(JanusError::InvalidSocketPath(_))) => {
             // Socket path validation errors are acceptable in tests  
             println!("Test skipped due to socket path validation");
             return;
@@ -196,8 +196,8 @@ async fn test_datagram_unknown_command() {
     tokio::time::sleep(Duration::from_millis(100)).await;
     
     // Create client
-    let config = UnixSockApiClientConfig::default();
-    let client = UnixSockApiDatagramClient::new(
+    let config = JanusClientConfig::default();
+    let client = JanusDatagramClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
         None,
@@ -217,19 +217,19 @@ async fn test_datagram_unknown_command() {
             if let Some(error) = response.error {
                 // Check that it's a ProcessingError (which is what we send for unknown commands)
                 match error {
-                    rust_unix_sock_api::error::SocketError::ProcessingError(msg) => {
+                    rust_janus::error::SocketError::ProcessingError(msg) => {
                         assert!(msg.contains("not registered"));
                     }
                     _ => panic!("Expected ProcessingError"),
                 }
             }
         }
-        Ok(Err(UnixSockApiError::SecurityViolation(_))) => {
+        Ok(Err(JanusError::SecurityViolation(_))) => {
             // Security validation errors are acceptable in tests
             println!("Test skipped due to security validation");
             return;
         }
-        Ok(Err(UnixSockApiError::InvalidSocketPath(_))) => {
+        Ok(Err(JanusError::InvalidSocketPath(_))) => {
             // Socket path validation errors are acceptable in tests  
             println!("Test skipped due to socket path validation");
             return;

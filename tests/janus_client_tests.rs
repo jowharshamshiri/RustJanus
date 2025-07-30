@@ -1,4 +1,4 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 
@@ -11,7 +11,7 @@ async fn test_datagram_client_initialization() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path.clone(),
         "test-channel".to_string(),
         Some(api_spec),
@@ -32,7 +32,7 @@ async fn test_datagram_client_send_command() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),

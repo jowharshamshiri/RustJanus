@@ -1,4 +1,4 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 use std::collections::HashMap;
 
 #[test]

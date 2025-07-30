@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// API specification structure (exact SwiftUnixSockAPI parity)
+/// API specification structure (exact SwiftJanus parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiSpecification {
     /// API version
@@ -25,7 +25,7 @@ impl ApiSpecification {
     }
     
     /// Load API specification from file (async wrapper)
-    pub async fn from_file(path: &str) -> Result<Self, crate::error::UnixSockApiError> {
+    pub async fn from_file(path: &str) -> Result<Self, crate::error::JanusError> {
         crate::specification::ApiSpecificationParser::from_file(path).await
     }
     

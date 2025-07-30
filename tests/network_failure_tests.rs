@@ -1,8 +1,8 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 
-/// Network Failure Tests (15 tests) - SwiftUnixSockAPI parity
+/// Network Failure Tests (15 tests) - SwiftJanus parity
 /// Tests connection failures, permission issues, resource exhaustion
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn test_connection_to_nonexistent_socket() {
     let config = create_test_config();
     let nonexistent_path = "/tmp/nonexistent_socket_12345.sock".to_string();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         nonexistent_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -26,8 +26,8 @@ async fn test_connection_to_nonexistent_socket() {
     
     assert!(result.is_err());
     match result.unwrap_err() {
-        UnixSockApiError::ConnectionError(_) | UnixSockApiError::CommandTimeout(_, _) => {},
-        UnixSockApiError::SecurityViolation(_) | UnixSockApiError::InvalidSocketPath(_) => {},
+        JanusError::ConnectionError(_) | JanusError::CommandTimeout(_, _) => {},
+        JanusError::SecurityViolation(_) | JanusError::InvalidSocketPath(_) => {},
         err => panic!("Expected connection error, got: {:?}", err),
     }
 }

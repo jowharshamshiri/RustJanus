@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-/// Configuration for UnixSockApiClient (exact SwiftUnixSockAPI parity)
+/// Configuration for JanusClient (exact SwiftJanus parity)
 #[derive(Debug, Clone)]
-pub struct UnixSockApiClientConfig {
+pub struct JanusClientConfig {
     /// Maximum number of concurrent connections (Default: 100)
     pub max_concurrent_connections: usize,
     
@@ -31,7 +31,7 @@ pub struct UnixSockApiClientConfig {
     pub max_args_data_size: usize,
 }
 
-impl Default for UnixSockApiClientConfig {
+impl Default for JanusClientConfig {
     fn default() -> Self {
         Self {
             max_concurrent_connections: 100,
@@ -47,7 +47,7 @@ impl Default for UnixSockApiClientConfig {
     }
 }
 
-impl UnixSockApiClientConfig {
+impl JanusClientConfig {
     /// Create a new configuration with all default values
     pub fn new() -> Self {
         Self::default()

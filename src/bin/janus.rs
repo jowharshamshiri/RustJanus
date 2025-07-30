@@ -42,14 +42,14 @@ struct SocketError {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let matches = Command::new("unixsock-dgram")
+    let matches = Command::new("janus")
         .about("Unified SOCK_DGRAM Unix Socket Process")
         .arg(
             Arg::new("socket")
                 .long("socket")
                 .value_name("PATH")
                 .help("Unix socket path")
-                .default_value("/tmp/rust-unixsock.sock"),
+                .default_value("/tmp/rust-janus.sock"),
         )
         .arg(
             Arg::new("listen")

@@ -1,8 +1,8 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 
-/// Stateless Communication Tests (8 tests) - SwiftUnixSockAPI parity
+/// Stateless Communication Tests (8 tests) - SwiftJanus parity
 /// Tests stateless patterns, isolation, and validation
 
 #[tokio::test]
@@ -12,7 +12,7 @@ async fn test_stateless_command_validation() {
     let socket_path = create_valid_socket_path();
     
     // Command validation should work without connection
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -28,7 +28,7 @@ async fn test_stateless_command_validation() {
     
     // Should fail at connection, not validation
     match result {
-        Err(UnixSockApiError::ConnectionError(_)) | Err(UnixSockApiError::CommandTimeout(_, _)) => {},
+        Err(JanusError::ConnectionError(_)) | Err(JanusError::CommandTimeout(_, _)) => {},
         other => println!("Stateless validation result: {:?}", other),
     }
 }

@@ -1,6 +1,6 @@
 use crate::core::{UnixDatagramClient, SecurityValidator};
-use crate::error::UnixSockApiError;
-use crate::config::UnixSockApiClientConfig;
+use crate::error::JanusError;
+use crate::config::JanusClientConfig;
 use crate::specification::ApiSpecification;
 use crate::protocol::message_types::{SocketCommand, SocketResponse};
 use std::collections::HashMap;
@@ -13,23 +13,23 @@ use uuid::Uuid;
 /// High-level API client for SOCK_DGRAM Unix socket communication
 /// Connectionless implementation with command validation and response correlation
 #[derive(Debug)]
-pub struct UnixSockApiDatagramClient {
+pub struct JanusDatagramClient {
     socket_path: String,
     channel_id: String,
     api_spec: Option<ApiSpecification>,
-    config: UnixSockApiClientConfig,
+    config: JanusClientConfig,
     datagram_client: UnixDatagramClient,
     // Note: SecurityValidator is used via static methods, no instance needed
 }
 
-impl UnixSockApiDatagramClient {
+impl JanusDatagramClient {
     /// Create a new datagram API client
     pub fn new(
         socket_path: String,
         channel_id: String,
         api_spec: Option<ApiSpecification>,
-        config: UnixSockApiClientConfig,
-    ) -> Result<Self, UnixSockApiError> {
+        config: JanusClientConfig,
+    ) -> Result<Self, JanusError> {
         let datagram_client = UnixDatagramClient::new(socket_path.clone(), config.clone())?;
         
         Ok(Self {
@@ -47,7 +47,7 @@ impl UnixSockApiDatagramClient {
         command: &str,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<Duration>,
-    ) -> Result<SocketResponse, UnixSockApiError> {
+    ) -> Result<SocketResponse, JanusError> {
         // Generate command ID and response socket path
         let command_id = Uuid::new_v4().to_string();
         let response_socket_path = self.datagram_client.generate_response_socket_path();
@@ -73,8 +73,8 @@ impl UnixSockApiDatagramClient {
         
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| UnixSockApiError::SerializationError { 
-                file: "unix_sock_api_datagram_client.rs".to_string(), 
+            .map_err(|e| JanusError::SerializationError { 
+                file: "janus_datagram_client.rs".to_string(), 
                 line: 111, 
                 message: format!("Failed to serialize command: {}", e) 
             })?;
@@ -86,16 +86,16 @@ impl UnixSockApiDatagramClient {
         
         // Deserialize response
         let response: SocketResponse = serde_json::from_slice(&response_data)
-            .map_err(|e| UnixSockApiError::SerializationError { 
-                file: "unix_sock_api_datagram_client.rs".to_string(), 
+            .map_err(|e| JanusError::SerializationError { 
+                file: "janus_datagram_client.rs".to_string(), 
                 line: 124, 
                 message: format!("Failed to deserialize response: {}", e) 
             })?;
         
         // Validate response correlation
         if response.commandId != command_id {
-            return Err(UnixSockApiError::ProtocolError { 
-                file: "unix_sock_api_datagram_client.rs".to_string(), 
+            return Err(JanusError::ProtocolError { 
+                file: "janus_datagram_client.rs".to_string(), 
                 line: 129, 
                 message: format!(
                     "Response correlation mismatch: expected {}, got {}",
@@ -105,8 +105,8 @@ impl UnixSockApiDatagramClient {
         }
         
         if response.channelId != self.channel_id {
-            return Err(UnixSockApiError::ProtocolError { 
-                file: "unix_sock_api_datagram_client.rs".to_string(), 
+            return Err(JanusError::ProtocolError { 
+                file: "janus_datagram_client.rs".to_string(), 
                 line: 136, 
                 message: format!(
                     "Channel mismatch: expected {}, got {}",
@@ -123,7 +123,7 @@ impl UnixSockApiDatagramClient {
         &self,
         command: &str,
         args: Option<HashMap<String, serde_json::Value>>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         // Generate command ID
         let command_id = Uuid::new_v4().to_string();
         
@@ -145,8 +145,8 @@ impl UnixSockApiDatagramClient {
         
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| UnixSockApiError::SerializationError { 
-                file: "unix_sock_api_datagram_client.rs".to_string(), 
+            .map_err(|e| JanusError::SerializationError { 
+                file: "janus_datagram_client.rs".to_string(), 
                 line: 167, 
                 message: format!("Failed to serialize command: {}", e) 
             })?;
@@ -158,7 +158,7 @@ impl UnixSockApiDatagramClient {
     }
     
     /// Test connectivity to the server
-    pub async fn test_connection(&self) -> Result<(), UnixSockApiError> {
+    pub async fn test_connection(&self) -> Result<(), JanusError> {
         self.datagram_client.test_connection().await
     }
     
@@ -167,11 +167,11 @@ impl UnixSockApiDatagramClient {
         &self,
         spec: &ApiSpecification,
         command: &SocketCommand,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         // Implementation would validate command against spec
         // For now, just check if channel exists
         if !spec.channels.contains_key(&command.channelId) {
-            return Err(UnixSockApiError::ValidationError(format!(
+            return Err(JanusError::ValidationError(format!(
                 "Channel {} not found in API specification",
                 command.channelId
             )));
@@ -196,7 +196,7 @@ impl UnixSockApiDatagramClient {
     }
     
     /// Get configuration for backward compatibility
-    pub fn configuration(&self) -> &UnixSockApiClientConfig {
+    pub fn configuration(&self) -> &JanusClientConfig {
         &self.config
     }
     

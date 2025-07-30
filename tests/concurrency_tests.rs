@@ -1,11 +1,11 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 mod test_utils;
 use test_utils::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 
-/// Concurrency Tests (13 tests) - Exact SwiftUnixSockAPI parity
+/// Concurrency Tests (13 tests) - Exact SwiftJanus parity
 /// Tests high concurrency, race conditions, thread safety, deadlock prevention
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn test_high_concurrency_command_execution() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -74,7 +74,7 @@ async fn test_concurrent_client_creation() {
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
-            UnixSockApiDatagramClient::new(
+            JanusDatagramClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
                 Some(api_spec_clone),
@@ -107,7 +107,7 @@ async fn test_concurrent_handler_registration() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -154,7 +154,7 @@ async fn test_concurrent_connection_pool_usage() {
     config.max_concurrent_connections = 10; // Limited pool
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -187,11 +187,11 @@ async fn test_concurrent_connection_pool_usage() {
     for result in results {
         match result.unwrap() {
             Ok(_) => success_count += 1,
-            Err(UnixSockApiError::CommandTimeout(_, _)) => timeout_count += 1,
-            Err(UnixSockApiError::ResourceLimit(_)) => error_count += 1,
-            Err(UnixSockApiError::ConnectionError(_)) => error_count += 1,
-            Err(UnixSockApiError::SecurityViolation(_)) => error_count += 1,
-            Err(UnixSockApiError::InvalidSocketPath(_)) => error_count += 1,
+            Err(JanusError::CommandTimeout(_, _)) => timeout_count += 1,
+            Err(JanusError::ResourceLimit(_)) => error_count += 1,
+            Err(JanusError::ConnectionError(_)) => error_count += 1,
+            Err(JanusError::SecurityViolation(_)) => error_count += 1,
+            Err(JanusError::InvalidSocketPath(_)) => error_count += 1,
             Err(err) => panic!("Unexpected error: {:?}", err),
         }
     }
@@ -207,7 +207,7 @@ async fn test_concurrent_state_modification() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -250,7 +250,7 @@ async fn test_concurrent_connection_management() {
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
-            let client = UnixSockApiDatagramClient::new(
+            let client = JanusDatagramClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
                 Some(api_spec_clone),
@@ -286,7 +286,7 @@ async fn test_thread_safety_of_configuration() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -315,7 +315,7 @@ async fn test_thread_safety_of_api_spec_access() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -343,7 +343,7 @@ async fn test_no_deadlock_under_load() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -372,7 +372,7 @@ async fn test_no_deadlock_under_load() {
             
             match timeout {
                 Ok(result) => result,
-                Err(_) => Err(UnixSockApiError::CommandTimeout("deadlock_test".to_string(), std::time::Duration::from_secs(10))),
+                Err(_) => Err(JanusError::CommandTimeout("deadlock_test".to_string(), std::time::Duration::from_secs(10))),
             }
         }));
     }
@@ -394,7 +394,7 @@ async fn test_no_deadlock_with_mixed_operations() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -459,7 +459,7 @@ async fn test_memory_safety_under_concurrent_access() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -514,7 +514,7 @@ async fn test_concurrent_resource_cleanup() {
         
         tasks.push(tokio::spawn(async move {
             // Create client
-            let client = UnixSockApiDatagramClient::new(
+            let client = JanusDatagramClient::new(
                 socket_path_clone,
                 format!("cleanup_channel_{}", i),
                 Some(api_spec_clone),
@@ -557,7 +557,7 @@ async fn test_connection_pool_thread_safety() {
     config.max_concurrent_connections = 5; // Small pool for contention
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(UnixSockApiDatagramClient::new(
+    let client = Arc::new(JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),

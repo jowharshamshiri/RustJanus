@@ -1,7 +1,7 @@
-//! # RustUnixSockAPI v2.0 - SwiftUnixSockAPI Parity
+//! # RustJanus v2.0 - SwiftJanus Parity
 //!
 //! Enterprise-grade Unix domain socket API communication library for Rust.
-//! This version achieves exact functional parity with SwiftUnixSockAPI, providing
+//! This version achieves exact functional parity with SwiftJanus, providing
 //! stateless communication, comprehensive security, and API specification-driven development.
 //!
 //! ## Features
@@ -16,7 +16,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use rust_unix_sock_api::{UnixSockApiDatagramClient, ApiSpecification, UnixSockApiClientConfig};
+//! use rust_janus::{JanusDatagramClient, ApiSpecification, JanusClientConfig};
 //! use std::collections::HashMap;
 //! use serde_json::json;
 //! use std::time::Duration;
@@ -27,10 +27,10 @@
 //!     let api_spec = ApiSpecification::from_file("api-spec.json").await?;
 //!     
 //!     // Create client configuration
-//!     let config = UnixSockApiClientConfig::default();
+//!     let config = JanusClientConfig::default();
 //!     
 //!     // Initialize client
-//!     let client = UnixSockApiDatagramClient::new(
+//!     let client = JanusDatagramClient::new(
 //!         "/tmp/my_socket.sock".to_string(),
 //!         "my-channel".to_string(),
 //!         Some(api_spec),
@@ -72,7 +72,7 @@ pub use core::{UnixDatagramClient, SecurityValidator};
 // Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
     SocketCommand, SocketResponse, SocketMessage, MessageType,
-    UnixSockApiDatagramClient, TimeoutManager
+    JanusDatagramClient, TimeoutManager
 };
 
 // High-level API exports (simple one-line usage)
@@ -86,13 +86,13 @@ pub use specification::{
 };
 
 // Configuration exports
-pub use config::UnixSockApiClientConfig;
+pub use config::JanusClientConfig;
 
 // Error exports
-pub use error::{UnixSockApiError, SocketError};
+pub use error::{JanusError, SocketError};
 
 // Result type alias
-pub type Result<T> = std::result::Result<T, UnixSockApiError>;
+pub type Result<T> = std::result::Result<T, JanusError>;
 
 // Utility exports
 pub use utils::{PathUtils, UuidUtils, JsonUtils};
@@ -105,11 +105,11 @@ pub use chrono::{DateTime, Utc};
 /// Prelude module for convenient importing
 pub mod prelude {
     pub use crate::{
-        UnixDatagramClient, UnixSockApiDatagramClient, ApiSpecification, UnixSockApiClientConfig,
+        UnixDatagramClient, JanusDatagramClient, ApiSpecification, JanusClientConfig,
         // Connection-based classes removed
         SocketCommand, SocketResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
-        UnixSockApiError, SocketError, Result,
+        JanusError, SocketError, Result,
         ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,
         Deserialize, Serialize, JsonValue, json,
         DateTime, Utc,
@@ -122,7 +122,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Library name
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 
-/// Migration indicator - this is v2.0 with SwiftUnixSockAPI parity
+/// Migration indicator - this is v2.0 with SwiftJanus parity
 pub const MIGRATION_VERSION: &str = "2.0.0-swift-parity";
 
 #[cfg(test)]
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn test_version_info() {
         assert!(!VERSION.is_empty());
-        assert_eq!(NAME, "RustUnixSockAPI");
+        assert_eq!(NAME, "RustJanus");
         assert_eq!(MIGRATION_VERSION, "2.0.0-swift-parity");
     }
 }

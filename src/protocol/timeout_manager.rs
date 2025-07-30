@@ -2,9 +2,9 @@ use std::time::Duration;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
-use crate::error::UnixSockApiError;
+use crate::error::JanusError;
 
-/// Timeout handler function type (exact SwiftUnixSockAPI parity)
+/// Timeout handler function type (exact SwiftJanus parity)
 pub type TimeoutHandler = Box<dyn Fn(String, Duration) + Send + Sync>;
 
 /// Bilateral timeout manager for handling both caller and handler timeouts
@@ -26,7 +26,7 @@ impl TimeoutManager {
         command_id: String,
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
-    ) -> Result<(), UnixSockApiError> {
+    ) -> Result<(), JanusError> {
         let command_id_clone = command_id.clone();
         let active_timeouts = self.active_timeouts.clone();
         
@@ -90,9 +90,9 @@ impl TimeoutManager {
         timeout: Duration,
         operation: F,
         on_timeout: Option<TimeoutHandler>,
-    ) -> Result<T, UnixSockApiError>
+    ) -> Result<T, JanusError>
     where
-        F: std::future::Future<Output = Result<T, UnixSockApiError>> + Send,
+        F: std::future::Future<Output = Result<T, JanusError>> + Send,
         T: Send,
     {
         // Start timeout tracking
@@ -106,7 +106,7 @@ impl TimeoutManager {
         
         match result {
             Ok(operation_result) => operation_result,
-            Err(_) => Err(UnixSockApiError::CommandTimeout(command_id, timeout)),
+            Err(_) => Err(JanusError::CommandTimeout(command_id, timeout)),
         }
     }
     
@@ -252,15 +252,15 @@ impl TimeoutConfig {
     }
     
     /// Validate timeout value against configuration
-    pub fn validate_timeout(&self, timeout: Duration) -> Result<Duration, UnixSockApiError> {
+    pub fn validate_timeout(&self, timeout: Duration) -> Result<Duration, JanusError> {
         if timeout < self.min_timeout {
-            return Err(UnixSockApiError::ValidationError(
+            return Err(JanusError::ValidationError(
                 format!("Timeout {:?} is below minimum {:?}", timeout, self.min_timeout)
             ));
         }
         
         if timeout > self.max_timeout {
-            return Err(UnixSockApiError::ValidationError(
+            return Err(JanusError::ValidationError(
                 format!("Timeout {:?} exceeds maximum {:?}", timeout, self.max_timeout)
             ));
         }
@@ -344,7 +344,7 @@ mod tests {
         
         let operation = async {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            Ok::<i32, UnixSockApiError>(42)
+            Ok::<i32, JanusError>(42)
         };
         
         let result = manager.execute_with_timeout(
@@ -366,7 +366,7 @@ mod tests {
         
         let operation = async {
             tokio::time::sleep(Duration::from_millis(100)).await;
-            Ok::<i32, UnixSockApiError>(42)
+            Ok::<i32, JanusError>(42)
         };
         
         let result = manager.execute_with_timeout(
@@ -378,7 +378,7 @@ mod tests {
         
         assert!(result.is_err());
         match result.unwrap_err() {
-            UnixSockApiError::CommandTimeout(id, duration) => {
+            JanusError::CommandTimeout(id, duration) => {
                 assert_eq!(id, command_id);
                 assert_eq!(duration, timeout);
             },

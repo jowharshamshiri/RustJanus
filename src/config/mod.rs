@@ -1,3 +1,3 @@
 pub mod client_config;
 
-pub use client_config::UnixSockApiClientConfig;
+pub use client_config::JanusClientConfig;

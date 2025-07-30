@@ -2,7 +2,7 @@ use thiserror::Error;
 use std::time::Duration;
 
 #[derive(Error, Debug, Clone, PartialEq)]
-pub enum UnixSockApiError {
+pub enum JanusError {
     #[error("Invalid channel: {0}")]
     InvalidChannel(String),
     
@@ -67,20 +67,20 @@ pub enum UnixSockApiError {
     SpecificationError { file: String, line: u32, message: String },
 }
 
-impl From<std::io::Error> for UnixSockApiError {
+impl From<std::io::Error> for JanusError {
     fn from(error: std::io::Error) -> Self {
-        UnixSockApiError::IoError(error.to_string())
+        JanusError::IoError(error.to_string())
     }
 }
 
-impl From<serde_json::Error> for UnixSockApiError {
+impl From<serde_json::Error> for JanusError {
     fn from(error: serde_json::Error) -> Self {
-        UnixSockApiError::DecodingFailed(error.to_string())
+        JanusError::DecodingFailed(error.to_string())
     }
 }
 
-impl From<regex::Error> for UnixSockApiError {
+impl From<regex::Error> for JanusError {
     fn from(error: regex::Error) -> Self {
-        UnixSockApiError::ValidationError(error.to_string())
+        JanusError::ValidationError(error.to_string())
     }
 }

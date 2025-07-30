@@ -1,4 +1,4 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 use std::sync::atomic::AtomicUsize;
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -11,7 +11,7 @@ pub fn create_test_socket_path() -> (TempDir, PathBuf) {
     (temp_dir, socket_path)
 }
 
-/// Create a test API specification matching SwiftUnixSockAPI tests
+/// Create a test API specification matching SwiftJanus tests
 pub fn create_test_api_spec() -> ApiSpecification {
     let mut api_spec = ApiSpecification::new("1.0.0".to_string());
     
@@ -89,8 +89,8 @@ pub fn create_test_api_spec() -> ApiSpecification {
 }
 
 /// Create test client configuration with secure defaults
-pub fn create_test_config() -> UnixSockApiClientConfig {
-    UnixSockApiClientConfig {
+pub fn create_test_config() -> JanusClientConfig {
+    JanusClientConfig {
         max_concurrent_connections: 10,
         max_message_size: 1_000_000,  // 1MB
         connection_timeout: std::time::Duration::from_secs(5),

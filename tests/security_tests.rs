@@ -1,10 +1,10 @@
-use rust_unix_sock_api::*;
+use rust_janus::*;
 
 mod test_utils;
 use test_utils::*;
 use std::collections::HashMap;
 
-/// Security Tests (15 tests) - Exact SwiftUnixSockAPI parity
+/// Security Tests (15 tests) - Exact SwiftJanus parity
 /// Tests path traversal, input injection, protocol security, and resource limits
 
 // Temporarily disabled - path validation happens at OS level in SOCK_DGRAM
@@ -16,7 +16,7 @@ async fn _test_path_traversal_attack() {
     let malicious_paths = get_malicious_socket_paths();
     
     for malicious_path in malicious_paths {
-        let result = UnixSockApiDatagramClient::new(
+        let result = JanusDatagramClient::new(
             malicious_path.clone(),
             "test-channel".to_string(),
             Some(api_spec.clone()),
@@ -26,16 +26,16 @@ async fn _test_path_traversal_attack() {
         assert!(result.is_err(), "Should reject malicious path: {}", malicious_path);
         
         match result.unwrap_err() {
-            UnixSockApiError::SecurityViolation(msg) => {
+            JanusError::SecurityViolation(msg) => {
                 assert!(msg.contains("path traversal") || msg.contains("Security violation"));
             },
-            UnixSockApiError::InvalidSocketPath(_) => {
+            JanusError::InvalidSocketPath(_) => {
                 // Also acceptable for path validation
             },
-            UnixSockApiError::IoError(_) => {
+            JanusError::IoError(_) => {
                 // Acceptable - OS-level rejection of malicious path
             },
-            UnixSockApiError::ValidationError(_) => {
+            JanusError::ValidationError(_) => {
                 // Acceptable - validation system caught the malicious path
             },
             _ => {
@@ -58,7 +58,7 @@ async fn test_invalid_socket_path_characters() {
     ];
     
     for invalid_path in invalid_paths {
-        let result = UnixSockApiDatagramClient::new(
+        let result = JanusDatagramClient::new(
             invalid_path.to_string(),
             "test-channel".to_string(),
             Some(api_spec.clone()),
@@ -77,7 +77,7 @@ async fn test_socket_path_length_limits() {
     // Create a path longer than 108 characters (Unix socket limit)
     let long_path = format!("/tmp/{}.sock", "x".repeat(200));
     
-    let result = UnixSockApiDatagramClient::new(
+    let result = JanusDatagramClient::new(
         long_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -86,7 +86,7 @@ async fn test_socket_path_length_limits() {
     
     assert!(result.is_err());
     match result.unwrap_err() {
-        UnixSockApiError::InvalidSocketPath(msg) => {
+        JanusError::InvalidSocketPath(msg) => {
             assert!(msg.contains("too long") || msg.contains("108 character"));
         },
         err => panic!("Expected InvalidSocketPath, got: {:?}", err),
@@ -103,7 +103,7 @@ async fn _test_channel_id_injection_attacks() {
     let malicious_channel_ids = get_malicious_channel_ids();
     
     for malicious_id in malicious_channel_ids {
-        let result = UnixSockApiDatagramClient::new(
+        let result = JanusDatagramClient::new(
             socket_path.clone(),
             malicious_id.clone(),
             Some(api_spec.clone()),
@@ -113,10 +113,10 @@ async fn _test_channel_id_injection_attacks() {
         assert!(result.is_err(), "Should reject malicious channel ID: {}", malicious_id);
         
         match result.unwrap_err() {
-            UnixSockApiError::InvalidChannel(_) | UnixSockApiError::SecurityViolation(_) => {
+            JanusError::InvalidChannel(_) | JanusError::SecurityViolation(_) => {
                 // Expected
             },
-            UnixSockApiError::ValidationError(_) => {
+            JanusError::ValidationError(_) => {
                 // Acceptable - validation caught malicious channel ID
             },
             _ => {
@@ -133,7 +133,7 @@ async fn test_command_injection_in_arguments() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -167,8 +167,8 @@ async fn test_command_injection_in_arguments() {
         // It should never execute the malicious command
         match result {
             Ok(_) => {}, // Server validated and processed safely
-            Err(UnixSockApiError::ConnectionError(_)) => {}, // Expected - no server running
-            Err(UnixSockApiError::CommandTimeout(_, _)) => {}, // Expected - timeout
+            Err(JanusError::ConnectionError(_)) => {}, // Expected - no server running
+            Err(JanusError::CommandTimeout(_, _)) => {}, // Expected - timeout
             Err(err) => {
                 // Ensure it's not a security breach
                 assert!(!format!("{:?}", err).contains("command executed"));
@@ -205,7 +205,7 @@ async fn test_unicode_normalization_attacks() {
     ];
     
     for unicode_channel in unicode_attacks {
-        let result = UnixSockApiDatagramClient::new(
+        let result = JanusDatagramClient::new(
             socket_path.clone(),
             unicode_channel.to_string(),
             Some(api_spec.clone()),
@@ -218,10 +218,10 @@ async fn test_unicode_normalization_attacks() {
                 // Valid Unicode characters were accepted - this is fine for normal characters
                 // Note: Some Unicode may be acceptable depending on implementation
             },
-            Err(UnixSockApiError::InvalidChannel(_)) => {
+            Err(JanusError::InvalidChannel(_)) => {
                 // Invalid characters should be rejected - this is the expected behavior for attack vectors
             },
-            Err(UnixSockApiError::ValidationError(_)) => {
+            Err(JanusError::ValidationError(_)) => {
                 // Validation system rejected suspicious Unicode - also acceptable
             },
             Err(_) => {
@@ -238,7 +238,7 @@ async fn test_large_payload_attacks() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -270,14 +270,14 @@ async fn test_large_payload_attacks() {
             assert!(result.is_err(), "Should reject large payload of {} bytes", size);
             
             match result.unwrap_err() {
-                UnixSockApiError::ResourceLimit(_) | 
-                UnixSockApiError::MessageTooLarge(_, _) |
-                UnixSockApiError::ConnectionError(_) |
-                UnixSockApiError::CommandTimeout(_, _) => {
+                JanusError::ResourceLimit(_) | 
+                JanusError::MessageTooLarge(_, _) |
+                JanusError::ConnectionError(_) |
+                JanusError::CommandTimeout(_, _) => {
                     // Expected errors
                 },
-                UnixSockApiError::SecurityViolation(_) |
-                UnixSockApiError::InvalidSocketPath(_) => {
+                JanusError::SecurityViolation(_) |
+                JanusError::InvalidSocketPath(_) => {
                     // Security validation errors are acceptable
                 },
                 err => panic!("Unexpected error for large payload: {:?}", err),
@@ -292,7 +292,7 @@ async fn test_repeated_large_payload_attacks() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -314,14 +314,14 @@ async fn test_repeated_large_payload_attacks() {
         // Each should be handled gracefully without system impact
         match result {
             Ok(_) => {},
-            Err(UnixSockApiError::ConnectionError(_)) => {},
-            Err(UnixSockApiError::CommandTimeout(_, _)) => {},
-            Err(UnixSockApiError::ResourceLimit(_)) => {},
-            Err(UnixSockApiError::MessageTooLarge(_, _)) => {
+            Err(JanusError::ConnectionError(_)) => {},
+            Err(JanusError::CommandTimeout(_, _)) => {},
+            Err(JanusError::ResourceLimit(_)) => {},
+            Err(JanusError::MessageTooLarge(_, _)) => {
                 // Expected - SOCK_DGRAM properly rejects oversized messages
             },
-            Err(UnixSockApiError::SecurityViolation(_)) => {},
-            Err(UnixSockApiError::InvalidSocketPath(_)) => {},
+            Err(JanusError::SecurityViolation(_)) => {},
+            Err(JanusError::InvalidSocketPath(_)) => {},
             Err(err) => panic!("Iteration {}: Unexpected error: {:?}", i, err),
         }
     }
@@ -335,7 +335,7 @@ async fn test_connection_pool_exhaustion() {
     let socket_path = create_valid_socket_path();
     
     // This test verifies that connection pool limits are enforced
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -382,7 +382,7 @@ async fn test_rapid_connection_attempts() {
         let config_clone = config.clone();
         
         tasks.push(async move {
-            UnixSockApiDatagramClient::new(
+            JanusDatagramClient::new(
                 socket_path_clone,
                 "test-channel".to_string(),
                 Some(api_spec_clone),
@@ -397,7 +397,7 @@ async fn test_rapid_connection_attempts() {
     for (i, result) in results.iter().enumerate() {
         match result {
             Ok(_) => {}, // Success is fine
-            Err(UnixSockApiError::ResourceLimit(_)) => {}, // Expected under load
+            Err(JanusError::ResourceLimit(_)) => {}, // Expected under load
             Err(err) => {
                 // Should not crash or cause system issues
                 assert!(!format!("{:?}", err).contains("system"), 
@@ -413,7 +413,7 @@ async fn test_insecure_configuration_prevention() {
     let socket_path = create_valid_socket_path();
     
     // Test with insecure configuration values
-    let insecure_config = UnixSockApiClientConfig {
+    let insecure_config = JanusClientConfig {
         max_concurrent_connections: 0,  // Invalid
         max_message_size: 0,            // Invalid
         connection_timeout: std::time::Duration::from_secs(0), // Invalid
@@ -425,7 +425,7 @@ async fn test_insecure_configuration_prevention() {
         max_args_data_size: 0,          // Invalid
     };
     
-    let result = UnixSockApiDatagramClient::new(
+    let result = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -435,7 +435,7 @@ async fn test_insecure_configuration_prevention() {
     assert!(result.is_err(), "Should reject insecure configuration");
     
     match result.unwrap_err() {
-        UnixSockApiError::ValidationError(_) => {}, // Expected
+        JanusError::ValidationError(_) => {}, // Expected
         err => panic!("Expected ValidationError, got: {:?}", err),
     }
 }
@@ -446,7 +446,7 @@ async fn test_extreme_configuration_values() {
     let socket_path = create_valid_socket_path();
     
     // Test with extreme but valid configuration values
-    let extreme_config = UnixSockApiClientConfig {
+    let extreme_config = JanusClientConfig {
         max_concurrent_connections: 1_000_000,
         max_message_size: u32::MAX as usize,
         connection_timeout: std::time::Duration::from_secs(86400), // 24 hours
@@ -458,7 +458,7 @@ async fn test_extreme_configuration_values() {
         max_args_data_size: 1_000_000_000, // 1GB
     };
     
-    let result = UnixSockApiDatagramClient::new(
+    let result = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -481,7 +481,7 @@ async fn test_validation_bypass_attempts() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = UnixSockApiDatagramClient::new(
+    let client = JanusDatagramClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -503,9 +503,9 @@ async fn test_validation_bypass_attempts() {
         // Should handle rapid commands gracefully
         match result {
             Ok(_) => {}, // Success is fine
-            Err(UnixSockApiError::ResourceLimit(_)) => {}, // Expected under load
-            Err(UnixSockApiError::CommandTimeout(_, _)) => {}, // Expected with no server
-            Err(UnixSockApiError::ConnectionError(_)) => {}, // Expected with no server
+            Err(JanusError::ResourceLimit(_)) => {}, // Expected under load
+            Err(JanusError::CommandTimeout(_, _)) => {}, // Expected with no server
+            Err(JanusError::ConnectionError(_)) => {}, // Expected with no server
             Err(err) => {
                 // Should not crash or cause system issues
                 assert!(!format!("{:?}", err).contains("panic"), 
