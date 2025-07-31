@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::os::unix::net::UnixDatagram;
+use std::os::unix::net::Janus;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
@@ -10,17 +10,17 @@ use crate::protocol::message_types::{SocketCommand, SocketResponse};
 use crate::error::JanusError;
 
 /// Command handler function type for SOCK_DGRAM server
-pub type DatagramCommandHandler = Box<dyn Fn(SocketCommand) -> Result<serde_json::Value, JanusError> + Send + Sync>;
+pub type JanusCommandHandler = Box<dyn Fn(SocketCommand) -> Result<serde_json::Value, JanusError> + Send + Sync>;
 
 /// High-level SOCK_DGRAM Unix socket server
 /// Handles command routing and response generation for connectionless communication
-pub struct UnixDatagramServer {
-    handlers: Arc<Mutex<HashMap<String, DatagramCommandHandler>>>,
+pub struct JanusServer {
+    handlers: Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
     is_running: Arc<AtomicBool>,
     socket_path: Option<String>,
 }
 
-impl UnixDatagramServer {
+impl JanusServer {
     /// Create a new SOCK_DGRAM server
     pub fn new() -> Self {
         Self {
@@ -78,13 +78,13 @@ impl UnixDatagramServer {
     // Private implementation
     async fn listen_loop(
         socket_path: String,
-        handlers: Arc<Mutex<HashMap<String, DatagramCommandHandler>>>,
+        handlers: Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
         is_running: Arc<AtomicBool>,
     ) -> Result<(), JanusError> {
         // Remove existing socket
         let _ = fs::remove_file(&socket_path);
 
-        let socket = UnixDatagram::bind(&socket_path)
+        let socket = Janus::bind(&socket_path)
             .map_err(|e| JanusError::IoError(format!("Failed to bind socket: {}", e)))?;
 
         // Set non-blocking mode for graceful shutdown
@@ -121,7 +121,7 @@ impl UnixDatagramServer {
 
     async fn process_datagram(
         data: &[u8],
-        handlers: &Arc<Mutex<HashMap<String, DatagramCommandHandler>>>,
+        handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
     ) {
         match serde_json::from_slice::<SocketCommand>(data) {
             Ok(cmd) => {
@@ -141,7 +141,7 @@ impl UnixDatagramServer {
 
     async fn process_command(
         cmd: &SocketCommand,
-        handlers: &Arc<Mutex<HashMap<String, DatagramCommandHandler>>>,
+        handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
     ) -> SocketResponse {
         let handlers_guard = handlers.lock().await;
         
@@ -230,7 +230,7 @@ impl UnixDatagramServer {
     async fn send_response(response: SocketResponse, reply_to: &str) {
         match serde_json::to_vec(&response) {
             Ok(response_data) => {
-                if let Ok(client_sock) = UnixDatagram::unbound() {
+                if let Ok(client_sock) = Janus::unbound() {
                     if let Err(e) = client_sock.send_to(&response_data, reply_to) {
                         eprintln!("Error sending response: {}", e);
                     } else {
@@ -245,13 +245,13 @@ impl UnixDatagramServer {
     }
 }
 
-impl Drop for UnixDatagramServer {
+impl Drop for JanusServer {
     fn drop(&mut self) {
         self.stop();
     }
 }
 
-impl Default for UnixDatagramServer {
+impl Default for JanusServer {
     fn default() -> Self {
         Self::new()
     }

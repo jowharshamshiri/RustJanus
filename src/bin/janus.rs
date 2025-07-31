@@ -1,6 +1,6 @@
 use clap::{Arg, Command};
 use serde_json;
-use std::os::unix::net::UnixDatagram;
+use std::os::unix::net::Janus;
 // Note: std::path::Path not needed in current SOCK_DGRAM implementation
 use std::fs;
 
@@ -112,7 +112,7 @@ async fn listen_for_datagrams(socket_path: &str) -> Result<(), Box<dyn std::erro
     // Remove existing socket
     let _ = fs::remove_file(socket_path);
     
-    let socket = UnixDatagram::bind(socket_path)?;
+    let socket = Janus::bind(socket_path)?;
     
     println!("Ready to receive datagrams");
     
@@ -148,7 +148,7 @@ async fn send_datagram(target_socket: &str, command: &str, message: &str) -> Res
     let _ = fs::remove_file(&response_socket);
     
     // Create response socket for receiving reply
-    let response_sock = UnixDatagram::bind(&response_socket)?;
+    let response_sock = Janus::bind(&response_socket)?;
     
     let mut args = HashMap::new();
     args.insert("message".to_string(), serde_json::Value::String(message.to_string()));
@@ -166,7 +166,7 @@ async fn send_datagram(target_socket: &str, command: &str, message: &str) -> Res
     let cmd_data = serde_json::to_vec(&cmd)?;
     
     // Send datagram to target
-    let client_sock = UnixDatagram::unbound()?;
+    let client_sock = Janus::unbound()?;
     client_sock.send_to(&cmd_data, target_socket)?;
     
     // Wait for response
@@ -281,7 +281,7 @@ fn send_response(
     let response_data = serde_json::to_vec(&response)?;
     
     // Send response datagram to reply_to socket
-    let reply_socket = UnixDatagram::unbound()?;
+    let reply_socket = Janus::unbound()?;
     reply_socket.send_to(&response_data, reply_to)?;
     
     Ok(())

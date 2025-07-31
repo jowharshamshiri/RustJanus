@@ -223,7 +223,7 @@ async fn _test_janus_client_initialization() {
     let socket_path = create_valid_socket_path();
     
     // Valid initialization
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path.clone(),
         "test-channel".to_string(),
         Some(api_spec.clone()),
@@ -237,7 +237,7 @@ async fn _test_janus_client_initialization() {
     assert_eq!(client.specification().unwrap().version, "1.0.0");
     
     // Invalid channel ID
-    let invalid_client = JanusDatagramClient::new(
+    let invalid_client = JanusClient::new(
         socket_path,
         "".to_string(), // Empty channel ID
         Some(api_spec),
@@ -257,7 +257,7 @@ async fn test_command_validation() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),

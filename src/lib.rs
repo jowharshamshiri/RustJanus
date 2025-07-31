@@ -16,7 +16,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use rust_janus::{JanusDatagramClient, ApiSpecification, JanusClientConfig};
+//! use rust_janus::{JanusClient, ApiSpecification, JanusClientConfig};
 //! use std::collections::HashMap;
 //! use serde_json::json;
 //! use std::time::Duration;
@@ -30,7 +30,7 @@
 //!     let config = JanusClientConfig::default();
 //!     
 //!     // Initialize client
-//!     let client = JanusDatagramClient::new(
+//!     let client = JanusClient::new(
 //!         "/tmp/my_socket.sock".to_string(),
 //!         "my-channel".to_string(),
 //!         Some(api_spec),
@@ -67,16 +67,16 @@ pub mod utils;
 pub mod server;
 
 // Core exports (low-level SOCK_DGRAM socket communication)
-pub use core::{UnixDatagramClient, SecurityValidator};
+pub use core::{JanusClient, SecurityValidator};
 
 // Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
     SocketCommand, SocketResponse, SocketMessage, MessageType,
-    JanusDatagramClient, TimeoutManager
+    JanusClient, TimeoutManager
 };
 
 // High-level API exports (simple one-line usage)
-pub use server::{UnixDatagramServer, DatagramCommandHandler};
+pub use server::{JanusServer, JanusCommandHandler};
 
 // Specification exports (API definition layer)
 pub use specification::{
@@ -105,7 +105,7 @@ pub use chrono::{DateTime, Utc};
 /// Prelude module for convenient importing
 pub mod prelude {
     pub use crate::{
-        UnixDatagramClient, JanusDatagramClient, ApiSpecification, JanusClientConfig,
+        JanusClient, JanusClient, ApiSpecification, JanusClientConfig,
         // Connection-based classes removed
         SocketCommand, SocketResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,

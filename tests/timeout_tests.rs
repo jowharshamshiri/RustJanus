@@ -14,7 +14,7 @@ async fn test_command_with_timeout() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -59,7 +59,7 @@ async fn test_command_timeout_error_message() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -98,7 +98,7 @@ async fn test_uuid_generation() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -143,7 +143,7 @@ async fn test_multiple_commands_with_different_timeouts() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -242,7 +242,7 @@ async fn test_default_timeout() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -283,7 +283,7 @@ async fn test_concurrent_timeouts() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusDatagramClient::new(
+    let client = Arc::new(JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),

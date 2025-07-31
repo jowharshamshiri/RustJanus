@@ -1,4 +1,4 @@
-use crate::core::{UnixDatagramClient, SecurityValidator};
+use crate::core::{JanusClient, SecurityValidator};
 use crate::error::JanusError;
 use crate::config::JanusClientConfig;
 use crate::specification::ApiSpecification;
@@ -13,16 +13,16 @@ use uuid::Uuid;
 /// High-level API client for SOCK_DGRAM Unix socket communication
 /// Connectionless implementation with command validation and response correlation
 #[derive(Debug)]
-pub struct JanusDatagramClient {
+pub struct JanusClient {
     socket_path: String,
     channel_id: String,
     api_spec: Option<ApiSpecification>,
     config: JanusClientConfig,
-    datagram_client: UnixDatagramClient,
+    janus_client: JanusClient,
     // Note: SecurityValidator is used via static methods, no instance needed
 }
 
-impl JanusDatagramClient {
+impl JanusClient {
     /// Create a new datagram API client
     pub fn new(
         socket_path: String,
@@ -30,14 +30,14 @@ impl JanusDatagramClient {
         api_spec: Option<ApiSpecification>,
         config: JanusClientConfig,
     ) -> Result<Self, JanusError> {
-        let datagram_client = UnixDatagramClient::new(socket_path.clone(), config.clone())?;
+        let janus_client = JanusClient::new(socket_path.clone(), config.clone())?;
         
         Ok(Self {
             socket_path,
             channel_id,
             api_spec,
             config,
-            datagram_client,
+            janus_client,
         })
     }
     
@@ -50,7 +50,7 @@ impl JanusDatagramClient {
     ) -> Result<SocketResponse, JanusError> {
         // Generate command ID and response socket path
         let command_id = Uuid::new_v4().to_string();
-        let response_socket_path = self.datagram_client.generate_response_socket_path();
+        let response_socket_path = self.janus_client.generate_response_socket_path();
         
         // Create socket command
         let socket_command = SocketCommand {
@@ -74,20 +74,20 @@ impl JanusDatagramClient {
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
             .map_err(|e| JanusError::SerializationError { 
-                file: "janus_datagram_client.rs".to_string(), 
+                file: "janus_client.rs".to_string(), 
                 line: 111, 
                 message: format!("Failed to serialize command: {}", e) 
             })?;
         
         // Send datagram and wait for response
-        let response_data = self.datagram_client
+        let response_data = self.janus_client
             .send_datagram(&command_data, &response_socket_path)
             .await?;
         
         // Deserialize response
         let response: SocketResponse = serde_json::from_slice(&response_data)
             .map_err(|e| JanusError::SerializationError { 
-                file: "janus_datagram_client.rs".to_string(), 
+                file: "janus_client.rs".to_string(), 
                 line: 124, 
                 message: format!("Failed to deserialize response: {}", e) 
             })?;
@@ -95,7 +95,7 @@ impl JanusDatagramClient {
         // Validate response correlation
         if response.commandId != command_id {
             return Err(JanusError::ProtocolError { 
-                file: "janus_datagram_client.rs".to_string(), 
+                file: "janus_client.rs".to_string(), 
                 line: 129, 
                 message: format!(
                     "Response correlation mismatch: expected {}, got {}",
@@ -106,7 +106,7 @@ impl JanusDatagramClient {
         
         if response.channelId != self.channel_id {
             return Err(JanusError::ProtocolError { 
-                file: "janus_datagram_client.rs".to_string(), 
+                file: "janus_client.rs".to_string(), 
                 line: 136, 
                 message: format!(
                     "Channel mismatch: expected {}, got {}",
@@ -146,20 +146,20 @@ impl JanusDatagramClient {
         // Serialize command
         let command_data = serde_json::to_vec(&socket_command)
             .map_err(|e| JanusError::SerializationError { 
-                file: "janus_datagram_client.rs".to_string(), 
+                file: "janus_client.rs".to_string(), 
                 line: 167, 
                 message: format!("Failed to serialize command: {}", e) 
             })?;
         
         // Send datagram without waiting for response
-        self.datagram_client.send_datagram_no_response(&command_data).await?;
+        self.janus_client.send_datagram_no_response(&command_data).await?;
         
         Ok(())
     }
     
     /// Test connectivity to the server
     pub async fn test_connection(&self) -> Result<(), JanusError> {
-        self.datagram_client.test_connection().await
+        self.janus_client.test_connection().await
     }
     
     /// Validate command against API specification

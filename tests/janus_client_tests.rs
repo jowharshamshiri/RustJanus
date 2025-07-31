@@ -6,12 +6,12 @@ use test_utils::*;
 /// Tests high-level datagram client functionality, command execution
 
 #[tokio::test]
-async fn test_datagram_client_initialization() {
+async fn test_janus_client_initialization() {
     let api_spec = create_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path.clone(),
         "test-channel".to_string(),
         Some(api_spec),
@@ -27,12 +27,12 @@ async fn test_datagram_client_initialization() {
 }
 
 #[tokio::test]
-async fn test_datagram_client_send_command() {
+async fn test_janus_client_send_command() {
     let api_spec = create_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),

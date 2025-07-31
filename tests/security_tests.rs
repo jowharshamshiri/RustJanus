@@ -16,7 +16,7 @@ async fn _test_path_traversal_attack() {
     let malicious_paths = get_malicious_socket_paths();
     
     for malicious_path in malicious_paths {
-        let result = JanusDatagramClient::new(
+        let result = JanusClient::new(
             malicious_path.clone(),
             "test-channel".to_string(),
             Some(api_spec.clone()),
@@ -58,7 +58,7 @@ async fn test_invalid_socket_path_characters() {
     ];
     
     for invalid_path in invalid_paths {
-        let result = JanusDatagramClient::new(
+        let result = JanusClient::new(
             invalid_path.to_string(),
             "test-channel".to_string(),
             Some(api_spec.clone()),
@@ -77,7 +77,7 @@ async fn test_socket_path_length_limits() {
     // Create a path longer than 108 characters (Unix socket limit)
     let long_path = format!("/tmp/{}.sock", "x".repeat(200));
     
-    let result = JanusDatagramClient::new(
+    let result = JanusClient::new(
         long_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -103,7 +103,7 @@ async fn _test_channel_id_injection_attacks() {
     let malicious_channel_ids = get_malicious_channel_ids();
     
     for malicious_id in malicious_channel_ids {
-        let result = JanusDatagramClient::new(
+        let result = JanusClient::new(
             socket_path.clone(),
             malicious_id.clone(),
             Some(api_spec.clone()),
@@ -133,7 +133,7 @@ async fn test_command_injection_in_arguments() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -205,7 +205,7 @@ async fn test_unicode_normalization_attacks() {
     ];
     
     for unicode_channel in unicode_attacks {
-        let result = JanusDatagramClient::new(
+        let result = JanusClient::new(
             socket_path.clone(),
             unicode_channel.to_string(),
             Some(api_spec.clone()),
@@ -238,7 +238,7 @@ async fn test_large_payload_attacks() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -292,7 +292,7 @@ async fn test_repeated_large_payload_attacks() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -335,7 +335,7 @@ async fn test_connection_pool_exhaustion() {
     let socket_path = create_valid_socket_path();
     
     // This test verifies that connection pool limits are enforced
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -382,7 +382,7 @@ async fn test_rapid_connection_attempts() {
         let config_clone = config.clone();
         
         tasks.push(async move {
-            JanusDatagramClient::new(
+            JanusClient::new(
                 socket_path_clone,
                 "test-channel".to_string(),
                 Some(api_spec_clone),
@@ -425,7 +425,7 @@ async fn test_insecure_configuration_prevention() {
         max_args_data_size: 0,          // Invalid
     };
     
-    let result = JanusDatagramClient::new(
+    let result = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -458,7 +458,7 @@ async fn test_extreme_configuration_values() {
         max_args_data_size: 1_000_000_000, // 1GB
     };
     
-    let result = JanusDatagramClient::new(
+    let result = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),
@@ -481,7 +481,7 @@ async fn test_validation_bypass_attempts() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path,
         "test-channel".to_string(),
         Some(api_spec),

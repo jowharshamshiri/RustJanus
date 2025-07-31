@@ -2,18 +2,18 @@ use std::time::Duration;
 use tokio::time::timeout;
 use serde_json::json;
 
-use rust_janus::{UnixDatagramServer, JanusDatagramClient, JanusClientConfig};
+use rust_janus::{JanusServer, JanusClient, JanusClientConfig};
 use rust_janus::error::JanusError;
 
 #[tokio::test]
-async fn test_datagram_server_creation() {
-    let server = UnixDatagramServer::new();
+async fn test_janus_server_creation() {
+    let server = JanusServer::new();
     assert!(!server.is_running());
 }
 
 #[tokio::test]
-async fn test_datagram_server_start_stop() {
-    let mut server = UnixDatagramServer::new();
+async fn test_janus_server_start_stop() {
+    let mut server = JanusServer::new();
     let socket_path = "/tmp/test_server_start_stop.sock";
     
     // Clean up any existing socket
@@ -32,8 +32,8 @@ async fn test_datagram_server_start_stop() {
 }
 
 #[tokio::test]
-async fn test_datagram_server_register_handler() {
-    let mut server = UnixDatagramServer::new();
+async fn test_janus_server_register_handler() {
+    let mut server = JanusServer::new();
     
     // Register a custom handler
     server.register_handler("test_cmd", |cmd| {
@@ -45,12 +45,12 @@ async fn test_datagram_server_register_handler() {
 }
 
 #[tokio::test]
-async fn test_datagram_client_server_communication() {
+async fn test_janus_client_server_communication() {
     let socket_path = "/tmp/test_client_server_comm.sock";
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = UnixDatagramServer::new();
+    let mut server = JanusServer::new();
     
     // Register custom handler
     server.register_handler("test_echo", |cmd| {
@@ -69,7 +69,7 @@ async fn test_datagram_client_server_communication() {
     
     // Create client
     let config = JanusClientConfig::default();
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
         None, // No API spec for this test
@@ -124,7 +124,7 @@ async fn test_datagram_default_ping_handler() {
     if let Ok(entries) = std::fs::read_dir("/tmp") {
         for entry in entries.flatten() {
             if let Some(name) = entry.file_name().to_str() {
-                if name.starts_with("rust_datagram_client_") && name.ends_with(".sock") {
+                if name.starts_with("rust_janus_client_") && name.ends_with(".sock") {
                     let _ = std::fs::remove_file(entry.path());
                 }
             }
@@ -132,7 +132,7 @@ async fn test_datagram_default_ping_handler() {
     }
     
     // Start server with no custom handlers
-    let mut server = UnixDatagramServer::new();
+    let mut server = JanusServer::new();
     server.start_listening(socket_path).await.expect("Failed to start server");
     
     // Give server time to start
@@ -140,7 +140,7 @@ async fn test_datagram_default_ping_handler() {
     
     // Create client
     let config = JanusClientConfig::default();
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
         None,
@@ -189,7 +189,7 @@ async fn test_datagram_unknown_command() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = UnixDatagramServer::new();
+    let mut server = JanusServer::new();
     server.start_listening(socket_path).await.expect("Failed to start server");
     
     // Give server time to start
@@ -197,7 +197,7 @@ async fn test_datagram_unknown_command() {
     
     // Create client
     let config = JanusClientConfig::default();
-    let client = JanusDatagramClient::new(
+    let client = JanusClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
         None,
@@ -246,12 +246,12 @@ async fn test_datagram_unknown_command() {
 }
 
 #[tokio::test]  
-async fn test_datagram_server_cleanup_on_drop() {
+async fn test_janus_server_cleanup_on_drop() {
     let socket_path = "/tmp/test_server_cleanup.sock";
     let _ = std::fs::remove_file(socket_path);
     
     {
-        let mut server = UnixDatagramServer::new();
+        let mut server = JanusServer::new();
         server.start_listening(socket_path).await.expect("Failed to start server");
         assert!(server.is_running());
         

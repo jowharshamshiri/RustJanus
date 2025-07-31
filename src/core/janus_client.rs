@@ -1,17 +1,17 @@
 use crate::core::SecurityValidator;
 use crate::error::JanusError;
 use crate::config::JanusClientConfig;
-use tokio::net::UnixDatagram;
+use tokio::net::Janus;
 
 /// Low-level Unix domain datagram socket client (SOCK_DGRAM)
 /// Connectionless implementation for cross-language compatibility
 #[derive(Debug)]
-pub struct UnixDatagramClient {
+pub struct JanusClient {
     socket_path: String,
     config: JanusClientConfig,
 }
 
-impl UnixDatagramClient {
+impl JanusClient {
     /// Create a new Unix datagram client
     pub fn new(socket_path: String, config: JanusClientConfig) -> Result<Self, JanusError> {
         // Validate socket path for security
@@ -36,7 +36,7 @@ impl UnixDatagramClient {
         SecurityValidator::validate_utf8_data(message)?;
         
         // Create response socket for receiving replies
-        let response_socket = UnixDatagram::bind(response_socket_path)
+        let response_socket = Janus::bind(response_socket_path)
             .map_err(|e| JanusError::ConnectionError(format!("Failed to bind response socket: {}", e)))?;
         
         // Set timeout for response
@@ -58,9 +58,9 @@ impl UnixDatagramClient {
     }
     
     /// Internal method to send datagram and receive response
-    async fn send_and_receive(&self, message: &[u8], response_socket: &UnixDatagram) -> Result<Vec<u8>, JanusError> {
+    async fn send_and_receive(&self, message: &[u8], response_socket: &Janus) -> Result<Vec<u8>, JanusError> {
         // Create client socket for sending
-        let client_socket = UnixDatagram::unbound()
+        let client_socket = Janus::unbound()
             .map_err(|e| JanusError::ConnectionError(format!("Failed to create client socket: {}", e)))?;
         
         // Send datagram to server
@@ -97,7 +97,7 @@ impl UnixDatagramClient {
         SecurityValidator::validate_utf8_data(message)?;
         
         // Create client socket for sending
-        let client_socket = UnixDatagram::unbound()
+        let client_socket = Janus::unbound()
             .map_err(|e| JanusError::ConnectionError(format!("Failed to create client socket: {}", e)))?;
         
         // Send datagram to server
@@ -121,7 +121,7 @@ impl UnixDatagramClient {
     /// Test connectivity to server socket
     pub async fn test_connection(&self) -> Result<(), JanusError> {
         // Try to create client socket and send test message
-        let client_socket = UnixDatagram::unbound()
+        let client_socket = Janus::unbound()
             .map_err(|e| JanusError::ConnectionError(format!("Failed to create test socket: {}", e)))?;
         
         let test_message = b"test";
@@ -145,7 +145,7 @@ impl UnixDatagramClient {
         let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
         let thread_id = std::thread::current().id();
         
-        format!("/tmp/rust_datagram_client_{}_{}_{:?}_{}.sock", pid, timestamp, thread_id, counter)
+        format!("/tmp/rust_janus_client_{}_{}_{:?}_{}.sock", pid, timestamp, thread_id, counter)
     }
     
     /// Get socket path
