@@ -11,8 +11,8 @@ async fn test_datagram_message_structure() {
     // Test SocketCommand serialization for SOCK_DGRAM
     let socket_command = SocketCommand {
         id: "test-id".to_string(),
-        channelId: "test-channel".to_string(),
-        command: "test-command".to_string(),
+        channelId: "test".to_string(),
+        command: "echo".to_string(),
         reply_to: Some("/tmp/response.sock".to_string()),
         args: Some(create_test_args()),
         timeout: Some(30.0),
@@ -22,13 +22,13 @@ async fn test_datagram_message_structure() {
     // Test JSON serialization
     let json_str = serde_json::to_string(&socket_command).unwrap();
     assert!(json_str.contains("test-id"));
-    assert!(json_str.contains("test-channel"));
+    assert!(json_str.contains("test"));
     assert!(json_str.contains("reply_to"));
     
     // Test deserialization
     let deserialized: SocketCommand = serde_json::from_str(&json_str).unwrap();
     assert_eq!(deserialized.id, "test-id");
-    assert_eq!(deserialized.channelId, "test-channel");
+    assert_eq!(deserialized.channelId, "test");
     assert_eq!(deserialized.reply_to, Some("/tmp/response.sock".to_string()));
 }
 
@@ -46,8 +46,8 @@ async fn test_datagram_size_validation() {
     for (name, args) in test_cases {
         let socket_command = SocketCommand {
             id: "test-id".to_string(),
-            channelId: "test-channel".to_string(),
-            command: "test-command".to_string(),
+            channelId: "test".to_string(),
+            command: "echo".to_string(),
             reply_to: Some("/tmp/response.sock".to_string()),
             args: Some(args),
             timeout: Some(30.0),
@@ -71,8 +71,8 @@ async fn test_datagram_json_validation() {
     // Test valid SOCK_DGRAM command
     let valid_command = SocketCommand {
         id: "test-id".to_string(),
-        channelId: "test-channel".to_string(),
-        command: "test-command".to_string(),
+        channelId: "test".to_string(),
+        command: "echo".to_string(),
         reply_to: Some("/tmp/response.sock".to_string()),
         args: Some(create_test_args()),
         timeout: Some(30.0),
@@ -103,7 +103,7 @@ async fn test_socket_response_structure() {
     // Test SocketResponse for SOCK_DGRAM
     let socket_response = SocketResponse {
         commandId: "cmd-123".to_string(),
-        channelId: "test-channel".to_string(),
+        channelId: "test".to_string(),
         success: true,
         result: Some(serde_json::Value::Object({
             let mut result = serde_json::Map::new();
@@ -117,13 +117,13 @@ async fn test_socket_response_structure() {
     // Test JSON serialization
     let json_str = serde_json::to_string(&socket_response).unwrap();
     assert!(json_str.contains("cmd-123"));
-    assert!(json_str.contains("test-channel"));
+    assert!(json_str.contains("test"));
     assert!(json_str.contains("response_data"));
     
     // Test deserialization
     let deserialized: SocketResponse = serde_json::from_str(&json_str).unwrap();
     assert_eq!(deserialized.commandId, "cmd-123");
-    assert_eq!(deserialized.channelId, "test-channel");
+    assert_eq!(deserialized.channelId, "test");
     assert_eq!(deserialized.success, true);
 }
 
@@ -139,8 +139,8 @@ async fn test_timestamp_values() {
     for timestamp in timestamps {
         let command = SocketCommand {
             id: "test-id".to_string(),
-            channelId: "test-channel".to_string(),
-            command: "test-command".to_string(),
+            channelId: "test".to_string(),
+            command: "echo".to_string(),
             reply_to: None,
             args: None,
             timeout: Some(30.0),

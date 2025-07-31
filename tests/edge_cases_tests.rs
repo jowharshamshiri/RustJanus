@@ -8,8 +8,8 @@ use test_utils::*;
 #[tokio::test]
 async fn test_anyccodable_with_null_values() {
     let command = SocketCommand::new(
-        "test-channel".to_string(),
-        "test-command".to_string(),
+        "test".to_string(),
+        "echo".to_string(),
         Some({
             let mut args = std::collections::HashMap::new();
             args.insert("null_value".to_string(), serde_json::Value::Null);

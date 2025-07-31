@@ -7,19 +7,19 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_connection_to_nonexistent_socket() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let nonexistent_path = "/tmp/nonexistent_socket_12345.sock".to_string();
     
     let client = JanusClient::new(
         nonexistent_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
     
     let result = client.send_command(
-        "test-command",
+        "echo",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(100)),
     ).await;

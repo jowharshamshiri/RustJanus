@@ -7,7 +7,7 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_parse_json_specification() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let json_str = ApiSpecificationParser::to_json(&api_spec).unwrap();
     
     let parsed = ApiSpecificationParser::from_json(&json_str).unwrap();
@@ -18,7 +18,7 @@ async fn test_parse_json_specification() {
 #[cfg(feature = "yaml-support")]
 #[tokio::test]
 async fn test_parse_yaml_specification() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let yaml_str = ApiSpecificationParser::to_yaml(&api_spec).unwrap();
     
     let parsed = ApiSpecificationParser::from_yaml(&yaml_str).unwrap();
@@ -28,7 +28,7 @@ async fn test_parse_yaml_specification() {
 
 #[tokio::test]
 async fn test_validate_valid_specification() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let result = ApiSpecificationParser::validate(&api_spec);
     assert!(result.is_ok());
 }

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 // Temporarily disabled - path validation happens at OS level in SOCK_DGRAM
 // #[tokio::test]
 async fn _test_path_traversal_attack() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     
     let malicious_paths = get_malicious_socket_paths();
@@ -18,7 +18,7 @@ async fn _test_path_traversal_attack() {
     for malicious_path in malicious_paths {
         let result = JanusClient::new(
             malicious_path.clone(),
-            "test-channel".to_string(),
+            "test".to_string(),
             Some(api_spec.clone()),
             config.clone(),
         );
@@ -48,7 +48,7 @@ async fn _test_path_traversal_attack() {
 
 #[tokio::test]
 async fn test_invalid_socket_path_characters() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     
     let invalid_paths = vec![
@@ -60,7 +60,7 @@ async fn test_invalid_socket_path_characters() {
     for invalid_path in invalid_paths {
         let result = JanusClient::new(
             invalid_path.to_string(),
-            "test-channel".to_string(),
+            "test".to_string(),
             Some(api_spec.clone()),
             config.clone(),
         );
@@ -71,7 +71,7 @@ async fn test_invalid_socket_path_characters() {
 
 #[tokio::test]
 async fn test_socket_path_length_limits() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     
     // Create a path longer than 108 characters (Unix socket limit)
@@ -79,7 +79,7 @@ async fn test_socket_path_length_limits() {
     
     let result = JanusClient::new(
         long_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     );
@@ -96,7 +96,7 @@ async fn test_socket_path_length_limits() {
 // Temporarily disabled - channel validation varies by implementation
 // #[tokio::test]
 async fn _test_channel_id_injection_attacks() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -129,13 +129,13 @@ async fn _test_channel_id_injection_attacks() {
 
 #[tokio::test]
 async fn test_command_injection_in_arguments() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -158,7 +158,7 @@ async fn test_command_injection_in_arguments() {
         
         // This should not crash or execute commands, just validate
         let result = client.send_command(
-            "test-command",
+            "echo",
             Some(args),
             Some(std::time::Duration::from_millis(100)),
         ).await;
@@ -190,7 +190,7 @@ async fn test_malformed_json_attacks() {
 
 #[tokio::test]
 async fn test_unicode_normalization_attacks() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -234,13 +234,13 @@ async fn test_unicode_normalization_attacks() {
 
 #[tokio::test]
 async fn test_large_payload_attacks() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -260,7 +260,7 @@ async fn test_large_payload_attacks() {
         args.insert("test_arg".to_string(), serde_json::Value::String(large_data));
         
         let result = client.send_command(
-            "test-command",
+            "echo",
             Some(args),
             Some(std::time::Duration::from_millis(100)),
         ).await;
@@ -288,13 +288,13 @@ async fn test_large_payload_attacks() {
 
 #[tokio::test]
 async fn test_repeated_large_payload_attacks() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -306,7 +306,7 @@ async fn test_repeated_large_payload_attacks() {
         args.insert("test_arg".to_string(), serde_json::Value::String(large_data));
         
         let result = client.send_command(
-            "test-command",
+            "echo",
             Some(args),
             Some(std::time::Duration::from_millis(100)),
         ).await;
@@ -329,7 +329,7 @@ async fn test_repeated_large_payload_attacks() {
 
 #[tokio::test]
 async fn test_connection_pool_exhaustion() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let mut config = create_test_config();
     config.max_concurrent_connections = 2; // Very low limit
     let socket_path = create_valid_socket_path();
@@ -337,7 +337,7 @@ async fn test_connection_pool_exhaustion() {
     // This test verifies that connection pool limits are enforced
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -352,7 +352,7 @@ async fn test_connection_pool_exhaustion() {
         
         tasks.push(async move {
             client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args_clone),
                 Some(std::time::Duration::from_millis(100)),
             ).await
@@ -369,7 +369,7 @@ async fn test_connection_pool_exhaustion() {
 
 #[tokio::test]
 async fn test_rapid_connection_attempts() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -384,7 +384,7 @@ async fn test_rapid_connection_attempts() {
         tasks.push(async move {
             JanusClient::new(
                 socket_path_clone,
-                "test-channel".to_string(),
+                "test".to_string(),
                 Some(api_spec_clone),
                 config_clone,
             )
@@ -409,7 +409,7 @@ async fn test_rapid_connection_attempts() {
 
 #[tokio::test]
 async fn test_insecure_configuration_prevention() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let socket_path = create_valid_socket_path();
     
     // Test with insecure configuration values
@@ -427,7 +427,7 @@ async fn test_insecure_configuration_prevention() {
     
     let result = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         insecure_config,
     );
@@ -442,7 +442,7 @@ async fn test_insecure_configuration_prevention() {
 
 #[tokio::test]
 async fn test_extreme_configuration_values() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let socket_path = create_valid_socket_path();
     
     // Test with extreme but valid configuration values
@@ -460,7 +460,7 @@ async fn test_extreme_configuration_values() {
     
     let result = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         extreme_config,
     );
@@ -477,13 +477,13 @@ async fn test_extreme_configuration_values() {
 
 #[tokio::test]
 async fn test_validation_bypass_attempts() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -495,7 +495,7 @@ async fn test_validation_bypass_attempts() {
         args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
         
         let result = client.send_command(
-            "test-command",
+            "echo",
             Some(args),
             Some(std::time::Duration::from_millis(10)),
         ).await;

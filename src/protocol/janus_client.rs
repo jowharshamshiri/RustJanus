@@ -24,7 +24,8 @@ pub struct JanusClient {
 
 impl JanusClient {
     /// Create a new datagram API client
-    pub fn new(
+    /// If api_spec is None, automatically fetches specification from server
+    pub async fn new(
         socket_path: String,
         channel_id: String,
         api_spec: Option<ApiSpecification>,
@@ -32,13 +33,93 @@ impl JanusClient {
     ) -> Result<Self, JanusError> {
         let core_client = CoreJanusClient::new(socket_path.clone(), config.clone())?;
         
+        // If no API specification provided, fetch from server
+        let final_api_spec = if api_spec.is_none() {
+            Some(Self::fetch_specification_from_server(&core_client, &config).await?)
+        } else {
+            api_spec
+        };
+        
+        // Validate channel exists in specification if we have one
+        if let Some(ref spec) = final_api_spec {
+            if !spec.channels.contains_key(&channel_id) {
+                return Err(JanusError::ProtocolError {
+                    file: "janus_client.rs".to_string(),
+                    line: 45,
+                    message: format!("Channel '{}' not found in API specification", channel_id),
+                });
+            }
+        }
+        
         Ok(Self {
             socket_path,
             channel_id,
-            api_spec,
+            api_spec: final_api_spec,
             config,
             core_client,
         })
+    }
+    
+    /// Fetch API specification from server
+    async fn fetch_specification_from_server(
+        core_client: &CoreJanusClient,
+        _config: &JanusClientConfig,
+    ) -> Result<ApiSpecification, JanusError> {
+        // Generate response socket path
+        let response_socket_path = core_client.generate_response_socket_path();
+        
+        // Create spec command
+        let spec_command = serde_json::json!({
+            "command": "spec",
+            "reply_to": response_socket_path
+        });
+        
+        let command_data = serde_json::to_vec(&spec_command)
+            .map_err(|e| JanusError::SerializationError {
+                file: "janus_client.rs".to_string(),
+                line: 71,
+                message: format!("Failed to serialize spec command: {}", e),
+            })?;
+        
+        // Send spec command to server
+        let response_data = core_client
+            .send_datagram(&command_data, &response_socket_path)
+            .await?;
+        
+        // Parse response JSON
+        let response: serde_json::Value = serde_json::from_slice(&response_data)
+            .map_err(|e| JanusError::SerializationError {
+                file: "janus_client.rs".to_string(),
+                line: 83,
+                message: format!("Failed to parse server response: {}", e),
+            })?;
+        
+        // Check for error in response
+        if let Some(error) = response.get("error") {
+            return Err(JanusError::ProtocolError {
+                file: "janus_client.rs".to_string(),
+                line: 91,
+                message: format!("Server returned error: {}", error),
+            });
+        }
+        
+        // Extract specification from response
+        let spec_data = response.get("result")
+            .ok_or_else(|| JanusError::ProtocolError {
+                file: "janus_client.rs".to_string(),
+                line: 99,
+                message: "Server response missing 'result' field".to_string(),
+            })?;
+        
+        // Parse the specification
+        let api_spec: ApiSpecification = serde_json::from_value(spec_data.clone())
+            .map_err(|e| JanusError::SerializationError {
+                file: "janus_client.rs".to_string(),
+                line: 107,
+                message: format!("Failed to parse server specification: {}", e),
+            })?;
+        
+        Ok(api_spec)
     }
     
     /// Send command via SOCK_DGRAM and wait for response

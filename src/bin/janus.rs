@@ -3,6 +3,7 @@ use serde_json;
 use std::os::unix::net::UnixDatagram;
 // Note: std::path::Path not needed in current SOCK_DGRAM implementation
 use std::fs;
+use rust_janus::specification::{ApiSpecification, ApiSpecificationParser};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -93,9 +94,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get_matches();
 
     let socket_path = matches.get_one::<String>("socket").unwrap();
+    
+    // Load API specification if provided
+    let api_spec = if let Some(spec_path) = matches.get_one::<String>("spec") {
+        match fs::read_to_string(spec_path) {
+            Ok(spec_content) => {
+                match ApiSpecificationParser::from_json(&spec_content) {
+                    Ok(spec) => {
+                        println!("Loaded API specification v{}", spec.version);
+                        Some(spec)
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse API specification: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to read API specification file: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
 
     if matches.get_flag("listen") {
-        listen_for_datagrams(socket_path).await
+        listen_for_datagrams(socket_path, api_spec).await
     } else if let Some(target) = matches.get_one::<String>("send-to") {
         let command = matches.get_one::<String>("command").unwrap();
         let message = matches.get_one::<String>("message").unwrap();
@@ -106,13 +131,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn listen_for_datagrams(socket_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn listen_for_datagrams(socket_path: &str, api_spec: Option<ApiSpecification>) -> Result<(), Box<dyn std::error::Error>> {
     println!("Listening for SOCK_DGRAM on: {}", socket_path);
     
     // Remove existing socket
     let _ = fs::remove_file(socket_path);
     
     let socket = UnixDatagram::bind(socket_path)?;
+    
+    // Set up signal handling
+    let socket_path_clone = socket_path.to_string();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+        println!("\nShutting down server...");
+        let _ = fs::remove_file(&socket_path_clone);
+        println!("Socket cleaned up");
+        std::process::exit(0);
+    });
+    
+    // Ensure cleanup on drop
+    let _cleanup_guard = SocketCleanupGuard::new(socket_path);
     
     println!("Ready to receive datagrams");
     
@@ -128,13 +166,32 @@ async fn listen_for_datagrams(socket_path: &str) -> Result<(), Box<dyn std::erro
                 
                 // Send response via reply_to if specified
                 if let Some(reply_to) = &cmd.reply_to {
-                    send_response(&cmd.id, &cmd.channel_id, &cmd.command, &cmd.args, reply_to)?;
+                    send_response(&cmd.id, &cmd.channel_id, &cmd.command, &cmd.args, reply_to, &api_spec)?;
                 }
             }
             Err(e) => {
                 eprintln!("Failed to parse datagram: {}", e);
             }
         }
+    }
+}
+
+// RAII guard for socket cleanup
+struct SocketCleanupGuard {
+    socket_path: String,
+}
+
+impl SocketCleanupGuard {
+    fn new(socket_path: &str) -> Self {
+        Self {
+            socket_path: socket_path.to_string(),
+        }
+    }
+}
+
+impl Drop for SocketCleanupGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.socket_path);
     }
 }
 
@@ -195,8 +252,30 @@ fn send_response(
     command: &str,
     args: &Option<std::collections::HashMap<String, serde_json::Value>>,
     reply_to: &str,
+    api_spec: &Option<ApiSpecification>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (result, success) = match command {
+        "spec" => {
+            if let Some(spec) = api_spec {
+                // Return the actual loaded API specification
+                match serde_json::to_value(spec) {
+                    Ok(spec_value) => {
+                        let mut result = std::collections::HashMap::new();
+                        result.insert("specification".to_string(), spec_value);
+                        (Some(result), true)
+                    }
+                    Err(e) => {
+                        let mut result = std::collections::HashMap::new();
+                        result.insert("error".to_string(), serde_json::Value::String(format!("Failed to serialize API specification: {}", e)));
+                        (Some(result), false)
+                    }
+                }
+            } else {
+                let mut result = std::collections::HashMap::new();
+                result.insert("error".to_string(), serde_json::Value::String("No API specification loaded on server".to_string()));
+                (Some(result), false)
+            }
+        }
         "ping" => {
             let mut result = std::collections::HashMap::new();
             result.insert("pong".to_string(), serde_json::Value::Bool(true));

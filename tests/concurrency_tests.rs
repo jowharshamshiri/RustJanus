@@ -10,13 +10,13 @@ use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_high_concurrency_command_execution() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -36,7 +36,7 @@ async fn test_high_concurrency_command_execution() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
             
             match client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
             ).await {
@@ -62,7 +62,7 @@ async fn test_high_concurrency_command_execution() {
 
 #[tokio::test]
 async fn test_concurrent_client_creation() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -103,13 +103,13 @@ async fn test_concurrent_client_creation() {
 
 #[tokio::test]
 async fn test_concurrent_handler_registration() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -149,14 +149,14 @@ async fn test_concurrent_handler_registration() {
 
 #[tokio::test]
 async fn test_concurrent_connection_pool_usage() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let mut config = create_test_config();
     config.max_concurrent_connections = 10; // Limited pool
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -171,7 +171,7 @@ async fn test_concurrent_connection_pool_usage() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("pool_test_{}", i)));
             
             client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
             ).await
@@ -203,13 +203,13 @@ async fn test_concurrent_connection_pool_usage() {
 
 #[tokio::test]
 async fn test_concurrent_state_modification() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -238,7 +238,7 @@ async fn test_concurrent_state_modification() {
 
 #[tokio::test]
 async fn test_concurrent_connection_management() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -261,7 +261,7 @@ async fn test_concurrent_connection_management() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
             
             client.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
             ).await
@@ -282,13 +282,13 @@ async fn test_concurrent_connection_management() {
 
 #[tokio::test]
 async fn test_thread_safety_of_configuration() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -311,13 +311,13 @@ async fn test_thread_safety_of_configuration() {
 
 #[tokio::test]
 async fn test_thread_safety_of_api_spec_access() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -339,13 +339,13 @@ async fn test_thread_safety_of_api_spec_access() {
 
 #[tokio::test]
 async fn test_no_deadlock_under_load() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -363,7 +363,7 @@ async fn test_no_deadlock_under_load() {
                     args.insert("test_arg".to_string(), serde_json::Value::String(format!("deadlock_test_{}", i)));
                     
                     client_clone.send_command(
-                        "test-command",
+                        "echo",
                         Some(args),
                         Some(std::time::Duration::from_millis(100)),
                     ).await
@@ -390,13 +390,13 @@ async fn test_no_deadlock_under_load() {
 
 #[tokio::test]
 async fn test_no_deadlock_with_mixed_operations() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -411,7 +411,7 @@ async fn test_no_deadlock_with_mixed_operations() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("mixed_test_{}", i)));
             
             client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
             ).await
@@ -439,7 +439,7 @@ async fn test_no_deadlock_with_mixed_operations() {
             let _config = client_clone.configuration();
             let _spec = client_clone.specification();
             // Convert to SocketResponse for consistency
-            Ok(SocketResponse::success("config_access".to_string(), "test-channel".to_string(), Some(serde_json::json!({}))))
+            Ok(SocketResponse::success("config_access".to_string(), "test".to_string(), Some(serde_json::json!({}))))
         }));
     }
     
@@ -455,13 +455,13 @@ async fn test_no_deadlock_with_mixed_operations() {
 
 #[tokio::test]
 async fn test_memory_safety_under_concurrent_access() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -479,7 +479,7 @@ async fn test_memory_safety_under_concurrent_access() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("{}_{}_{}", large_data_clone, i, i)));
             
             client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
             ).await
@@ -501,7 +501,7 @@ async fn test_memory_safety_under_concurrent_access() {
 
 #[tokio::test]
 async fn test_concurrent_resource_cleanup() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -526,13 +526,13 @@ async fn test_concurrent_resource_cleanup() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("cleanup_test_{}", i)));
             
             let _result = client.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
             );
             
             // Client should be cleaned up automatically when dropped
-            Ok(SocketResponse::success("timeout_test".to_string(), "test-channel".to_string(), Some(serde_json::json!({}))))
+            Ok(SocketResponse::success("timeout_test".to_string(), "test".to_string(), Some(serde_json::json!({}))))
         }));
     }
     
@@ -552,14 +552,14 @@ async fn test_concurrent_resource_cleanup() {
 
 #[tokio::test]
 async fn test_connection_pool_thread_safety() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let mut config = create_test_config();
     config.max_concurrent_connections = 5; // Small pool for contention
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -574,7 +574,7 @@ async fn test_connection_pool_thread_safety() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("pool_safety_{}", i)));
             
             client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
             ).await

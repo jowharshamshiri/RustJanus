@@ -10,13 +10,13 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_command_with_timeout() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -26,7 +26,7 @@ async fn test_command_with_timeout() {
     
     // 0.1 second timeout (100ms) - should timeout since no server is running
     let result = client.send_command(
-        "test-command",
+        "echo",
         Some(args),
         Some(std::time::Duration::from_millis(100)),
     ).await;
@@ -55,13 +55,13 @@ async fn test_command_with_timeout() {
 
 #[tokio::test]
 async fn test_command_timeout_error_message() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -69,7 +69,7 @@ async fn test_command_timeout_error_message() {
     let args = create_test_args();
     
     let result = client.send_command(
-        "test-command",
+        "echo",
         Some(args),
         Some(std::time::Duration::from_millis(50)),
     ).await;
@@ -94,13 +94,13 @@ async fn test_command_timeout_error_message() {
 
 #[tokio::test]
 async fn test_uuid_generation() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -112,7 +112,7 @@ async fn test_uuid_generation() {
     
     for _ in 0..10 {
         match client.send_command(
-            "test-command",
+            "echo",
             Some(args.clone()),
             Some(std::time::Duration::from_millis(10)),
         ).await {
@@ -139,13 +139,13 @@ async fn test_uuid_generation() {
 
 #[tokio::test]
 async fn test_multiple_commands_with_different_timeouts() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -162,7 +162,7 @@ async fn test_multiple_commands_with_different_timeouts() {
     for (i, timeout) in timeouts.iter().enumerate() {
         let (result, elapsed_time) = measure_time(
             client.send_command(
-                "test-command",
+                "echo",
                 Some(args.clone()),
                 Some(*timeout),
             )
@@ -195,8 +195,8 @@ async fn test_multiple_commands_with_different_timeouts() {
 #[tokio::test]
 async fn test_socket_command_timeout_field() {
     let command_with_timeout = SocketCommand::new(
-        "test-channel".to_string(),
-        "test-command".to_string(),
+        "test".to_string(),
+        "echo".to_string(),
         Some(create_test_args()),
         Some(30.5), // 30.5 seconds
     );
@@ -217,8 +217,8 @@ async fn test_socket_command_timeout_field() {
 #[tokio::test]
 async fn test_socket_command_without_timeout() {
     let command_without_timeout = SocketCommand::new(
-        "test-channel".to_string(),
-        "test-command".to_string(),
+        "test".to_string(),
+        "echo".to_string(),
         Some(create_test_args()),
         None, // No timeout
     );
@@ -238,13 +238,13 @@ async fn test_socket_command_without_timeout() {
 
 #[tokio::test]
 async fn test_default_timeout() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
@@ -255,7 +255,7 @@ async fn test_default_timeout() {
     let start_time = std::time::Instant::now();
     
     let result = client.send_command(
-        "test-command",
+        "echo",
         Some(args),
         Some(std::time::Duration::from_secs(30)), // Default timeout
     ).await;
@@ -279,13 +279,13 @@ async fn test_default_timeout() {
 
 #[tokio::test]
 async fn test_concurrent_timeouts() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap());
@@ -304,7 +304,7 @@ async fn test_concurrent_timeouts() {
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("concurrent_{}", i)));
             
             let result = client_clone.send_command(
-                "test-command",
+                "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
             ).await;
@@ -337,21 +337,21 @@ async fn test_concurrent_timeouts() {
 async fn test_command_handler_timeout_error() {
     // Test SocketError::HandlerTimeout structure
     let handler_timeout_error = SocketError::HandlerTimeout(
-        "test-command-123".to_string(),
+        "echo-123".to_string(),
         5.0, // 5 seconds
     );
     
     // Serialize and verify structure
     let json = serde_json::to_string(&handler_timeout_error).unwrap();
     assert!(json.contains("HandlerTimeout"));
-    assert!(json.contains("test-command-123"));
+    assert!(json.contains("echo-123"));
     assert!(json.contains("5.0") || json.contains("5"));
     
     // Deserialize and verify
     let deserialized: SocketError = serde_json::from_str(&json).unwrap();
     match deserialized {
         SocketError::HandlerTimeout(command_id, timeout_seconds) => {
-            assert_eq!(command_id, "test-command-123");
+            assert_eq!(command_id, "echo-123");
             assert_eq!(timeout_seconds, 5.0);
         },
         other => panic!("Expected HandlerTimeout, got: {:?}", other),
@@ -359,7 +359,7 @@ async fn test_command_handler_timeout_error() {
     
     // Test error message format
     let error_message = format!("{}", handler_timeout_error);
-    assert!(error_message.contains("test-command-123"));
+    assert!(error_message.contains("echo-123"));
     assert!(error_message.contains("timed out"));
     assert!(error_message.contains("5"));
 }
@@ -389,8 +389,8 @@ async fn test_handler_timeout_api_error() {
     
     // Test response creation with timeout error
     let timeout_response = SocketResponse::timeout_error(
-        "test-command-789".to_string(),
-        "test-channel".to_string(),
+        "echo-789".to_string(),
+        "test".to_string(),
         15.0,
     );
     
@@ -400,7 +400,7 @@ async fn test_handler_timeout_api_error() {
     
     match timeout_response.error.unwrap() {
         SocketError::HandlerTimeout(command_id, timeout_seconds) => {
-            assert_eq!(command_id, "test-command-789");
+            assert_eq!(command_id, "echo-789");
             assert_eq!(timeout_seconds, 15.0);
         },
         other => panic!("Expected HandlerTimeout in response, got: {:?}", other),

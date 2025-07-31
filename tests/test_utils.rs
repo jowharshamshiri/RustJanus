@@ -11,82 +11,78 @@ pub fn create_test_socket_path() -> (TempDir, PathBuf) {
     (temp_dir, socket_path)
 }
 
-/// Create a test API specification matching SwiftJanus tests
-pub fn create_test_api_spec() -> ApiSpecification {
-    let mut api_spec = ApiSpecification::new("1.0.0".to_string());
+/// Fetch API specification from a running test server
+/// This replaces hardcoded specifications with dynamic fetching for better test accuracy
+pub async fn fetch_test_api_spec(server_socket_path: &str) -> ApiSpecification {
+    use rust_janus::core::CoreJanusClient;
+    use rust_janus::config::JanusClientConfig;
     
-    // Create test channel
-    let mut channel = ChannelSpec::new("Test channel for validation".to_string());
+    // Create minimal client configuration for spec fetching
+    let config = JanusClientConfig {
+        max_concurrent_connections: 1,
+        max_message_size: 1_000_000,
+        connection_timeout: std::time::Duration::from_secs(5),
+        max_pending_commands: 10,
+        max_command_handlers: 10,
+        enable_resource_monitoring: false,
+        max_channel_name_length: 128,
+        max_command_name_length: 128,
+        max_args_data_size: 500_000,
+    };
     
-    // Add test-command
-    let mut test_command = CommandSpec::new(
-        "Test command for validation".to_string(),
-        ResponseSpec::new("object".to_string())
-    );
+    // Create core client for spec fetching
+    let core_client = CoreJanusClient::new(server_socket_path.to_string(), config)
+        .expect("Failed to create core client for spec fetching");
     
-    let test_arg = ArgumentSpec::new("string".to_string())
-        .required()
-        .with_description("Test argument".to_string())
-        .with_validation(
-            ValidationSpec::new()
-                .with_length_range(Some(1), Some(100))
-        );
+    // Generate response socket path
+    let response_socket_path = core_client.generate_response_socket_path();
     
-    test_command.add_argument("test_arg".to_string(), test_arg);
-    channel.add_command("test-command".to_string(), test_command);
+    // Create spec command
+    let spec_command = serde_json::json!({
+        "command": "spec",
+        "reply_to": response_socket_path
+    });
     
-    // Add echo-command  
-    let mut echo_command = CommandSpec::new(
-        "Echo command".to_string(),
-        ResponseSpec::new("object".to_string())
-    );
+    let command_data = serde_json::to_vec(&spec_command)
+        .expect("Failed to serialize spec command");
     
-    let message_arg = ArgumentSpec::new("string".to_string())
-        .required()
-        .with_description("Message to echo".to_string());
+    // Send spec command to server
+    let response_data = core_client
+        .send_datagram(&command_data, &response_socket_path)
+        .await
+        .expect("Failed to fetch specification from server");
     
-    echo_command.add_argument("message".to_string(), message_arg);
-    channel.add_command("echo".to_string(), echo_command);
+    // Parse response JSON
+    let response: serde_json::Value = serde_json::from_slice(&response_data)
+        .expect("Failed to parse server response");
     
-    // Add process-command with complex args
-    let mut process_command = CommandSpec::new(
-        "Process command with validation".to_string(),
-        ResponseSpec::new("object".to_string())
-    );
+    // Check for error in response
+    if let Some(error) = response.get("error") {
+        panic!("Server returned error when fetching spec: {}", error);
+    }
     
-    let action_arg = ArgumentSpec::new("string".to_string())
-        .required()
-        .with_validation(
-            ValidationSpec::new()
-                .with_enum(vec![
-                    serde_json::Value::String("create".to_string()),
-                    serde_json::Value::String("update".to_string()),
-                    serde_json::Value::String("delete".to_string()),
-                ])
-        );
+    // Extract specification from response
+    let spec_data = response.get("result")
+        .expect("Missing 'result' field in spec response");
     
-    let data_arg = ArgumentSpec::new("string".to_string())
-        .required()
-        .with_validation(
-            ValidationSpec::new()
-                .with_length_range(Some(1), Some(1000))
-        );
-    
-    let count_arg = ArgumentSpec::new("integer".to_string())
-        .optional()
-        .with_validation(
-            ValidationSpec::new()
-                .with_numeric_range(Some(1.0), Some(100.0))
-        );
-    
-    process_command.add_argument("action".to_string(), action_arg);
-    process_command.add_argument("data".to_string(), data_arg);
-    process_command.add_argument("count".to_string(), count_arg);
-    channel.add_command("process".to_string(), process_command);
-    
-    api_spec.add_channel("test-channel".to_string(), channel);
-    api_spec
+    // Parse API specification
+    ApiSpecificationParser::from_json(&serde_json::to_string(spec_data).unwrap())
+        .expect("Failed to parse API specification from server response")
 }
+
+/// Load test API specification from test-spec.json file
+pub fn load_test_api_spec() -> ApiSpecification {
+    let spec_path = "../../test-spec.json";
+    let spec_data = std::fs::read_to_string(spec_path)
+        .expect("Failed to read test-spec.json");
+    
+    let spec_json: serde_json::Value = serde_json::from_str(&spec_data)
+        .expect("Failed to parse test-spec.json");
+    
+    ApiSpecificationParser::from_json(&spec_data)
+        .expect("Failed to parse API specification from test-spec.json")
+}
+
 
 /// Create test client configuration with secure defaults
 pub fn create_test_config() -> JanusClientConfig {
@@ -180,7 +176,7 @@ pub fn get_invalid_utf8_sequences() -> Vec<Vec<u8>> {
 /// Create command arguments for testing
 pub fn create_test_args() -> HashMap<String, serde_json::Value> {
     let mut args = HashMap::new();
-    args.insert("test_arg".to_string(), serde_json::Value::String("test_value".to_string()));
+    args.insert("message".to_string(), serde_json::Value::String("test_value".to_string()));
     args
 }
 

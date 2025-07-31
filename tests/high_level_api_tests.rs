@@ -74,7 +74,7 @@ async fn test_janus_client_server_communication() {
         "test_channel".to_string(),
         None, // No API spec for this test
         config,
-    ).expect("Failed to create client");
+    ).await.expect("Failed to create client");
     
     // Send command
     let mut args = std::collections::HashMap::new();

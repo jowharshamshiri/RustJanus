@@ -1,5 +1,4 @@
 use rust_janus::*;
-use std::collections::HashMap;
 
 #[test]
 fn test_json_parsing_error_logging() {

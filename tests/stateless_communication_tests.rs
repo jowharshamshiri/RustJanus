@@ -7,21 +7,21 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_stateless_command_validation() {
-    let api_spec = create_test_api_spec();
+    let api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     // Command validation should work without connection
     let client = JanusClient::new(
         socket_path,
-        "test-channel".to_string(),
+        "test".to_string(),
         Some(api_spec),
         config,
     ).unwrap();
     
     // Validation happens before connection attempt
     let result = client.send_command(
-        "test-command",
+        "echo",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(100)),
     ).await;
