@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::os::unix::net::Janus;
+use std::os::unix::net::UnixDatagram;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
@@ -84,7 +84,7 @@ impl JanusServer {
         // Remove existing socket
         let _ = fs::remove_file(&socket_path);
 
-        let socket = Janus::bind(&socket_path)
+        let socket = UnixDatagram::bind(&socket_path)
             .map_err(|e| JanusError::IoError(format!("Failed to bind socket: {}", e)))?;
 
         // Set non-blocking mode for graceful shutdown
@@ -230,7 +230,7 @@ impl JanusServer {
     async fn send_response(response: SocketResponse, reply_to: &str) {
         match serde_json::to_vec(&response) {
             Ok(response_data) => {
-                if let Ok(client_sock) = Janus::unbound() {
+                if let Ok(client_sock) = UnixDatagram::unbound() {
                     if let Err(e) = client_sock.send_to(&response_data, reply_to) {
                         eprintln!("Error sending response: {}", e);
                     } else {

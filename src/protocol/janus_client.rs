@@ -1,4 +1,4 @@
-use crate::core::{JanusClient, SecurityValidator};
+use crate::core::{CoreJanusClient, SecurityValidator};
 use crate::error::JanusError;
 use crate::config::JanusClientConfig;
 use crate::specification::ApiSpecification;
@@ -18,7 +18,7 @@ pub struct JanusClient {
     channel_id: String,
     api_spec: Option<ApiSpecification>,
     config: JanusClientConfig,
-    janus_client: JanusClient,
+    core_client: CoreJanusClient,
     // Note: SecurityValidator is used via static methods, no instance needed
 }
 
@@ -30,14 +30,14 @@ impl JanusClient {
         api_spec: Option<ApiSpecification>,
         config: JanusClientConfig,
     ) -> Result<Self, JanusError> {
-        let janus_client = JanusClient::new(socket_path.clone(), config.clone())?;
+        let core_client = CoreJanusClient::new(socket_path.clone(), config.clone())?;
         
         Ok(Self {
             socket_path,
             channel_id,
             api_spec,
             config,
-            janus_client,
+            core_client,
         })
     }
     
@@ -50,7 +50,7 @@ impl JanusClient {
     ) -> Result<SocketResponse, JanusError> {
         // Generate command ID and response socket path
         let command_id = Uuid::new_v4().to_string();
-        let response_socket_path = self.janus_client.generate_response_socket_path();
+        let response_socket_path = self.core_client.generate_response_socket_path();
         
         // Create socket command
         let socket_command = SocketCommand {
@@ -80,7 +80,7 @@ impl JanusClient {
             })?;
         
         // Send datagram and wait for response
-        let response_data = self.janus_client
+        let response_data = self.core_client
             .send_datagram(&command_data, &response_socket_path)
             .await?;
         
@@ -152,14 +152,14 @@ impl JanusClient {
             })?;
         
         // Send datagram without waiting for response
-        self.janus_client.send_datagram_no_response(&command_data).await?;
+        self.core_client.send_datagram_no_response(&command_data).await?;
         
         Ok(())
     }
     
     /// Test connectivity to the server
     pub async fn test_connection(&self) -> Result<(), JanusError> {
-        self.janus_client.test_connection().await
+        self.core_client.test_connection().await
     }
     
     /// Validate command against API specification

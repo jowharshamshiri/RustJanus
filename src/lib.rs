@@ -67,7 +67,7 @@ pub mod utils;
 pub mod server;
 
 // Core exports (low-level SOCK_DGRAM socket communication)
-pub use core::{JanusClient, SecurityValidator};
+pub use core::{CoreJanusClient, SecurityValidator};
 
 // Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
@@ -105,7 +105,7 @@ pub use chrono::{DateTime, Utc};
 /// Prelude module for convenient importing
 pub mod prelude {
     pub use crate::{
-        JanusClient, JanusClient, ApiSpecification, JanusClientConfig,
+        JanusClient, CoreJanusClient, ApiSpecification, JanusClientConfig,
         // Connection-based classes removed
         SocketCommand, SocketResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
