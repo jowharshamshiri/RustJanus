@@ -135,11 +135,44 @@ impl ResponseValidator {
 
     /// Validate a value against a specification
     fn validate_value(&self, value: &Value, spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
-        // Handle model references (only for ArgumentSpec in Rust implementation) 
-        if let SpecType::Argument(arg_spec) = spec {
-            if let Some(ref _validation) = arg_spec.validation {
-                // For now, we don't have model references in the current Rust structure
-                // This would need to be extended if model references are added
+        // Handle model references first
+        match spec {
+            SpecType::Response(response_spec) => {
+                if let Some(model_ref) = &response_spec.model_ref {
+                    if let Some(model) = self.resolve_model_reference(model_ref) {
+                        self.validate_value(value, &SpecType::Model(model.clone()), field_path, errors);
+                        return;
+                    } else {
+                        errors.push(ValidationError {
+                            field: field_path.to_string(),
+                            message: format!("Model reference '{}' not found", model_ref),
+                            expected: "valid model reference".to_string(),
+                            actual: Value::String(model_ref.clone()),
+                            context: None,
+                        });
+                        return;
+                    }
+                }
+            }
+            SpecType::Argument(arg_spec) => {
+                if let Some(model_ref) = &arg_spec.model_ref {
+                    if let Some(model) = self.resolve_model_reference(model_ref) {
+                        self.validate_value(value, &SpecType::Model(model.clone()), field_path, errors);
+                        return;
+                    } else {
+                        errors.push(ValidationError {
+                            field: field_path.to_string(),
+                            message: format!("Model reference '{}' not found", model_ref),
+                            expected: "valid model reference".to_string(),
+                            actual: Value::String(model_ref.clone()),
+                            context: None,
+                        });
+                        return;
+                    }
+                }
+            }
+            SpecType::Model(_) => {
+                // No model reference needed for already resolved models
             }
         }
 
@@ -335,11 +368,70 @@ impl ResponseValidator {
         }
     }
 
-    /// Validate array value and items
-    fn validate_array(&self, _value: &[Value], _spec: &SpecType, _field_path: &str, _errors: &mut Vec<ValidationError>) {
-        // Array item validation would need to be added to the Rust specification structure
-        // For now, basic array validation is handled by type checking
-        // This could be extended when array item specifications are added to the Rust model
+    /// Validate array value and items (matches Go implementation)
+    fn validate_array(&self, value: &[Value], spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
+        // Basic array validation - type checking is handled by caller
+        
+        // For each array item, validate recursively if we have type information
+        // This is a basic implementation matching Go's recursive array validation
+        for (index, item) in value.iter().enumerate() {
+            let item_path = format!("{}[{}]", field_path, index);
+            
+            // For arrays, we can do basic type consistency validation
+            // More advanced validation would require array item type specs
+            match item {
+                Value::Object(obj) => {
+                    // Validate object items recursively if we have object spec
+                    if let SpecType::Response(response_spec) = spec {
+                        if let Some(properties) = &response_spec.properties {
+                            self.validate_object_properties(obj, properties, &item_path, errors);
+                        }
+                    }
+                }
+                Value::Array(arr) => {
+                    // Recursive array validation
+                    self.validate_array(arr, spec, &item_path, errors);
+                }
+                _ => {
+                    // Basic type validation for primitive array items
+                    // Additional constraints could be added here
+                }
+            }
+        }
+    }
+    
+    /// Validate object properties (helper method for array validation)
+    fn validate_object_properties(&self, value: &serde_json::Map<String, Value>, properties: &std::collections::HashMap<String, ArgumentSpec>, field_path: &str, errors: &mut Vec<ValidationError>) {
+        // Validate each property
+        for (prop_name, prop_spec) in properties {
+            let prop_field_path = if field_path.is_empty() {
+                prop_name.clone()
+            } else {
+                format!("{}.{}", field_path, prop_name)
+            };
+
+            let prop_value = value.get(prop_name);
+
+            // Check required fields
+            let is_required = prop_spec.required.unwrap_or(false);
+            if is_required && (prop_value.is_none() || prop_value == Some(&Value::Null)) {
+                errors.push(ValidationError {
+                    field: prop_field_path.clone(),
+                    message: "Required field is missing or null".to_string(),
+                    expected: format!("non-null {}", prop_spec.r#type),
+                    actual: prop_value.cloned().unwrap_or(Value::Null),
+                    context: None,
+                });
+                continue;
+            }
+
+            // Validate property value if present
+            if let Some(value) = prop_value {
+                // Use the property spec directly as ArgumentSpec (they have compatible structure)
+                let spec_type = SpecType::Argument(prop_spec.clone());
+                self.validate_value(value, &spec_type, &prop_field_path, errors);
+            }
+        }
     }
 
     /// Validate object properties

@@ -7,16 +7,15 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_connection_to_nonexistent_socket() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let nonexistent_path = "/tmp/nonexistent_socket_12345.sock".to_string();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         nonexistent_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     let result = client.send_command(
         "echo",

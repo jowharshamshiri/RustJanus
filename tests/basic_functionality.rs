@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_api_specification_creation() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     
     assert_eq!(api_spec.version, "1.0.0");
     assert!(!api_spec.channels.is_empty());
@@ -19,20 +19,20 @@ async fn test_api_specification_creation() {
     assert_eq!(channel.description, "Test channel for cross-platform communication");
     assert!(!channel.commands.is_empty());
     
-    // Verify commands exist
+    // Verify commands exist (only check non-built-in commands)
     assert!(channel.get_command("ping").is_some());
     assert!(channel.get_command("echo").is_some());
-    assert!(channel.get_command("spec").is_some());
+    // Note: spec is a built-in command and should not be in API spec
 }
 
 #[tokio::test]
 async fn test_api_specification_json_serialization() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     
     // Serialize to JSON
     let json_str = ApiSpecificationParser::to_json(&api_spec).unwrap();
     assert!(!json_str.is_empty());
-    assert!(json_str.contains("\"version\":\"1.0.0\""));
+    assert!(json_str.contains("\"version\": \"1.0.0\""));
     assert!(json_str.contains("\"test\""));
     
     // Deserialize from JSON
@@ -216,17 +216,16 @@ async fn test_anyccodable_array_value() {
 
 #[tokio::test]
 async fn test_janus_client_initialization() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     // Valid initialization
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path.clone(),
         "test".to_string(),
-        Some(api_spec.clone()),
         config.clone(),
-    );
+    ).await;
     
     assert!(client.is_ok());
     
@@ -238,9 +237,8 @@ async fn test_janus_client_initialization() {
     let invalid_client = JanusClient::new(
         socket_path,
         "".to_string(), // Empty channel ID
-        Some(api_spec),
         config,
-    );
+    ).await;
     
     assert!(invalid_client.is_err());
     match invalid_client.unwrap_err() {
@@ -251,16 +249,15 @@ async fn test_janus_client_initialization() {
 
 #[tokio::test] 
 async fn test_command_validation() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     // Valid command
     let valid_args = create_test_args();

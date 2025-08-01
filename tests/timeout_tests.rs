@@ -10,16 +10,15 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_command_with_timeout() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     let timeout_counter = create_counting_timeout_handler();
     let args = create_test_args();
@@ -55,16 +54,15 @@ async fn test_command_with_timeout() {
 
 #[tokio::test]
 async fn test_command_timeout_error_message() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     let args = create_test_args();
     
@@ -94,16 +92,15 @@ async fn test_command_timeout_error_message() {
 
 #[tokio::test]
 async fn test_uuid_generation() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     let args = create_test_args();
     
@@ -139,16 +136,15 @@ async fn test_uuid_generation() {
 
 #[tokio::test]
 async fn test_multiple_commands_with_different_timeouts() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     // Test 3 different timeouts (0.05s, 0.1s, 0.15s)
     let timeouts = vec![
@@ -238,16 +234,15 @@ async fn test_socket_command_without_timeout() {
 
 #[tokio::test]
 async fn test_default_timeout() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap();
+    ).await.unwrap();
     
     let args = create_test_args();
     
@@ -279,16 +274,15 @@ async fn test_default_timeout() {
 
 #[tokio::test]
 async fn test_concurrent_timeouts() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     let timeout_counter = Arc::new(AtomicUsize::new(0));
     

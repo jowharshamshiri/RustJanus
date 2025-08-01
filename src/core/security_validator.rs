@@ -175,4 +175,117 @@ impl SecurityValidator {
         // Return sanitized string (for now, just validate and return original)
         Ok(input.to_string())
     }
+    
+    /// Validate UUID format (matches TypeScript implementation)
+    pub fn validate_uuid_format(uuid: &str) -> Result<(), JanusError> {
+        // UUID v4 format: 8-4-4-4-12 hexadecimal digits
+        let uuid_regex = Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")?;
+        if !uuid_regex.is_match(uuid) {
+            return Err(JanusError::SecurityViolation(
+                format!("Invalid UUID format: {}", uuid)
+            ));
+        }
+        Ok(())
+    }
+    
+    /// Validate timestamp format (matches Swift/TypeScript implementation)
+    pub fn validate_timestamp_format(timestamp: &str) -> Result<(), JanusError> {
+        use chrono::{DateTime, Utc};
+        
+        // Try parsing as ISO 8601 format
+        if DateTime::parse_from_rfc3339(timestamp).is_ok() {
+            return Ok(());
+        }
+        
+        // Try parsing as UTC format
+        if timestamp.parse::<DateTime<Utc>>().is_ok() {
+            return Ok(());
+        }
+        
+        Err(JanusError::SecurityViolation(
+            format!("Invalid timestamp format: {} (expected ISO 8601)", timestamp)
+        ))
+    }
+
+    /// Validate reserved channel names (matches Swift implementation)
+    pub fn validate_reserved_channels(&self, channel_id: &str) -> Result<(), JanusError> {
+        let reserved_channels = [
+            "system", "admin", "root", "internal", "__proto__", "constructor"
+        ];
+        
+        let lower_channel = channel_id.to_lowercase();
+        if reserved_channels.contains(&lower_channel.as_str()) {
+            return Err(JanusError::SecurityViolation(
+                format!("Channel ID '{}' is reserved and cannot be used", channel_id)
+            ));
+        }
+        
+        Ok(())
+    }
+
+    /// Validate dangerous command patterns (matches Swift implementation)
+    pub fn validate_dangerous_command(&self, command_name: &str) -> Result<(), JanusError> {
+        let dangerous_patterns = ["eval", "exec", "system", "shell", "rm", "delete", "drop"];
+        let lower_command = command_name.to_lowercase();
+        
+        for pattern in &dangerous_patterns {
+            if lower_command.contains(pattern) {
+                return Err(JanusError::SecurityViolation(
+                    format!("Command name contains dangerous pattern: {}", pattern)
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate argument security (matches Swift implementation)
+    pub fn validate_argument_security(&self, args: &serde_json::Map<String, serde_json::Value>) -> Result<(), JanusError> {
+        let dangerous_args = [
+            "__proto__", "constructor", "prototype", "eval", "function"
+        ];
+        
+        for arg_name in args.keys() {
+            let lower_arg = arg_name.to_lowercase();
+            if dangerous_args.contains(&lower_arg.as_str()) {
+                return Err(JanusError::SecurityViolation(
+                    format!("Dangerous argument name: {}", arg_name)
+                ));
+            }
+        }
+        
+        // Validate argument values for injection attempts
+        for (key, value) in args {
+            self.validate_argument_value(key, value)?;
+        }
+        
+        Ok(())
+    }
+
+    /// Validate argument value for SQL and script injection patterns (matches Swift implementation)
+    fn validate_argument_value(&self, key: &str, value: &serde_json::Value) -> Result<(), JanusError> {
+        if let Some(string_value) = value.as_str() {
+            let lower_value = string_value.to_lowercase();
+            
+            // Check for SQL injection patterns
+            let sql_patterns = ["'", "\"", "--", "/*", "*/", "union", "select", "drop", "delete", "insert", "update"];
+            for pattern in &sql_patterns {
+                if lower_value.contains(pattern) {
+                    return Err(JanusError::SecurityViolation(
+                        format!("Argument '{}' contains potentially dangerous SQL pattern: {}", key, pattern)
+                    ));
+                }
+            }
+            
+            // Check for script injection patterns
+            let script_patterns = ["<script", "javascript:", "vbscript:", "onload=", "onerror="];
+            for pattern in &script_patterns {
+                if lower_value.contains(pattern) {
+                    return Err(JanusError::SecurityViolation(
+                        format!("Argument '{}' contains script injection pattern: {}", key, pattern)
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }

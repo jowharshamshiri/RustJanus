@@ -10,16 +10,15 @@ use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_high_concurrency_command_execution() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     let success_count = Arc::new(AtomicUsize::new(0));
     let error_count = Arc::new(AtomicUsize::new(0));
@@ -62,7 +61,7 @@ async fn test_high_concurrency_command_execution() {
 
 #[tokio::test]
 async fn test_concurrent_client_creation() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -70,16 +69,15 @@ async fn test_concurrent_client_creation() {
     let mut tasks = Vec::new();
     for i in 0..50 {
         let socket_path_clone = socket_path.clone();
-        let api_spec_clone = api_spec.clone();
+        let _api_spec_clone = _api_spec.clone();
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
             JanusClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
-                Some(api_spec_clone),
                 config_clone,
-            )
+            ).await
         }));
     }
     
@@ -103,16 +101,15 @@ async fn test_concurrent_client_creation() {
 
 #[tokio::test]
 async fn test_concurrent_handler_registration() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // Register 20 handlers concurrently
     let mut tasks = Vec::new();
@@ -149,7 +146,7 @@ async fn test_concurrent_handler_registration() {
 
 #[tokio::test]
 async fn test_concurrent_connection_pool_usage() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let mut config = create_test_config();
     config.max_concurrent_connections = 10; // Limited pool
     let socket_path = create_valid_socket_path();
@@ -157,9 +154,8 @@ async fn test_concurrent_connection_pool_usage() {
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // 50 operations on 10-connection pool
     let mut tasks = Vec::new();
@@ -203,16 +199,15 @@ async fn test_concurrent_connection_pool_usage() {
 
 #[tokio::test]
 async fn test_concurrent_state_modification() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     let counter = Arc::new(AtomicUsize::new(0));
     
@@ -238,7 +233,7 @@ async fn test_concurrent_state_modification() {
 
 #[tokio::test]
 async fn test_concurrent_connection_management() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -246,16 +241,15 @@ async fn test_concurrent_connection_management() {
     let mut tasks = Vec::new();
     for i in 0..30 {
         let socket_path_clone = socket_path.clone();
-        let api_spec_clone = api_spec.clone();
+        let _api_spec_clone = _api_spec.clone();
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
-            let client = JanusClient::new(
+            let mut client = JanusClient::new(
                 socket_path_clone,
                 format!("channel-{}", i),
-                Some(api_spec_clone),
                 config_clone,
-            )?;
+            ).await?;
             
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
@@ -282,16 +276,15 @@ async fn test_concurrent_connection_management() {
 
 #[tokio::test]
 async fn test_thread_safety_of_configuration() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // 100 concurrent configuration accesses
     let mut tasks = Vec::new();
@@ -311,16 +304,15 @@ async fn test_thread_safety_of_configuration() {
 
 #[tokio::test]
 async fn test_thread_safety_of_api_spec_access() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // 100 concurrent specification accesses
     let mut tasks = Vec::new();
@@ -339,16 +331,15 @@ async fn test_thread_safety_of_api_spec_access() {
 
 #[tokio::test]
 async fn test_no_deadlock_under_load() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // 50 tasks with 10-second timeout to detect deadlocks
     let mut tasks = Vec::new();
@@ -390,16 +381,15 @@ async fn test_no_deadlock_under_load() {
 
 #[tokio::test]
 async fn test_no_deadlock_with_mixed_operations() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     let mut tasks = Vec::new();
     
@@ -455,16 +445,15 @@ async fn test_no_deadlock_with_mixed_operations() {
 
 #[tokio::test]
 async fn test_memory_safety_under_concurrent_access() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // 100 concurrent operations with memory pressure
     let large_data = Arc::new(create_large_test_data(100)); // 100KB each
@@ -501,7 +490,7 @@ async fn test_memory_safety_under_concurrent_access() {
 
 #[tokio::test]
 async fn test_concurrent_resource_cleanup() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -509,17 +498,16 @@ async fn test_concurrent_resource_cleanup() {
     let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();
     for i in 0..20 {
         let socket_path_clone = socket_path.clone();
-        let api_spec_clone = api_spec.clone();
+        let _api_spec_clone = _api_spec.clone();
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
             // Create client
-            let client = JanusClient::new(
+            let mut client = JanusClient::new(
                 socket_path_clone,
                 format!("cleanup_channel_{}", i),
-                Some(api_spec_clone),
                 config_clone,
-            )?;
+            ).await?;
             
             // Use client
             let mut args = HashMap::new();
@@ -552,7 +540,7 @@ async fn test_concurrent_resource_cleanup() {
 
 #[tokio::test]
 async fn test_connection_pool_thread_safety() {
-    let api_spec = load_test_api_spec();
+    let _api_spec = load_test_api_spec();
     let mut config = create_test_config();
     config.max_concurrent_connections = 5; // Small pool for contention
     let socket_path = create_valid_socket_path();
@@ -560,9 +548,8 @@ async fn test_connection_pool_thread_safety() {
     let client = Arc::new(JanusClient::new(
         socket_path,
         "test".to_string(),
-        Some(api_spec),
         config,
-    ).unwrap());
+    ).await.unwrap());
     
     // 30 operations on 5-connection pool
     let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();

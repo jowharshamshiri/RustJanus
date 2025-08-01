@@ -658,6 +658,22 @@ impl ApiSpecificationParser {
             )));
         }
 
+        // Validate against reserved command names - built-in commands cannot be redefined
+        let reserved_commands = ["ping", "echo", "get_info", "validate", "slow_process", "spec"];
+        if reserved_commands.contains(&command_name) {
+            error!(
+                "Command validation failed{}: '{}' is a reserved built-in command",
+                context, command_name
+            );
+            return Err(JanusError::UnknownCommand(format!(
+                "Command '{}' is reserved and cannot be defined in API specification{}. Reserved commands: {}",
+                command_name, 
+                context,
+                reserved_commands.join(", ")
+            )));
+        }
+        debug!("✓ Command '{}' is not reserved", command_name);
+
         // Description validation
         if command_spec.description.is_empty() {
             return Err(JanusError::UnknownCommand(format!(

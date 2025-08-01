@@ -5,7 +5,7 @@ use tokio::net::UnixDatagram;
 
 /// Low-level Unix domain datagram socket client (SOCK_DGRAM)
 /// Connectionless implementation for cross-language compatibility
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreJanusClient {
     socket_path: String,
     config: JanusClientConfig,

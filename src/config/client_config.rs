@@ -29,6 +29,9 @@ pub struct JanusClientConfig {
     
     /// Maximum args data size in bytes (Default: 5MB)
     pub max_args_data_size: usize,
+    
+    /// Enable API specification validation (Default: true)
+    pub enable_validation: bool,
 }
 
 impl Default for JanusClientConfig {
@@ -43,6 +46,7 @@ impl Default for JanusClientConfig {
             max_channel_name_length: 256,
             max_command_name_length: 256,
             max_args_data_size: 5_000_000,  // 5MB
+            enable_validation: true,
         }
     }
 }
@@ -65,6 +69,7 @@ impl JanusClientConfig {
             max_channel_name_length: 512,
             max_command_name_length: 512,
             max_args_data_size: 25_000_000,  // 25MB
+            enable_validation: true,
         }
     }
     
@@ -80,6 +85,7 @@ impl JanusClientConfig {
             max_channel_name_length: 128,
             max_command_name_length: 128,
             max_args_data_size: 500_000,  // 500KB
+            enable_validation: true,
         }
     }
     

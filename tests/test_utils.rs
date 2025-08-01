@@ -28,6 +28,7 @@ pub async fn fetch_test_api_spec(server_socket_path: &str) -> ApiSpecification {
         max_channel_name_length: 128,
         max_command_name_length: 128,
         max_args_data_size: 500_000,
+        enable_validation: true,
     };
     
     // Create core client for spec fetching
@@ -70,17 +71,17 @@ pub async fn fetch_test_api_spec(server_socket_path: &str) -> ApiSpecification {
         .expect("Failed to parse API specification from server response")
 }
 
-/// Load test API specification from test-spec.json file
+/// Load test API specification from test-api-spec.json file
 pub fn load_test_api_spec() -> ApiSpecification {
-    let spec_path = "../../test-spec.json";
+    let spec_path = "test-api-spec.json";
     let spec_data = std::fs::read_to_string(spec_path)
-        .expect("Failed to read test-spec.json");
+        .expect("Failed to read test-api-spec.json");
     
-    let spec_json: serde_json::Value = serde_json::from_str(&spec_data)
-        .expect("Failed to parse test-spec.json");
+    let _spec_json: serde_json::Value = serde_json::from_str(&spec_data)
+        .expect("Failed to parse test-api-spec.json");
     
     ApiSpecificationParser::from_json(&spec_data)
-        .expect("Failed to parse API specification from test-spec.json")
+        .expect("Failed to parse API specification from test-api-spec.json")
 }
 
 
@@ -96,6 +97,7 @@ pub fn create_test_config() -> JanusClientConfig {
         max_channel_name_length: 128,
         max_command_name_length: 128,
         max_args_data_size: 500_000,  // 500KB
+        enable_validation: true,
     }
 }
 

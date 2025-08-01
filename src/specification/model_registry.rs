@@ -204,6 +204,10 @@ pub struct ArgumentSpec {
     
     /// Validation constraints (optional)
     pub validation: Option<ValidationSpec>,
+    
+    /// Model reference for complex types (optional)
+    #[serde(rename = "modelRef")]
+    pub model_ref: Option<String>,
 }
 
 impl ArgumentSpec {
@@ -215,6 +219,7 @@ impl ArgumentSpec {
             description: None,
             default_value: None,
             validation: None,
+            model_ref: None,
         }
     }
     
@@ -335,6 +340,10 @@ pub struct ResponseSpec {
     
     /// Response properties for object types (optional)
     pub properties: Option<HashMap<String, ArgumentSpec>>,
+    
+    /// Model reference for complex types (optional)
+    #[serde(rename = "modelRef")]
+    pub model_ref: Option<String>,
 }
 
 impl ResponseSpec {
@@ -343,6 +352,7 @@ impl ResponseSpec {
         Self {
             r#type: response_type,
             properties: None,
+            model_ref: None,
         }
     }
     

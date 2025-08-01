@@ -69,10 +69,9 @@ async fn test_janus_client_server_communication() {
     
     // Create client
     let config = JanusClientConfig::default();
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
-        None, // No API spec for this test
         config,
     ).await.expect("Failed to create client");
     
@@ -140,12 +139,11 @@ async fn test_datagram_default_ping_handler() {
     
     // Create client
     let config = JanusClientConfig::default();
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
-        None,
         config,
-    ).expect("Failed to create client");
+    ).await.expect("Failed to create client");
     
     // Test default ping handler
     let result = timeout(
@@ -197,12 +195,11 @@ async fn test_datagram_unknown_command() {
     
     // Create client
     let config = JanusClientConfig::default();
-    let client = JanusClient::new(
+    let mut client = JanusClient::new(
         socket_path.to_string(),
         "test_channel".to_string(),
-        None,
         config,
-    ).expect("Failed to create client");
+    ).await.expect("Failed to create client");
     
     // Send unknown command
     let result = timeout(
