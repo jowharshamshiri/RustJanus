@@ -44,10 +44,15 @@ async fn test_janus_client_send_command() {
 #[tokio::test]
 async fn test_jsonrpc_error_functionality() {
     // Test error code creation and properties
-    let err = JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some("Test method not found".to_string()), None);
+    let err = JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some("Test method not found".to_string()));
     
     assert_eq!(err.code, JSONRPCErrorCode::MethodNotFound as i32);
-    assert_eq!(err.message, "Test method not found");
+    assert_eq!(err.message, "Method not found"); // Standard message for the error code
+    if let Some(data) = &err.data {
+        if let Some(details) = &data.details {
+            assert_eq!(details, "Test method not found"); // Custom details
+        }
+    }
     
     // Test error code string representation
     let code_string = JSONRPCErrorCode::MethodNotFound.to_string();
@@ -77,10 +82,10 @@ async fn test_jsonrpc_error_functionality() {
     let parsed: serde_json::Value = serde_json::from_str(&json_string).unwrap();
     
     assert_eq!(parsed["code"], JSONRPCErrorCode::MethodNotFound as i32);
-    assert_eq!(parsed["message"], "Test method not found");
+    assert_eq!(parsed["message"], "Method not found");
     
     // Test error deserialization
-    let deserialized: Result<JSONRPCError, _> = serde_json::from_str(&json_string);
+    let deserialized: std::result::Result<JSONRPCError, _> = serde_json::from_str(&json_string);
     assert!(deserialized.is_ok(), "Failed to deserialize JSONRPCError from JSON");
     
     let deserialized_err = deserialized.unwrap();

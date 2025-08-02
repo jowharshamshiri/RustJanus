@@ -1,4 +1,4 @@
-use crate::error::JanusError;
+use crate::error::{JSONRPCError, JSONRPCErrorCode};
 use crate::specification::Manifest;
 use log::{debug, error, info, warn};
 use tokio::fs;
@@ -8,7 +8,7 @@ pub struct ManifestParser;
 
 impl ManifestParser {
     /// Parse Manifest from JSON string
-    pub fn from_json(json_str: &str) -> Result<Manifest, JanusError> {
+    pub fn from_json(json_str: &str) -> Result<Manifest, JSONRPCError> {
         Self::from_json_with_context(json_str, None)
     }
 
@@ -16,7 +16,7 @@ impl ManifestParser {
     pub fn from_json_with_context(
         json_str: &str,
         file_path: Option<&str>,
-    ) -> Result<Manifest, JanusError> {
+    ) -> Result<Manifest, JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -29,10 +29,7 @@ impl ManifestParser {
         // Validate JSON string is not empty
         if json_str.trim().is_empty() {
             error!("Manifest JSON string is empty{}", context);
-            return Err(JanusError::DecodingFailed(format!(
-                "JSON parsing error{}: input string is empty",
-                context
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("JSON parsing error{}: input string is empty", context))));
         }
 
         // Log the first part of JSON for debugging (truncated to avoid sensitive data exposure)
@@ -89,14 +86,14 @@ impl ManifestParser {
                     }
                 };
 
-                Err(JanusError::DecodingFailed(detailed_error))
+                Err(JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(detailed_error)))
             }
         }
     }
 
     /// Parse Manifest from YAML string
     #[cfg(feature = "yaml-support")]
-    pub fn from_yaml(yaml_str: &str) -> Result<Manifest, JanusError> {
+    pub fn from_yaml(yaml_str: &str) -> Result<Manifest, JSONRPCError> {
         Self::from_yaml_with_context(yaml_str, None)
     }
 
@@ -105,7 +102,7 @@ impl ManifestParser {
     pub fn from_yaml_with_context(
         yaml_str: &str,
         file_path: Option<&str>,
-    ) -> Result<Manifest, JanusError> {
+    ) -> Result<Manifest, JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -118,10 +115,7 @@ impl ManifestParser {
         // Validate YAML string is not empty
         if yaml_str.trim().is_empty() {
             error!("Manifest YAML string is empty{}", context);
-            return Err(JanusError::DecodingFailed(format!(
-                "YAML parsing error{}: input string is empty",
-                context
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("YAML parsing error{}: input string is empty", context))));
         }
 
         // Log the first part of YAML for debugging (truncated to avoid sensitive data exposure)
@@ -161,21 +155,19 @@ impl ManifestParser {
                     format!("YAML parsing error{}: {}", context, e)
                 };
 
-                Err(JanusError::DecodingFailed(detailed_error))
+                Err(JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(detailed_error)))
             }
         }
     }
 
     /// Parse Manifest from file (auto-detect format based on extension)
-    pub async fn from_file(path: &str) -> Result<Manifest, JanusError> {
+    pub async fn from_file(path: &str) -> Result<Manifest, JSONRPCError> {
         info!("Loading Manifest from file: {}", path);
 
         // Validate file path
         if path.trim().is_empty() {
             error!("Manifest file path is empty");
-            return Err(JanusError::IoError(
-                "File path cannot be empty".to_string(),
-            ));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some("File path cannot be empty".to_string())));
         }
 
         // Check if file exists and log file information
@@ -196,10 +188,7 @@ impl ManifestParser {
             }
             Err(e) => {
                 error!("Cannot access Manifest file '{}': {}", path, e);
-                return Err(JanusError::IoError(format!(
-                    "Failed to access file {}: {}",
-                    path, e
-                )));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::ResourceNotFound, Some(format!("Failed to access file {}: {}", path, e))));
             }
         }
 
@@ -211,10 +200,7 @@ impl ManifestParser {
             }
             Err(e) => {
                 error!("Failed to read Manifest file '{}': {}", path, e);
-                return Err(JanusError::IoError(format!(
-                    "Failed to read file {}: {}",
-                    path, e
-                )));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::ResourceNotFound, Some(format!("Failed to read file {}: {}", path, e))));
             }
         };
 
@@ -228,10 +214,7 @@ impl ManifestParser {
             #[cfg(not(feature = "yaml-support"))]
             {
                 error!("YAML support not enabled for file: {}", path);
-                Err(JanusError::DecodingFailed(format!(
-                    "YAML support not enabled (file: {}). Enable 'yaml-support' feature.",
-                    path
-                )))
+                Err(JSONRPCError::new(JSONRPCErrorCode::ConfigurationError, Some(format!("YAML support not enabled (file: {}). Enable 'yaml-support' feature.", path))))
             }
         } else if path.ends_with(".json") {
             info!("Detected JSON format for file: {}", path);
@@ -262,11 +245,11 @@ impl ManifestParser {
     }
 
     /// Serialize Manifest to JSON string
-    pub fn to_json(manifest: &Manifest) -> Result<String, JanusError> {
+    pub fn to_json(manifest: &Manifest) -> Result<String, JSONRPCError> {
         debug!("Serializing Manifest to JSON");
         serde_json::to_string_pretty(manifest).map_err(|e| {
             error!("Failed to serialize Manifest to JSON: {}", e);
-            JanusError::EncodingFailed(format!("JSON serialization error: {}", e))
+            JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("JSON serialization error: {}", e)))
         })
     }
 
@@ -276,12 +259,12 @@ impl ManifestParser {
         debug!("Serializing Manifest to YAML");
         serde_yaml::to_string(manifest).map_err(|e| {
             error!("Failed to serialize Manifest to YAML: {}", e);
-            JanusError::EncodingFailed(format!("YAML serialization error: {}", e))
+            JSONRPCErrorCode::EncodingFailed(format!("YAML serialization error: {}", e))
         })
     }
 
     /// Write Manifest to file (format based on extension)
-    pub async fn to_file(manifest: &Manifest, path: &str) -> Result<(), JanusError> {
+    pub async fn to_file(manifest: &Manifest, path: &str) -> Result<(), JSONRPCError> {
         let content = if path.ends_with(".yaml") || path.ends_with(".yml") {
             #[cfg(feature = "yaml-support")]
             {
@@ -289,23 +272,21 @@ impl ManifestParser {
             }
             #[cfg(not(feature = "yaml-support"))]
             {
-                return Err(JanusError::EncodingFailed(
-                    "YAML support not enabled. Enable 'yaml-support' feature.".to_string(),
-                ));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::ConfigurationError, Some("YAML support not enabled. Enable 'yaml-support' feature.".to_string())));
             }
         } else {
             Self::to_json(manifest)?
         };
 
         fs::write(path, content).await.map_err(|e| {
-            JanusError::IoError(format!("Failed to write file {}: {}", path, e))
+            JSONRPCError::new(JSONRPCErrorCode::ResourceNotFound, Some(format!("Failed to write file {}: {}", path, e)))
         })?;
 
         Ok(())
     }
 
     /// Validate Manifest structure and content
-    pub fn validate(manifest: &Manifest) -> Result<(), JanusError> {
+    pub fn validate(manifest: &Manifest) -> Result<(), JSONRPCError> {
         Self::validate_with_context(manifest, None)
     }
 
@@ -313,7 +294,7 @@ impl ManifestParser {
     pub fn validate_with_context(
         manifest: &Manifest,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -326,10 +307,10 @@ impl ManifestParser {
                 "Manifest validation failed{}: version is required",
                 context
             );
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Manifest version is required{}",
                 context
-            )));
+            ))));
         }
 
         // Validate version format (semantic versioning)
@@ -338,10 +319,10 @@ impl ManifestParser {
                 "Manifest validation failed{}: invalid version format '{}'",
                 context, manifest.version
             );
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Invalid version format: {}{}",
                 manifest.version, context
-            )));
+            ))));
         }
         debug!("✓ Version format is valid: {}", manifest.version);
 
@@ -351,10 +332,10 @@ impl ManifestParser {
                 "Manifest validation failed{}: no channels defined",
                 context
             );
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Manifest must define at least one channel{}",
                 context
-            )));
+            ))));
         }
         debug!("Validating {} channels", manifest.channels.len());
 
@@ -404,7 +385,7 @@ impl ManifestParser {
     }
 
     /// Load and validate Manifest from file in one step
-    pub async fn load_and_validate(path: &str) -> Result<Manifest, JanusError> {
+    pub async fn load_and_validate(path: &str) -> Result<Manifest, JSONRPCError> {
         info!("Loading and validating Manifest from: {}", path);
 
         // Load the specification
@@ -421,7 +402,7 @@ impl ManifestParser {
     }
 
     /// Load and validate Manifest from JSON string in one step
-    pub fn load_and_validate_json(json_str: &str) -> Result<Manifest, JanusError> {
+    pub fn load_and_validate_json(json_str: &str) -> Result<Manifest, JSONRPCError> {
         Self::load_and_validate_json_with_context(json_str, None)
     }
 
@@ -429,7 +410,7 @@ impl ManifestParser {
     pub fn load_and_validate_json_with_context(
         json_str: &str,
         file_path: Option<&str>,
-    ) -> Result<Manifest, JanusError> {
+    ) -> Result<Manifest, JSONRPCError> {
         let context = file_path
             .map(|p| format!(" from file: {}", p))
             .unwrap_or_default();
@@ -453,7 +434,7 @@ impl ManifestParser {
 
     /// Load and validate Manifest from YAML string in one step
     #[cfg(feature = "yaml-support")]
-    pub fn load_and_validate_yaml(yaml_str: &str) -> Result<Manifest, JanusError> {
+    pub fn load_and_validate_yaml(yaml_str: &str) -> Result<Manifest, JSONRPCError> {
         Self::load_and_validate_yaml_with_context(yaml_str, None)
     }
 
@@ -462,7 +443,7 @@ impl ManifestParser {
     pub fn load_and_validate_yaml_with_context(
         yaml_str: &str,
         file_path: Option<&str>,
-    ) -> Result<Manifest, JanusError> {
+    ) -> Result<Manifest, JSONRPCError> {
         let context = file_path
             .map(|p| format!(" from file: {}", p))
             .unwrap_or_default();
@@ -546,7 +527,7 @@ impl ManifestParser {
         channel_name: &str,
         channel_spec: &crate::specification::ChannelSpec,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -560,10 +541,10 @@ impl ManifestParser {
         // Channel name validation
         if channel_name.is_empty() {
             error!("Channel validation failed{}: name cannot be empty", context);
-            return Err(JanusError::InvalidChannel(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
                 "Channel name cannot be empty{}",
                 context
-            )));
+            ))));
         }
 
         // Channel name format validation (alphanumeric, hyphens, underscores)
@@ -575,10 +556,10 @@ impl ManifestParser {
                 "Channel validation failed{}: invalid name format '{}'",
                 context, channel_name
             );
-            return Err(JanusError::InvalidChannel(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
                 "Invalid channel name format: {}{}",
                 channel_name, context
-            )));
+            ))));
         }
 
         // Description validation
@@ -587,10 +568,10 @@ impl ManifestParser {
                 "Channel validation failed{}: '{}' must have a description",
                 context, channel_name
             );
-            return Err(JanusError::InvalidChannel(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
                 "Channel '{}' must have a description{}",
                 channel_name, context
-            )));
+            ))));
         }
 
         // Commands validation
@@ -599,10 +580,10 @@ impl ManifestParser {
                 "Channel validation failed{}: '{}' must define at least one command",
                 context, channel_name
             );
-            return Err(JanusError::InvalidChannel(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
                 "Channel '{}' must define at least one command{}",
                 channel_name, context
-            )));
+            ))));
         }
 
         debug!(
@@ -635,16 +616,13 @@ impl ManifestParser {
         command_name: &str,
         command_spec: &crate::specification::CommandSpec,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Command name validation
         if command_name.is_empty() {
-            return Err(JanusError::UnknownCommand(format!(
-                "Command name cannot be empty{}",
-                context
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Command name cannot be empty{}", context))));
         }
 
         // Command name format validation
@@ -652,10 +630,7 @@ impl ManifestParser {
             .chars()
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
         {
-            return Err(JanusError::UnknownCommand(format!(
-                "Invalid command name format: {}{}",
-                command_name, context
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Invalid command name format: {}{}", command_name, context))));
         }
 
         // Validate against reserved command names - built-in commands cannot be redefined
@@ -665,21 +640,13 @@ impl ManifestParser {
                 "Command validation failed{}: '{}' is a reserved built-in command",
                 context, command_name
             );
-            return Err(JanusError::UnknownCommand(format!(
-                "Command '{}' is reserved and cannot be defined in Manifest{}. Reserved commands: {}",
-                command_name, 
-                context,
-                reserved_commands.join(", ")
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Command '{}' is reserved and cannot be defined in Manifest{}. Reserved commands: {}", command_name, context, reserved_commands.join(", ")))));
         }
         debug!("✓ Command '{}' is not reserved", command_name);
 
         // Description validation
         if command_spec.description.is_empty() {
-            return Err(JanusError::UnknownCommand(format!(
-                "Command '{}' in channel '{}' must have a description{}",
-                command_name, channel_name, context
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Command '{}' in channel '{}' must have a description{}", command_name, channel_name, context))));
         }
 
         // Validate arguments
@@ -705,25 +672,19 @@ impl ManifestParser {
         arg_name: &str,
         arg_spec: &crate::specification::ArgumentSpec,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Argument name validation
         if arg_name.is_empty() {
-            return Err(JanusError::InvalidArgument(
-                "argument".to_string(),
-                format!("Argument name cannot be empty{}", context),
-            ));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Argument name cannot be empty{}", context))));
         }
 
         // Type validation
         let valid_types = ["string", "integer", "number", "boolean", "array", "object"];
         if !valid_types.contains(&arg_spec.r#type.as_str()) {
-            return Err(JanusError::InvalidArgument(
-                arg_name.to_string(),
-                format!("Invalid argument type: {}{}", arg_spec.r#type, context),
-            ));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Invalid argument type: {}{}", arg_spec.r#type, context))));
         }
 
         // Validation constraint validation
@@ -744,20 +705,14 @@ impl ManifestParser {
         arg_name: &str,
         validation_spec: &crate::specification::ValidationSpec,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Range validation
         if let (Some(min), Some(max)) = (validation_spec.minimum, validation_spec.maximum) {
             if min > max {
-                return Err(JanusError::InvalidArgument(
-                    arg_name.to_string(),
-                    format!(
-                        "Minimum value cannot be greater than maximum value{}",
-                        context
-                    ),
-                ));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Minimum value cannot be greater than maximum value{}", context))));
             }
         }
 
@@ -766,33 +721,21 @@ impl ManifestParser {
             (validation_spec.min_length, validation_spec.max_length)
         {
             if min_len > max_len {
-                return Err(JanusError::InvalidArgument(
-                    arg_name.to_string(),
-                    format!(
-                        "Minimum length cannot be greater than maximum length{}",
-                        context
-                    ),
-                ));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Minimum length cannot be greater than maximum length{}", context))));
             }
         }
 
         // Pattern validation
         if let Some(pattern) = &validation_spec.pattern {
             regex::Regex::new(pattern).map_err(|e| {
-                JanusError::InvalidArgument(
-                    arg_name.to_string(),
-                    format!("Invalid regex pattern: {}{}", e, context),
-                )
+                JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Invalid regex pattern: {}{}", e, context)))
             })?;
         }
 
         // Enum validation
         if let Some(enum_values) = &validation_spec.r#enum {
             if enum_values.is_empty() {
-                return Err(JanusError::InvalidArgument(
-                    arg_name.to_string(),
-                    format!("Enum values cannot be empty{}", context),
-                ));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Enum values cannot be empty{}", context))));
             }
         }
 
@@ -803,17 +746,17 @@ impl ManifestParser {
     fn validate_response_spec(
         response_spec: &crate::specification::ResponseSpec,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Response type validation
         let valid_types = ["string", "integer", "number", "boolean", "array", "object"];
         if !valid_types.contains(&response_spec.r#type.as_str()) {
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Invalid response type: {}{}",
                 response_spec.r#type, context
-            )));
+            ))));
         }
 
         // Validate properties if object type
@@ -833,30 +776,30 @@ impl ManifestParser {
         error_name: &str,
         error_spec: &crate::specification::ErrorCodeSpec,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         if error_name.is_empty() {
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Error code name cannot be empty{}",
                 context
-            )));
+            ))));
         }
 
         if error_spec.message.is_empty() {
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Error code '{}' must have a message{}",
                 error_name, context
-            )));
+            ))));
         }
 
         // Validate HTTP status code range
         if !(100..=599).contains(&error_spec.code) {
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Invalid HTTP status code: {}{}",
                 error_spec.code, context
-            )));
+            ))));
         }
 
         Ok(())
@@ -868,16 +811,16 @@ impl ManifestParser {
         model_spec: &crate::specification::ModelSpec,
         _manifest: &Manifest,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Model name validation
         if model_name.is_empty() {
-            return Err(JanusError::MalformedData(format!(
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Model name cannot be empty{}",
                 context
-            )));
+            ))));
         }
 
         // Validate properties
@@ -889,10 +832,10 @@ impl ManifestParser {
         if let Some(required_fields) = &model_spec.required {
             for required_field in required_fields {
                 if !model_spec.properties.contains_key(required_field) {
-                    return Err(JanusError::MalformedData(format!(
+                    return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                         "Required field '{}' not found in model '{}'{}",
                         required_field, model_name, context
-                    )));
+                    ))));
                 }
             }
         }
@@ -906,7 +849,7 @@ impl ManifestParser {
         value: &serde_json::Value,
         expected_type: &str,
         file_path: Option<&str>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
@@ -921,24 +864,16 @@ impl ManifestParser {
         };
 
         if !matches {
-            return Err(JanusError::InvalidArgument(
-                arg_name.to_string(),
-                format!(
-                    "Value type mismatch: expected {}, got {}{}",
-                    expected_type,
-                    Self::get_value_type_name(value),
-                    context
-                ),
-            ));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Value type mismatch: expected {}, got {}{}", expected_type, Self::get_value_type_name(value), context))));
         }
 
         Ok(())
     }
 
     /// Parse multiple Manifest files and merge them
-    pub async fn parse_multiple_files(file_paths: &[String]) -> Result<Manifest, JanusError> {
+    pub async fn parse_multiple_files(file_paths: &[String]) -> Result<Manifest, JSONRPCError> {
         if file_paths.is_empty() {
-            return Err(JanusError::IoError("No files provided".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ResourceNotFound, Some("No files provided".to_string())));
         }
 
         info!("Parsing {} Manifest files", file_paths.len());
@@ -962,16 +897,16 @@ impl ManifestParser {
     }
 
     /// Merge two Manifests
-    pub fn merge_specifications(base: &mut Manifest, additional: &Manifest) -> Result<(), JanusError> {
+    pub fn merge_specifications(base: &mut Manifest, additional: &Manifest) -> Result<(), JSONRPCError> {
         info!("Merging Manifests");
         
         // Merge channels
         for (channel_id, channel_spec) in &additional.channels {
             if base.channels.contains_key(channel_id) {
-                return Err(JanusError::InvalidChannel(format!(
+                return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
                     "Channel '{}' already exists in base specification", 
                     channel_id
-                )));
+                ))));
             }
             base.channels.insert(channel_id.clone(), channel_spec.clone());
         }
@@ -982,10 +917,10 @@ impl ManifestParser {
             
             for (model_name, model_spec) in additional_models {
                 if base_models.contains_key(model_name) {
-                    return Err(JanusError::MalformedData(format!(
+                    return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                         "Model '{}' already exists in base specification", 
                         model_name
-                    )));
+                    ))));
                 }
                 base_models.insert(model_name.clone(), model_spec.clone());
             }
@@ -1011,28 +946,28 @@ impl ManifestParser {
 // Static interface methods for convenience (matching Go/Swift patterns)
 impl ManifestParser {
     /// Static method for parsing JSON
-    pub fn parse_json(json_str: &str) -> Result<Manifest, JanusError> {
+    pub fn parse_json(json_str: &str) -> Result<Manifest, JSONRPCError> {
         Self::from_json(json_str)
     }
 
     /// Static method for parsing YAML
     #[cfg(feature = "yaml-support")]
-    pub fn parse_yaml(yaml_str: &str) -> Result<Manifest, JanusError> {
+    pub fn parse_yaml(yaml_str: &str) -> Result<Manifest, JSONRPCError> {
         Self::from_yaml(yaml_str)
     }
 
     /// Static method for parsing from file
-    pub async fn parse_from_file(path: &str) -> Result<Manifest, JanusError> {
+    pub async fn parse_from_file(path: &str) -> Result<Manifest, JSONRPCError> {
         Self::from_file(path).await
     }
 
     /// Static method for validation
-    pub fn validate_specification(manifest: &Manifest) -> Result<(), JanusError> {
+    pub fn validate_specification(manifest: &Manifest) -> Result<(), JSONRPCError> {
         Self::validate(manifest)
     }
 
     /// Static method for JSON serialization
-    pub fn serialize_to_json(manifest: &Manifest) -> Result<String, JanusError> {
+    pub fn serialize_to_json(manifest: &Manifest) -> Result<String, JSONRPCError> {
         Self::to_json(manifest)
     }
 

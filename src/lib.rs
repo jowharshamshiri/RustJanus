@@ -89,10 +89,10 @@ pub use specification::{
 pub use config::JanusClientConfig;
 
 // Error exports
-pub use error::JanusError;
+pub use error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData};
 
 // Result type alias
-pub type Result<T> = std::result::Result<T, JanusError>;
+pub type Result<T> = std::result::Result<T, JSONRPCError>;
 
 // Utility exports
 pub use utils::{PathUtils, UuidUtils, JsonUtils};
@@ -109,7 +109,7 @@ pub mod prelude {
         // Connection-based classes removed
         JanusCommand, JanusResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
-        JanusError, Result,
+        JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData, Result,
         ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,
         Deserialize, Serialize, JsonValue, json,
         DateTime, Utc,

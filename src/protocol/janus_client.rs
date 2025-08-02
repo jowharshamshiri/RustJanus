@@ -1,5 +1,5 @@
 use crate::core::{CoreJanusClient, SecurityValidator};
-use crate::error::JanusError;
+use crate::error::{JSONRPCError, JSONRPCErrorCode};
 use crate::config::JanusClientConfig;
 use crate::specification::Manifest;
 use crate::protocol::message_types::{JanusCommand, JanusResponse};
@@ -61,7 +61,7 @@ impl JanusClient {
         socket_path: String,
         channel_id: String,
         config: JanusClientConfig,
-    ) -> Result<Self, JanusError> {
+    ) -> Result<Self, JSONRPCError> {
         // Validate socket path
         SecurityValidator::validate_socket_path(&socket_path)?;
         
@@ -93,7 +93,7 @@ impl JanusClient {
     async fn fetch_specification_from_server(
         core_client: &CoreJanusClient,
         _config: &JanusClientConfig,
-    ) -> Result<Manifest, JanusError> {
+    ) -> Result<Manifest, JSONRPCError> {
         // Generate response socket path
         let response_socket_path = core_client.generate_response_socket_path();
         
@@ -109,11 +109,7 @@ impl JanusClient {
         };
         
         let command_data = serde_json::to_vec(&spec_command)
-            .map_err(|e| JanusError::SerializationError {
-                file: "janus_client.rs".to_string(),
-                line: 71,
-                message: format!("Failed to serialize spec command: {}", e),
-            })?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize spec command: {}", e))))?;
         
         // Send spec command to server
         let response_data = core_client
@@ -122,11 +118,7 @@ impl JanusClient {
         
         // Parse response as JanusResponse
         let response: JanusResponse = serde_json::from_slice(&response_data)
-            .map_err(|e| JanusError::SerializationError {
-                file: "janus_client.rs".to_string(),
-                line: 83,
-                message: format!("Failed to parse server response: {}", e),
-            })?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("Failed to parse server response: {}", e))))?;
         
         // Check for error in response
         if !response.success {
@@ -134,34 +126,22 @@ impl JanusClient {
                 .as_ref()
                 .map(|e| e.message.clone())
                 .unwrap_or_else(|| "Unknown error".to_string());
-            return Err(JanusError::ProtocolError {
-                file: "janus_client.rs".to_string(),
-                line: 91,
-                message: format!("Server returned error: {}", error_msg),
-            });
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Server returned error: {}", error_msg))));
         }
         
         // Extract specification from response
         let spec_data = response.result.as_ref()
-            .ok_or_else(|| JanusError::ProtocolError {
-                file: "janus_client.rs".to_string(),
-                line: 99,
-                message: "Server response missing 'result' field".to_string(),
-            })?;
+            .ok_or_else(|| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some("Server response missing 'result' field".to_string())))?;
         
         // Parse the specification
         let manifest: Manifest = serde_json::from_value(spec_data.clone())
-            .map_err(|e| JanusError::SerializationError {
-                file: "janus_client.rs".to_string(),
-                line: 107,
-                message: format!("Failed to parse server specification: {}", e),
-            })?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("Failed to parse server specification: {}", e))))?;
         
         Ok(manifest)
     }
     
     /// Ensure Manifest is loaded, fetching from server if needed
-    async fn ensure_manifest_loaded(&mut self) -> Result<(), JanusError> {
+    async fn ensure_manifest_loaded(&mut self) -> Result<(), JSONRPCError> {
         if self.manifest.is_some() {
             return Ok(()); // Already loaded
         }
@@ -175,9 +155,7 @@ impl JanusClient {
         
         // Validate channel exists in fetched specification
         if !fetched_spec.channels.contains_key(&self.channel_id) {
-            return Err(JanusError::InvalidChannel(
-                format!("Channel '{}' not found in server specification", self.channel_id)
-            ));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Channel '{}' not found in server specification", self.channel_id))));
         }
         
         self.manifest = Some(fetched_spec);
@@ -190,7 +168,7 @@ impl JanusClient {
         command: &str,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<Duration>,
-    ) -> Result<JanusResponse, JanusError> {
+    ) -> Result<JanusResponse, JSONRPCError> {
         // Generate command ID and response socket path
         let command_id = Uuid::new_v4().to_string();
         let response_socket_path = self.core_client.generate_response_socket_path();
@@ -213,11 +191,7 @@ impl JanusClient {
         
         // Serialize command for message size validation
         let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| JanusError::SerializationError { 
-                file: "janus_client.rs".to_string(), 
-                line: 193, 
-                message: format!("Failed to serialize command: {}", e) 
-            })?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize command: {}", e))))?;
         
         // Validate message size
         SecurityValidator::validate_message_size(command_data.len(), &self.config)?;
@@ -241,33 +215,15 @@ impl JanusClient {
         
         // Deserialize response
         let response: JanusResponse = serde_json::from_slice(&response_data)
-            .map_err(|e| JanusError::SerializationError { 
-                file: "janus_client.rs".to_string(), 
-                line: 124, 
-                message: format!("Failed to deserialize response: {}", e) 
-            })?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("Failed to deserialize response: {}", e))))?;
         
         // Validate response correlation
         if response.commandId != command_id {
-            return Err(JanusError::ProtocolError { 
-                file: "janus_client.rs".to_string(), 
-                line: 129, 
-                message: format!(
-                    "Response correlation mismatch: expected {}, got {}",
-                    command_id, response.commandId
-                ) 
-            });
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Response correlation mismatch: expected {}, got {}", command_id, response.commandId))));
         }
         
         if response.channelId != self.channel_id {
-            return Err(JanusError::ProtocolError { 
-                file: "janus_client.rs".to_string(), 
-                line: 136, 
-                message: format!(
-                    "Channel mismatch: expected {}, got {}",
-                    self.channel_id, response.channelId
-                ) 
-            });
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Channel mismatch: expected {}, got {}", self.channel_id, response.channelId))));
         }
         
         // Update connection state after successful communication
@@ -281,7 +237,7 @@ impl JanusClient {
         &self,
         command: &str,
         args: Option<HashMap<String, serde_json::Value>>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         // Generate command ID
         let command_id = Uuid::new_v4().to_string();
         
@@ -302,11 +258,7 @@ impl JanusClient {
         
         // Serialize command for message size validation
         let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| JanusError::SerializationError { 
-                file: "janus_client.rs".to_string(), 
-                line: 167, 
-                message: format!("Failed to serialize command: {}", e) 
-            })?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize command: {}", e))))?;
         
         // Validate message size
         SecurityValidator::validate_message_size(command_data.len(), &self.config)?;
@@ -326,7 +278,7 @@ impl JanusClient {
     }
     
     /// Test connectivity to the server
-    pub async fn test_connection(&self) -> Result<(), JanusError> {
+    pub async fn test_connection(&self) -> Result<(), JSONRPCError> {
         self.core_client.test_connection().await
     }
     
@@ -335,30 +287,21 @@ impl JanusClient {
         &self,
         spec: &Manifest,
         command: &JanusCommand,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         // Check if command is reserved (built-in commands should never be in Manifests)
         let builtin_commands = ["ping", "echo", "get_info", "validate", "slow_process", "spec"];
         if builtin_commands.contains(&command.command.as_str()) {
-            return Err(JanusError::ValidationError(format!(
-                "Command '{}' is reserved and cannot be used from Manifest",
-                command.command
-            )));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Command '{}' is reserved and cannot be used from Manifest", command.command))));
         }
         
         // Check if channel exists
         let channel = spec.channels.get(&command.channelId).ok_or_else(|| {
-            JanusError::ValidationError(format!(
-                "Channel {} not found in Manifest",
-                command.channelId
-            ))
+            JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Channel {} not found in Manifest", command.channelId)))
         })?;
         
         // Check if command exists in channel
         let command_spec = channel.commands.get(&command.command).ok_or_else(|| {
-            JanusError::ValidationError(format!(
-                "Command '{}' not found in channel '{}'",
-                command.command, command.channelId
-            ))
+            JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Command '{}' not found in channel '{}'", command.command, command.channelId)))
         })?;
         
         // Validate command arguments if spec has argument definitions
@@ -370,10 +313,7 @@ impl JanusClient {
             // Check for required arguments
             for (arg_name, arg_spec) in spec_args {
                 if arg_spec.required.unwrap_or(false) && !args.contains_key(arg_name) {
-                    return Err(JanusError::ValidationError(format!(
-                        "Required argument '{}' missing for command '{}'",
-                        arg_name, command.command
-                    )));
+                    return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Required argument '{}' missing for command '{}'", arg_name, command.command))));
                 }
             }
             
@@ -384,42 +324,27 @@ impl JanusClient {
                     match arg_spec.r#type.as_str() {
                         "string" => {
                             if !arg_value.is_string() {
-                                return Err(JanusError::ValidationError(format!(
-                                    "Argument '{}' must be a string",
-                                    arg_name
-                                )));
+                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be a string", arg_name))));
                             }
                         }
                         "number" => {
                             if !arg_value.is_number() {
-                                return Err(JanusError::ValidationError(format!(
-                                    "Argument '{}' must be a number",
-                                    arg_name
-                                )));
+                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be a number", arg_name))));
                             }
                         }
                         "boolean" => {
                             if !arg_value.is_boolean() {
-                                return Err(JanusError::ValidationError(format!(
-                                    "Argument '{}' must be a boolean",
-                                    arg_name
-                                )));
+                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be a boolean", arg_name))));
                             }
                         }
                         "array" => {
                             if !arg_value.is_array() {
-                                return Err(JanusError::ValidationError(format!(
-                                    "Argument '{}' must be an array",
-                                    arg_name
-                                )));
+                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be an array", arg_name))));
                             }
                         }
                         "object" => {
                             if !arg_value.is_object() {
-                                return Err(JanusError::ValidationError(format!(
-                                    "Argument '{}' must be an object",
-                                    arg_name
-                                )));
+                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be an object", arg_name))));
                             }
                         }
                         _ => {
@@ -470,15 +395,12 @@ impl JanusClient {
     /// Register command handler - validates command exists in specification (SOCK_DGRAM compatibility)
     /// This validates that the command exists in the Manifest for the client's channel.
     /// SOCK_DGRAM doesn't actually use handlers, but validation ensures compatibility.
-    pub fn register_command_handler<T>(&self, command: &str, _handler: T) -> Result<(), JanusError> {
+    pub fn register_command_handler<T>(&self, command: &str, _handler: T) -> Result<(), JSONRPCError> {
         // Validate command exists in the Manifest for the client's channel
         if let Some(ref spec) = self.manifest {
             if let Some(channel) = spec.channels.get(&self.channel_id) {
                 if !channel.commands.contains_key(command) {
-                    return Err(JanusError::InvalidArgument(
-                        command.to_string(), 
-                        format!("Command '{}' not found in channel '{}'", command, self.channel_id)
-                    ));
+                    return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Command '{}' not found in channel '{}'", command, self.channel_id))));
                 }
             }
         }
@@ -493,7 +415,7 @@ impl JanusClient {
     }
     
     /// Disconnect is a no-op for backward compatibility (SOCK_DGRAM doesn't have persistent connections)
-    pub fn disconnect(&self) -> Result<(), JanusError> {
+    pub fn disconnect(&self) -> Result<(), JSONRPCError> {
         // SOCK_DGRAM doesn't have persistent connections - this is for backward compatibility only
         Ok(())
     }
@@ -530,12 +452,12 @@ impl JanusClient {
         command: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Duration,
-    ) -> Result<(tokio::sync::oneshot::Receiver<JanusResponse>, String), JanusError> {
+    ) -> Result<(tokio::sync::oneshot::Receiver<JanusResponse>, String), JSONRPCError> {
         let command_id = Uuid::new_v4().to_string();
         
         // Track the command in response tracker
         let receiver = self.response_tracker.track_command(command_id.clone(), timeout)
-            .map_err(|e| JanusError::ValidationError(format!("Response tracking failed: {}", e)))?;
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Response tracking failed: {}", e))))?;
 
         // Send the command asynchronously
         let core_client = self.core_client.clone();
@@ -717,7 +639,7 @@ impl ChannelProxy {
         &self,
         command: String,
         args: Option<HashMap<String, serde_json::Value>>,
-    ) -> Result<JanusResponse, JanusError> {
+    ) -> Result<JanusResponse, JSONRPCError> {
         // Create a temporary client with the proxy's channel ID
         let mut proxy_client = self.client.clone();
         proxy_client.channel_id = self.channel_id.clone();

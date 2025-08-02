@@ -25,6 +25,11 @@ pub enum JSONRPCErrorCode {
     ConfigurationError = -32008,
     SecurityViolation = -32009,
     ResourceLimitExceeded = -32010,
+
+    // Janus Protocol-Specific Error Codes (-32011 to -32013)
+    MessageFramingError = -32011,
+    ResponseTrackingError = -32012,
+    ManifestValidationError = -32013,
 }
 
 impl JSONRPCErrorCode {
@@ -47,6 +52,9 @@ impl JSONRPCErrorCode {
             JSONRPCErrorCode::ConfigurationError => "CONFIGURATION_ERROR",
             JSONRPCErrorCode::SecurityViolation => "SECURITY_VIOLATION",
             JSONRPCErrorCode::ResourceLimitExceeded => "RESOURCE_LIMIT_EXCEEDED",
+            JSONRPCErrorCode::MessageFramingError => "MESSAGE_FRAMING_ERROR",
+            JSONRPCErrorCode::ResponseTrackingError => "RESPONSE_TRACKING_ERROR",
+            JSONRPCErrorCode::ManifestValidationError => "MANIFEST_VALIDATION_ERROR",
         }
     }
 
@@ -69,6 +77,9 @@ impl JSONRPCErrorCode {
             JSONRPCErrorCode::ConfigurationError => "Configuration error",
             JSONRPCErrorCode::SecurityViolation => "Security violation",
             JSONRPCErrorCode::ResourceLimitExceeded => "Resource limit exceeded",
+            JSONRPCErrorCode::MessageFramingError => "Message framing error",
+            JSONRPCErrorCode::ResponseTrackingError => "Response tracking error",
+            JSONRPCErrorCode::ManifestValidationError => "Manifest validation error",
         }
     }
 
@@ -233,6 +244,9 @@ impl JSONRPCError {
             -32008 => Some(JSONRPCErrorCode::ConfigurationError),
             -32009 => Some(JSONRPCErrorCode::SecurityViolation),
             -32010 => Some(JSONRPCErrorCode::ResourceLimitExceeded),
+            -32011 => Some(JSONRPCErrorCode::MessageFramingError),
+            -32012 => Some(JSONRPCErrorCode::ResponseTrackingError),
+            -32013 => Some(JSONRPCErrorCode::ManifestValidationError),
             _ => None,
         }
     }
@@ -252,19 +266,6 @@ impl fmt::Display for JSONRPCError {
 impl std::error::Error for JSONRPCError {}
 
 
-/// Legacy JanusError mapping for backward compatibility  
-pub fn map_legacy_janus_error(legacy_error: &crate::error::api_error::JanusError) -> JSONRPCErrorCode {
-    use crate::error::api_error::JanusError;
-    
-    match legacy_error {
-        JanusError::UnknownCommand(_) => JSONRPCErrorCode::MethodNotFound,
-        JanusError::InvalidArgument(_, _) => JSONRPCErrorCode::InvalidParams,
-        JanusError::HandlerTimeout(_, _) => JSONRPCErrorCode::HandlerTimeout,
-        JanusError::SecurityViolation(_) => JSONRPCErrorCode::SecurityViolation,
-        JanusError::ResourceLimit(_) => JSONRPCErrorCode::ResourceLimitExceeded,
-        _ => JSONRPCErrorCode::InternalError,
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -275,6 +276,9 @@ mod tests {
         assert_eq!(JSONRPCErrorCode::ParseError.code(), -32700);
         assert_eq!(JSONRPCErrorCode::MethodNotFound.code(), -32601);
         assert_eq!(JSONRPCErrorCode::ValidationFailed.code(), -32005);
+        assert_eq!(JSONRPCErrorCode::MessageFramingError.code(), -32011);
+        assert_eq!(JSONRPCErrorCode::ResponseTrackingError.code(), -32012);
+        assert_eq!(JSONRPCErrorCode::ManifestValidationError.code(), -32013);
     }
 
     #[test]

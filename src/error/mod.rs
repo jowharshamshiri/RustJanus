@@ -1,7 +1,7 @@
 pub mod api_error;
 pub mod jsonrpc_error;
 
-pub use api_error::JanusError;
+// Legacy JanusError eliminated - use JSONRPCError for all error handling
 pub use jsonrpc_error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData};
 
-pub type Result<T> = std::result::Result<T, JanusError>;
+pub type Result<T> = std::result::Result<T, JSONRPCError>;

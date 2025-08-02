@@ -25,7 +25,7 @@ impl Manifest {
     }
     
     /// Load Manifest from file (async wrapper)
-    pub async fn from_file(path: &str) -> Result<Self, crate::error::JanusError> {
+    pub async fn from_file(path: &str) -> Result<Self, crate::error::JSONRPCError> {
         crate::specification::ManifestParser::from_file(path).await
     }
     

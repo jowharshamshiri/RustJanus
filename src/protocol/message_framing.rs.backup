@@ -64,7 +64,9 @@ impl MessageFraming {
     pub fn decode_message(&self, buffer: &[u8]) -> Result<(MessageFramingMessage, Vec<u8>), JSONRPCError> {
         // Check if we have at least the length prefix
         if buffer.len() < LENGTH_PREFIX_SIZE {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Buffer too small for length prefix: {} < {}", buffer.len(), LENGTH_PREFIX_SIZE))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Buffer too small for length prefix: {} < {}", buffer.len(), LENGTH_PREFIX_SIZE),
+                "Buffer too small for length prefix")));
         }
 
         // Read message length from big-endian prefix
@@ -74,17 +76,23 @@ impl MessageFraming {
 
         // Validate message length
         if message_length > MAX_MESSAGE_SIZE {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Message length {} exceeds maximum {}", message_length, MAX_MESSAGE_SIZE))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Message length {} exceeds maximum {}", message_length, MAX_MESSAGE_SIZE),
+                "Message too large")));
         }
 
         if message_length == 0 {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Message length cannot be zero".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                message: "Message length cannot be zero".to_string(),
+                "Message length cannot be zero")));
         }
 
         // Check if we have the complete message
         let total_required = LENGTH_PREFIX_SIZE + message_length;
         if buffer.len() < total_required {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Buffer too small for complete message: {} < {}", buffer.len(), total_required))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Buffer too small for complete message: {} < {}", buffer.len(), total_required),
+                "Buffer too small for complete message")));
         }
 
         // Extract message data
@@ -92,26 +100,35 @@ impl MessageFraming {
         let remaining_buffer = buffer[LENGTH_PREFIX_SIZE + message_length..].to_vec();
 
         // Parse JSON envelope
-        let envelope: SocketMessageEnvelope = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to parse message envelope JSON: {}", e))))?;
+        let envelope: SocketMessageEnvelope = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+            format!("Failed to parse message envelope JSON: {}", e),
+            "Failed to parse message envelope JSON"))))?;
 
         // Validate envelope structure
         if envelope.message_type.is_empty() || envelope.payload.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Message envelope missing required fields (type, payload)".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Message envelope missing required fields (type, payload)")));
         }
 
         if envelope.message_type != "command" && envelope.message_type != "response" {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Invalid message type: {}", envelope.message_type))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Invalid message type: {}", envelope.message_type),
+                "Invalid message type")));
         }
 
         // Parse payload JSON directly
         let message = if envelope.message_type == "command" {
-            let cmd: JanusCommand = serde_json::from_str(&envelope.payload).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to parse command payload JSON: {}", e))))?;
+            let cmd: JanusCommand = serde_json::from_str(&envelope.payload).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Failed to parse command payload JSON: {}", e),
+                "Failed to parse payload JSON"))))?;
             
             // Validate command structure
             self.validate_command_structure(&cmd)?;
             MessageFramingMessage::Command(cmd)
         } else {
-            let resp: JanusResponse = serde_json::from_str(&envelope.payload).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to parse response payload JSON: {}", e))))?;
+            let resp: JanusResponse = serde_json::from_str(&envelope.payload).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Failed to parse response payload JSON: {}", e),
+                "Failed to parse payload JSON"))))?;
             
             // Validate response structure
             self.validate_response_structure(&resp)?;
@@ -133,12 +150,9 @@ impl MessageFraming {
                     current_buffer = remaining_buffer;
                 }
                 Err(e) => {
-                    if e.code == JSONRPCErrorCode::MessageFramingError.code() {
-                        // Check if it's a partial message error by looking at the message
-                        if e.message.contains("Buffer too small") {
-                            // Not enough data for complete message, save remaining buffer
-                            break;
-                        }
+                    if e.code == "INCOMPLETE_LENGTH_PREFIX" || e.code == "INCOMPLETE_MESSAGE" {
+                        // Not enough data for complete message, save remaining buffer
+                        break;
                     }
                     return Err(e);
                 }
@@ -159,16 +173,22 @@ impl MessageFraming {
         // Serialize message to JSON
         let message_bytes = match message {
             MessageFramingMessage::Command(cmd) => {
-                serde_json::to_vec(&cmd).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to marshal command: {}", e))))?
+                serde_json::to_vec(&cmd).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                    format!("Failed to marshal command: {}", e),
+                    "Failed to marshal"))))?
             }
             MessageFramingMessage::Response(resp) => {
-                serde_json::to_vec(&resp).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to marshal response: {}", e))))?
+                serde_json::to_vec(&resp).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                    format!("Failed to marshal response: {}", e),
+                    "Failed to marshal"))))?
             }
         };
 
         // Validate message size
         if message_bytes.len() > MAX_MESSAGE_SIZE {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Message size {} exceeds maximum {}", message_bytes.len(), MAX_MESSAGE_SIZE))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Message size {} exceeds maximum {}", message_bytes.len(), MAX_MESSAGE_SIZE),
+                "Message too large")));
         }
 
         // Create length prefix and combine
@@ -183,7 +203,9 @@ impl MessageFraming {
     pub fn decode_direct_message(&self, buffer: &[u8]) -> Result<(MessageFramingMessage, Vec<u8>), JSONRPCError> {
         // Check length prefix
         if buffer.len() < LENGTH_PREFIX_SIZE {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Buffer too small for length prefix: {} < {}", buffer.len(), LENGTH_PREFIX_SIZE))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Buffer too small for length prefix: {} < {}", buffer.len(), LENGTH_PREFIX_SIZE),
+                "Buffer too small for length prefix")));
         }
 
         let message_length = u32::from_be_bytes([
@@ -192,7 +214,9 @@ impl MessageFraming {
         let total_required = LENGTH_PREFIX_SIZE + message_length;
 
         if buffer.len() < total_required {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Buffer too small for complete message: {} < {}", buffer.len(), total_required))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Buffer too small for complete message: {} < {}", buffer.len(), total_required),
+                "Buffer too small for complete message")));
         }
 
         // Extract and parse message
@@ -200,17 +224,24 @@ impl MessageFraming {
         let remaining_buffer = buffer[LENGTH_PREFIX_SIZE + message_length..].to_vec();
 
         // Try to determine message type by looking for key fields
-        let raw_value: serde_json::Value = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to parse message JSON: {}", e))))?;
+        let raw_value: serde_json::Value = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+            format!("Failed to parse message JSON: {}", e),
+            "Failed to parse message JSON"))))?;
 
         // Determine message type and parse accordingly
         let message = if raw_value.get("command").is_some() {
-            let cmd: JanusCommand = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to parse command: {}", e))))?;
+            let cmd: JanusCommand = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Failed to parse command: {}", e),
+                "Failed to parse command"))))?;
             MessageFramingMessage::Command(cmd)
         } else if raw_value.get("commandId").is_some() {
-            let resp: JanusResponse = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!("Failed to parse response: {}", e))))?;
+            let resp: JanusResponse = serde_json::from_slice(message_buffer).map_err(|e| JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                format!("Failed to parse response: {}", e),
+                "Failed to parse response"))))?;
             MessageFramingMessage::Response(resp)
         } else {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Cannot determine message type".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Cannot determine message type")));
         };
 
         Ok((message, remaining_buffer))
@@ -219,13 +250,16 @@ impl MessageFraming {
     /// Validate command structure
     fn validate_command_structure(&self, cmd: &JanusCommand) -> Result<(), JSONRPCError> {
         if cmd.id.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Command missing required string field: id".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Command missing required string field: id")));
         }
         if cmd.channelId.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Command missing required string field: channelId".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Command missing required string field: channelId")));
         }
         if cmd.command.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Command missing required string field: command".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Command missing required string field: command")));
         }
         Ok(())
     }
@@ -233,10 +267,12 @@ impl MessageFraming {
     /// Validate response structure
     fn validate_response_structure(&self, resp: &JanusResponse) -> Result<(), JSONRPCError> {
         if resp.commandId.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Response missing required field: commandId".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Response missing required field: commandId")));
         }
         if resp.channelId.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some("Response missing required field: channelId".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MessageFramingError, Some(format!(
+                "Response missing required field: channelId")));
         }
         Ok(())
     }
@@ -398,8 +434,7 @@ mod tests {
         let result = framing.decode_message(&short_buffer);
         assert!(result.is_err());
         if let Err(e) = result {
-            assert_eq!(e.code, JSONRPCErrorCode::MessageFramingError.code());
-            assert!(e.message.contains("Buffer too small"));
+            assert_eq!(e.code, "INCOMPLETE_LENGTH_PREFIX");
         }
         
         // Test zero length message
@@ -407,8 +442,7 @@ mod tests {
         let result = framing.decode_message(&zero_length);
         assert!(result.is_err());
         if let Err(e) = result {
-            assert_eq!(e.code, JSONRPCErrorCode::MessageFramingError.code());
-            assert!(e.message.contains("Message length cannot be zero"));
+            assert_eq!(e.code, "ZERO_LENGTH_MESSAGE");
         }
     }
 }

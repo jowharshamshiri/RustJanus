@@ -2,7 +2,7 @@ use std::time::Duration;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
-use crate::error::JanusError;
+use crate::error::{JSONRPCError, JSONRPCErrorCode};
 
 /// Timeout handler function type (exact SwiftJanus parity)
 pub type TimeoutHandler = Box<dyn Fn(String, Duration) + Send + Sync>;
@@ -39,7 +39,7 @@ impl TimeoutManager {
         command_id: String,
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         self.start_timeout_with_error_handler(command_id, timeout, on_timeout, None).await
     }
     
@@ -50,7 +50,7 @@ impl TimeoutManager {
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
         _on_error: Option<ErrorTimeoutHandler>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let command_id_clone = command_id.clone();
         let active_timeouts = self.active_timeouts.clone();
         let stats = self.stats.clone();
@@ -170,7 +170,7 @@ impl TimeoutManager {
         base_command_id: &str,
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
-    ) -> Result<(), JanusError> {
+    ) -> Result<(), JSONRPCError> {
         let request_id = format!("{}-request", base_command_id);
         let response_id = format!("{}-response", base_command_id);
         
@@ -294,9 +294,9 @@ impl TimeoutManager {
         timeout: Duration,
         operation: F,
         on_timeout: Option<TimeoutHandler>,
-    ) -> Result<T, JanusError>
+    ) -> Result<T, JSONRPCError>
     where
-        F: std::future::Future<Output = Result<T, JanusError>> + Send,
+        F: std::future::Future<Output = Result<T, JSONRPCError>> + Send,
         T: Send,
     {
         // Start timeout tracking
@@ -310,7 +310,7 @@ impl TimeoutManager {
         
         match result {
             Ok(operation_result) => operation_result,
-            Err(_) => Err(JanusError::CommandTimeout(command_id, timeout)),
+            Err(_) => Err(JSONRPCError::new(JSONRPCErrorCode::HandlerTimeout, Some(format!("Command {} timed out after {:?}", command_id, timeout)))),
         }
     }
     
@@ -475,16 +475,16 @@ impl TimeoutConfig {
     }
     
     /// Validate timeout value against configuration
-    pub fn validate_timeout(&self, timeout: Duration) -> Result<Duration, JanusError> {
+    pub fn validate_timeout(&self, timeout: Duration) -> Result<Duration, JSONRPCError> {
         if timeout < self.min_timeout {
-            return Err(JanusError::ValidationError(
-                format!("Timeout {:?} is below minimum {:?}", timeout, self.min_timeout)
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed,
+                Some(format!("Timeout {:?} is below minimum {:?}", timeout, self.min_timeout))
             ));
         }
         
         if timeout > self.max_timeout {
-            return Err(JanusError::ValidationError(
-                format!("Timeout {:?} exceeds maximum {:?}", timeout, self.max_timeout)
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed,
+                Some(format!("Timeout {:?} exceeds maximum {:?}", timeout, self.max_timeout))
             ));
         }
         
@@ -601,7 +601,7 @@ mod tests {
         
         assert!(result.is_err());
         match result.unwrap_err() {
-            JanusError::CommandTimeout(id, duration) => {
+            JSONRPCErrorCode::CommandTimeout(id, duration) => {
                 assert_eq!(id, command_id);
                 assert_eq!(duration, timeout);
             },

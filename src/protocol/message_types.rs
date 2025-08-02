@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 // Note: chrono types removed as they are not used in current SOCK_DGRAM implementation
-use crate::error::{JSONRPCError, JSONRPCErrorCode, JanusError};
+use crate::error::{JSONRPCError, JSONRPCErrorCode};
 
 /// Socket command structure (exact cross-language parity with Go/Swift/TypeScript)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -87,22 +87,22 @@ impl JanusCommand {
     }
     
     /// Validate command structure
-    pub fn validate(&self) -> Result<(), JanusError> {
+    pub fn validate(&self) -> Result<(), JSONRPCError> {
         if self.id.is_empty() {
-            return Err(JanusError::ValidationError("Command ID cannot be empty".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Command ID cannot be empty".to_string())));
         }
         
         if self.channelId.is_empty() {
-            return Err(JanusError::ValidationError("Channel ID cannot be empty".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Channel ID cannot be empty".to_string())));
         }
         
         if self.command.is_empty() {
-            return Err(JanusError::ValidationError("Command name cannot be empty".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Command name cannot be empty".to_string())));
         }
         
         if let Some(timeout) = self.timeout {
             if timeout <= 0.0 {
-                return Err(JanusError::ValidationError("Timeout must be positive".to_string()));
+                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Timeout must be positive".to_string())));
             }
         }
         
@@ -207,23 +207,23 @@ impl JanusResponse {
     }
     
     /// Validate response structure
-    pub fn validate(&self) -> Result<(), JanusError> {
+    pub fn validate(&self) -> Result<(), JSONRPCError> {
         if self.commandId.is_empty() {
-            return Err(JanusError::ValidationError("Command ID cannot be empty".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Command ID cannot be empty".to_string())));
         }
         
         if self.channelId.is_empty() {
-            return Err(JanusError::ValidationError("Channel ID cannot be empty".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Channel ID cannot be empty".to_string())));
         }
         
         // If success is true, should not have error
         if self.success && self.error.is_some() {
-            return Err(JanusError::ValidationError("Successful response cannot have error".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Successful response cannot have error".to_string())));
         }
         
         // If success is false, should have error
         if !self.success && self.error.is_none() {
-            return Err(JanusError::ValidationError("Failed response must have error".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Failed response must have error".to_string())));
         }
         
         Ok(())
@@ -294,21 +294,21 @@ impl SocketMessage {
     }
     
     /// Validate message structure
-    pub fn validate(&self) -> Result<(), JanusError> {
+    pub fn validate(&self) -> Result<(), JSONRPCError> {
         if self.payload.is_empty() {
-            return Err(JanusError::ValidationError("Message payload cannot be empty".to_string()));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Message payload cannot be empty".to_string())));
         }
         
         // Try to decode based on type to ensure payload is valid
         match self.message_type {
             MessageType::Command => {
                 let command = self.decode_command()
-                    .map_err(|e| JanusError::ValidationError(format!("Invalid command payload: {}", e)))?;
+                    .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Invalid command payload: {}", e))))?;
                 command.validate()?;
             },
             MessageType::Response => {
                 let response = self.decode_response()
-                    .map_err(|e| JanusError::ValidationError(format!("Invalid response payload: {}", e)))?;
+                    .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Invalid response payload: {}", e))))?;
                 response.validate()?;
             },
         }

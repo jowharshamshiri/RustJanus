@@ -1,4 +1,4 @@
-use crate::error::{JanusError, JSONRPCError, JSONRPCErrorCode};
+use crate::error::{JSONRPCError, JSONRPCErrorCode};
 use crate::protocol::message_types::JanusCommand;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -242,16 +242,14 @@ impl HandlerRegistry {
         }
     }
     
-    pub async fn register_handler<H>(&self, command: String, handler: H) -> Result<(), JanusError>
+    pub async fn register_handler<H>(&self, command: String, handler: H) -> Result<(), JSONRPCError>
     where
         H: CommandHandler + 'static,
     {
         let mut handlers = self.handlers.write().await;
         
         if handlers.len() >= self.max_handlers {
-            return Err(JanusError::ResourceLimit(
-                format!("Maximum handlers ({}) exceeded", self.max_handlers)
-            ));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ResourceLimitExceeded, Some(format!("Maximum handlers ({}) exceeded", self.max_handlers))));
         }
         
         handlers.insert(command, Box::new(handler));

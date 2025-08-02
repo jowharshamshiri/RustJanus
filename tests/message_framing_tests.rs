@@ -55,7 +55,8 @@ async fn test_message_framing_encode_large_message() {
     
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err.code, "MESSAGE_TOO_LARGE");
+        // Validate error code instead of error string - should be JSONRPCError with MessageFramingError code
+        assert_eq!(err.code, -32011); // MessageFramingError code 
     }
 }
 
@@ -149,7 +150,8 @@ async fn test_message_framing_decode_errors() {
     let result = framing.decode_message(&short_buffer);
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err.code, "INCOMPLETE_LENGTH_PREFIX");
+        // Validate error code instead of error string - should be JSONRPCError with MessageFramingError code
+        assert_eq!(err.code, -32011); // MessageFramingError code 
     }
     
     // Test incomplete message
@@ -166,7 +168,8 @@ async fn test_message_framing_decode_errors() {
     let result = framing.decode_message(truncated);
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err.code, "INCOMPLETE_MESSAGE");
+        // Validate error code instead of error string - should be JSONRPCError with MessageFramingError code
+        assert_eq!(err.code, -32011); // MessageFramingError code 
     }
     
     // Test zero-length message
@@ -174,7 +177,8 @@ async fn test_message_framing_decode_errors() {
     let result = framing.decode_message(&zero_length_buffer);
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err.code, "ZERO_LENGTH_MESSAGE");
+        // Validate error code instead of error string - should be JSONRPCError with MessageFramingError code
+        assert_eq!(err.code, -32011); // MessageFramingError code 
     }
 }
 
