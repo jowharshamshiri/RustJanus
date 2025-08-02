@@ -30,7 +30,7 @@ pub struct JanusClientConfig {
     /// Maximum args data size in bytes (Default: 5MB)
     pub max_args_data_size: usize,
     
-    /// Enable API specification validation (Default: true)
+    /// Enable Manifest validation (Default: true)
     pub enable_validation: bool,
 }
 

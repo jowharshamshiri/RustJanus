@@ -1,34 +1,34 @@
 use crate::error::JanusError;
-use crate::specification::ApiSpecification;
+use crate::specification::Manifest;
 use log::{debug, error, info, warn};
 use tokio::fs;
 
-/// API specification parser for JSON and YAML formats (exact SwiftJanus parity)
-pub struct ApiSpecificationParser;
+/// Manifest parser for JSON and YAML formats (exact SwiftJanus parity)
+pub struct ManifestParser;
 
-impl ApiSpecificationParser {
-    /// Parse API specification from JSON string
-    pub fn from_json(json_str: &str) -> Result<ApiSpecification, JanusError> {
+impl ManifestParser {
+    /// Parse Manifest from JSON string
+    pub fn from_json(json_str: &str) -> Result<Manifest, JanusError> {
         Self::from_json_with_context(json_str, None)
     }
 
-    /// Parse API specification from JSON string with file context
+    /// Parse Manifest from JSON string with file context
     pub fn from_json_with_context(
         json_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, JanusError> {
+    ) -> Result<Manifest, JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         debug!(
-            "Attempting to parse API specification from JSON{} ({} bytes)",
+            "Attempting to parse Manifest from JSON{} ({} bytes)",
             context,
             json_str.len()
         );
 
         // Validate JSON string is not empty
         if json_str.trim().is_empty() {
-            error!("API specification JSON string is empty{}", context);
+            error!("Manifest JSON string is empty{}", context);
             return Err(JanusError::DecodingFailed(format!(
                 "JSON parsing error{}: input string is empty",
                 context
@@ -43,16 +43,16 @@ impl ApiSpecificationParser {
         };
         debug!("JSON content preview{}: {}", context, preview);
 
-        match serde_json::from_str::<ApiSpecification>(json_str) {
-            Ok(api_spec) => {
-                info!("Successfully parsed API specification from JSON{}", context);
-                debug!("Parsed API spec version: {}", api_spec.version);
-                debug!("Number of channels: {}", api_spec.channels.len());
-                Ok(api_spec)
+        match serde_json::from_str::<Manifest>(json_str) {
+            Ok(manifest) => {
+                info!("Successfully parsed Manifest from JSON{}", context);
+                debug!("Parsed Manifest version: {}", manifest.version);
+                debug!("Number of channels: {}", manifest.channels.len());
+                Ok(manifest)
             }
             Err(e) => {
                 error!(
-                    "Failed to parse API specification from JSON{}: {}",
+                    "Failed to parse Manifest from JSON{}: {}",
                     context, e
                 );
 
@@ -94,30 +94,30 @@ impl ApiSpecificationParser {
         }
     }
 
-    /// Parse API specification from YAML string
+    /// Parse Manifest from YAML string
     #[cfg(feature = "yaml-support")]
-    pub fn from_yaml(yaml_str: &str) -> Result<ApiSpecification, JanusError> {
+    pub fn from_yaml(yaml_str: &str) -> Result<Manifest, JanusError> {
         Self::from_yaml_with_context(yaml_str, None)
     }
 
-    /// Parse API specification from YAML string with file context
+    /// Parse Manifest from YAML string with file context
     #[cfg(feature = "yaml-support")]
     pub fn from_yaml_with_context(
         yaml_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, JanusError> {
+    ) -> Result<Manifest, JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         debug!(
-            "Attempting to parse API specification from YAML{} ({} bytes)",
+            "Attempting to parse Manifest from YAML{} ({} bytes)",
             context,
             yaml_str.len()
         );
 
         // Validate YAML string is not empty
         if yaml_str.trim().is_empty() {
-            error!("API specification YAML string is empty{}", context);
+            error!("Manifest YAML string is empty{}", context);
             return Err(JanusError::DecodingFailed(format!(
                 "YAML parsing error{}: input string is empty",
                 context
@@ -132,16 +132,16 @@ impl ApiSpecificationParser {
         };
         debug!("YAML content preview{}: {}", context, preview);
 
-        match serde_yaml::from_str::<ApiSpecification>(yaml_str) {
-            Ok(api_spec) => {
-                info!("Successfully parsed API specification from YAML{}", context);
-                debug!("Parsed API spec version: {}", api_spec.version);
-                debug!("Number of channels: {}", api_spec.channels.len());
-                Ok(api_spec)
+        match serde_yaml::from_str::<Manifest>(yaml_str) {
+            Ok(manifest) => {
+                info!("Successfully parsed Manifest from YAML{}", context);
+                debug!("Parsed Manifest version: {}", manifest.version);
+                debug!("Number of channels: {}", manifest.channels.len());
+                Ok(manifest)
             }
             Err(e) => {
                 error!(
-                    "Failed to parse API specification from YAML{}: {}",
+                    "Failed to parse Manifest from YAML{}: {}",
                     context, e
                 );
 
@@ -166,13 +166,13 @@ impl ApiSpecificationParser {
         }
     }
 
-    /// Parse API specification from file (auto-detect format based on extension)
-    pub async fn from_file(path: &str) -> Result<ApiSpecification, JanusError> {
-        info!("Loading API specification from file: {}", path);
+    /// Parse Manifest from file (auto-detect format based on extension)
+    pub async fn from_file(path: &str) -> Result<Manifest, JanusError> {
+        info!("Loading Manifest from file: {}", path);
 
         // Validate file path
         if path.trim().is_empty() {
-            error!("API specification file path is empty");
+            error!("Manifest file path is empty");
             return Err(JanusError::IoError(
                 "File path cannot be empty".to_string(),
             ));
@@ -183,19 +183,19 @@ impl ApiSpecificationParser {
             Ok(metadata) => {
                 debug!("File found: {} ({} bytes)", path, metadata.len());
                 if metadata.len() == 0 {
-                    warn!("API specification file is empty: {}", path);
+                    warn!("Manifest file is empty: {}", path);
                 }
                 if metadata.len() > 10_000_000 {
                     // 10MB limit
                     warn!(
-                        "API specification file is very large ({} bytes): {}",
+                        "Manifest file is very large ({} bytes): {}",
                         metadata.len(),
                         path
                     );
                 }
             }
             Err(e) => {
-                error!("Cannot access API specification file '{}': {}", path, e);
+                error!("Cannot access Manifest file '{}': {}", path, e);
                 return Err(JanusError::IoError(format!(
                     "Failed to access file {}: {}",
                     path, e
@@ -210,7 +210,7 @@ impl ApiSpecificationParser {
                 content
             }
             Err(e) => {
-                error!("Failed to read API specification file '{}': {}", path, e);
+                error!("Failed to read Manifest file '{}': {}", path, e);
                 return Err(JanusError::IoError(format!(
                     "Failed to read file {}: {}",
                     path, e
@@ -245,47 +245,47 @@ impl ApiSpecificationParser {
         };
 
         match &result {
-            Ok(api_spec) => {
-                info!("Successfully loaded API specification from {}", path);
+            Ok(manifest) => {
+                info!("Successfully loaded Manifest from {}", path);
                 debug!(
                     "Loaded spec version: {} with {} channels",
-                    api_spec.version,
-                    api_spec.channels.len()
+                    manifest.version,
+                    manifest.channels.len()
                 );
             }
             Err(e) => {
-                error!("Failed to parse API specification from {}: {}", path, e);
+                error!("Failed to parse Manifest from {}: {}", path, e);
             }
         }
 
         result
     }
 
-    /// Serialize API specification to JSON string
-    pub fn to_json(api_spec: &ApiSpecification) -> Result<String, JanusError> {
-        debug!("Serializing API specification to JSON");
-        serde_json::to_string_pretty(api_spec).map_err(|e| {
-            error!("Failed to serialize API specification to JSON: {}", e);
+    /// Serialize Manifest to JSON string
+    pub fn to_json(manifest: &Manifest) -> Result<String, JanusError> {
+        debug!("Serializing Manifest to JSON");
+        serde_json::to_string_pretty(manifest).map_err(|e| {
+            error!("Failed to serialize Manifest to JSON: {}", e);
             JanusError::EncodingFailed(format!("JSON serialization error: {}", e))
         })
     }
 
-    /// Serialize API specification to YAML string
+    /// Serialize Manifest to YAML string
     #[cfg(feature = "yaml-support")]
-    pub fn to_yaml(api_spec: &ApiSpecification) -> Result<String, JanusError> {
-        debug!("Serializing API specification to YAML");
-        serde_yaml::to_string(api_spec).map_err(|e| {
-            error!("Failed to serialize API specification to YAML: {}", e);
+    pub fn to_yaml(manifest: &Manifest) -> Result<String, JanusError> {
+        debug!("Serializing Manifest to YAML");
+        serde_yaml::to_string(manifest).map_err(|e| {
+            error!("Failed to serialize Manifest to YAML: {}", e);
             JanusError::EncodingFailed(format!("YAML serialization error: {}", e))
         })
     }
 
-    /// Write API specification to file (format based on extension)
-    pub async fn to_file(api_spec: &ApiSpecification, path: &str) -> Result<(), JanusError> {
+    /// Write Manifest to file (format based on extension)
+    pub async fn to_file(manifest: &Manifest, path: &str) -> Result<(), JanusError> {
         let content = if path.ends_with(".yaml") || path.ends_with(".yml") {
             #[cfg(feature = "yaml-support")]
             {
-                Self::to_yaml(api_spec)?
+                Self::to_yaml(manifest)?
             }
             #[cfg(not(feature = "yaml-support"))]
             {
@@ -294,7 +294,7 @@ impl ApiSpecificationParser {
                 ));
             }
         } else {
-            Self::to_json(api_spec)?
+            Self::to_json(manifest)?
         };
 
         fs::write(path, content).await.map_err(|e| {
@@ -304,61 +304,61 @@ impl ApiSpecificationParser {
         Ok(())
     }
 
-    /// Validate API specification structure and content
-    pub fn validate(api_spec: &ApiSpecification) -> Result<(), JanusError> {
-        Self::validate_with_context(api_spec, None)
+    /// Validate Manifest structure and content
+    pub fn validate(manifest: &Manifest) -> Result<(), JanusError> {
+        Self::validate_with_context(manifest, None)
     }
 
-    /// Validate API specification structure and content with file context
+    /// Validate Manifest structure and content with file context
     pub fn validate_with_context(
-        api_spec: &ApiSpecification,
+        manifest: &Manifest,
         file_path: Option<&str>,
     ) -> Result<(), JanusError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
-        info!("Starting API specification validation{}", context);
-        debug!("Validating API spec version: {}", api_spec.version);
+        info!("Starting Manifest validation{}", context);
+        debug!("Validating Manifest version: {}", manifest.version);
 
         // Validate version
-        if api_spec.version.is_empty() {
+        if manifest.version.is_empty() {
             error!(
-                "API specification validation failed{}: version is required",
+                "Manifest validation failed{}: version is required",
                 context
             );
             return Err(JanusError::MalformedData(format!(
-                "API specification version is required{}",
+                "Manifest version is required{}",
                 context
             )));
         }
 
         // Validate version format (semantic versioning)
-        if !Self::is_valid_version(&api_spec.version) {
+        if !Self::is_valid_version(&manifest.version) {
             error!(
-                "API specification validation failed{}: invalid version format '{}'",
-                context, api_spec.version
+                "Manifest validation failed{}: invalid version format '{}'",
+                context, manifest.version
             );
             return Err(JanusError::MalformedData(format!(
                 "Invalid version format: {}{}",
-                api_spec.version, context
+                manifest.version, context
             )));
         }
-        debug!("✓ Version format is valid: {}", api_spec.version);
+        debug!("✓ Version format is valid: {}", manifest.version);
 
         // Validate channels
-        if api_spec.channels.is_empty() {
+        if manifest.channels.is_empty() {
             error!(
-                "API specification validation failed{}: no channels defined",
+                "Manifest validation failed{}: no channels defined",
                 context
             );
             return Err(JanusError::MalformedData(format!(
-                "API specification must define at least one channel{}",
+                "Manifest must define at least one channel{}",
                 context
             )));
         }
-        debug!("Validating {} channels", api_spec.channels.len());
+        debug!("Validating {} channels", manifest.channels.len());
 
-        for (channel_name, channel_spec) in &api_spec.channels {
+        for (channel_name, channel_spec) in &manifest.channels {
             debug!("Validating channel: {}", channel_name);
             if let Err(e) = Self::validate_channel(channel_name, channel_spec, file_path) {
                 error!(
@@ -371,11 +371,11 @@ impl ApiSpecificationParser {
         }
 
         // Validate models if present
-        if let Some(models) = &api_spec.models {
+        if let Some(models) = &manifest.models {
             debug!("Validating {} models", models.len());
             for (model_name, model_spec) in models {
                 debug!("Validating model: {}", model_name);
-                if let Err(e) = Self::validate_model(model_name, model_spec, api_spec, file_path) {
+                if let Err(e) = Self::validate_model(model_name, model_spec, manifest, file_path) {
                     error!(
                         "Model validation failed for '{}'{}: {}",
                         model_name, context, e
@@ -385,121 +385,121 @@ impl ApiSpecificationParser {
                 debug!("✓ Model '{}' is valid", model_name);
             }
         } else {
-            debug!("No models defined in API specification");
+            debug!("No models defined in Manifest");
         }
 
         info!(
-            "✓ API specification validation completed successfully{}",
+            "✓ Manifest validation completed successfully{}",
             context
         );
         info!(
             "Validated{}: version {}, {} channels, {} models",
             context,
-            api_spec.version,
-            api_spec.channels.len(),
-            api_spec.models.as_ref().map_or(0, |m| m.len())
+            manifest.version,
+            manifest.channels.len(),
+            manifest.models.as_ref().map_or(0, |m| m.len())
         );
 
         Ok(())
     }
 
-    /// Load and validate API specification from file in one step
-    pub async fn load_and_validate(path: &str) -> Result<ApiSpecification, JanusError> {
-        info!("Loading and validating API specification from: {}", path);
+    /// Load and validate Manifest from file in one step
+    pub async fn load_and_validate(path: &str) -> Result<Manifest, JanusError> {
+        info!("Loading and validating Manifest from: {}", path);
 
         // Load the specification
-        let api_spec = Self::from_file(path).await?;
+        let manifest = Self::from_file(path).await?;
 
         // Validate the loaded specification
-        Self::validate_with_context(&api_spec, Some(path))?;
+        Self::validate_with_context(&manifest, Some(path))?;
 
         info!(
-            "Successfully loaded and validated API specification from: {}",
+            "Successfully loaded and validated Manifest from: {}",
             path
         );
-        Ok(api_spec)
+        Ok(manifest)
     }
 
-    /// Load and validate API specification from JSON string in one step
-    pub fn load_and_validate_json(json_str: &str) -> Result<ApiSpecification, JanusError> {
+    /// Load and validate Manifest from JSON string in one step
+    pub fn load_and_validate_json(json_str: &str) -> Result<Manifest, JanusError> {
         Self::load_and_validate_json_with_context(json_str, None)
     }
 
-    /// Load and validate API specification from JSON string with file context
+    /// Load and validate Manifest from JSON string with file context
     pub fn load_and_validate_json_with_context(
         json_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, JanusError> {
+    ) -> Result<Manifest, JanusError> {
         let context = file_path
             .map(|p| format!(" from file: {}", p))
             .unwrap_or_default();
         info!(
-            "Loading and validating API specification from JSON string{}",
+            "Loading and validating Manifest from JSON string{}",
             context
         );
 
         // Parse the JSON with context
-        let api_spec = Self::from_json_with_context(json_str, file_path)?;
+        let manifest = Self::from_json_with_context(json_str, file_path)?;
 
         // Validate the parsed specification with context
-        Self::validate_with_context(&api_spec, file_path)?;
+        Self::validate_with_context(&manifest, file_path)?;
 
         info!(
-            "Successfully loaded and validated API specification from JSON{}",
+            "Successfully loaded and validated Manifest from JSON{}",
             context
         );
-        Ok(api_spec)
+        Ok(manifest)
     }
 
-    /// Load and validate API specification from YAML string in one step
+    /// Load and validate Manifest from YAML string in one step
     #[cfg(feature = "yaml-support")]
-    pub fn load_and_validate_yaml(yaml_str: &str) -> Result<ApiSpecification, JanusError> {
+    pub fn load_and_validate_yaml(yaml_str: &str) -> Result<Manifest, JanusError> {
         Self::load_and_validate_yaml_with_context(yaml_str, None)
     }
 
-    /// Load and validate API specification from YAML string with file context
+    /// Load and validate Manifest from YAML string with file context
     #[cfg(feature = "yaml-support")]
     pub fn load_and_validate_yaml_with_context(
         yaml_str: &str,
         file_path: Option<&str>,
-    ) -> Result<ApiSpecification, JanusError> {
+    ) -> Result<Manifest, JanusError> {
         let context = file_path
             .map(|p| format!(" from file: {}", p))
             .unwrap_or_default();
         info!(
-            "Loading and validating API specification from YAML string{}",
+            "Loading and validating Manifest from YAML string{}",
             context
         );
 
         // Parse the YAML with context
-        let api_spec = Self::from_yaml_with_context(yaml_str, file_path)?;
+        let manifest = Self::from_yaml_with_context(yaml_str, file_path)?;
 
         // Validate the parsed specification with context
-        Self::validate_with_context(&api_spec, file_path)?;
+        Self::validate_with_context(&manifest, file_path)?;
 
         info!(
-            "Successfully loaded and validated API specification from YAML{}",
+            "Successfully loaded and validated Manifest from YAML{}",
             context
         );
-        Ok(api_spec)
+        Ok(manifest)
     }
 
     /// Get a summary of validation errors for diagnostics
-    pub fn get_validation_summary(api_spec: &ApiSpecification) -> String {
+    pub fn get_validation_summary(manifest: &Manifest) -> String {
         let mut summary = Vec::new();
 
         // Check version
-        if api_spec.version.is_empty() {
+        if manifest.version.is_empty() {
             summary.push("• Missing version".to_string());
-        } else if !Self::is_valid_version(&api_spec.version) {
-            summary.push(format!("• Invalid version format: {}", api_spec.version));
+        } else if !Self::is_valid_version(&manifest.version) {
+            summary.push(format!("• Invalid version format: {}", manifest.version));
         }
 
         // Check channels
-        if api_spec.channels.is_empty() {
+        if manifest.channels.is_empty() {
             summary.push("• No channels defined".to_string());
         } else {
-            for (channel_name, channel_spec) in &api_spec.channels {
+            for (channel_name, channel_spec) in &manifest.channels {
                 if channel_name.is_empty() {
                     summary.push("• Empty channel name found".to_string());
                 }
@@ -513,7 +513,7 @@ impl ApiSpecificationParser {
         }
 
         // Check models if present
-        if let Some(models) = &api_spec.models {
+        if let Some(models) = &manifest.models {
             for (model_name, model_spec) in models {
                 if model_name.is_empty() {
                     summary.push("• Empty model name found".to_string());
@@ -525,9 +525,9 @@ impl ApiSpecificationParser {
         }
 
         if summary.is_empty() {
-            "API specification appears to be valid".to_string()
+            "Manifest appears to be valid".to_string()
         } else {
-            format!("API specification issues found:\n{}", summary.join("\n"))
+            format!("Manifest issues found:\n{}", summary.join("\n"))
         }
     }
 
@@ -666,7 +666,7 @@ impl ApiSpecificationParser {
                 context, command_name
             );
             return Err(JanusError::UnknownCommand(format!(
-                "Command '{}' is reserved and cannot be defined in API specification{}. Reserved commands: {}",
+                "Command '{}' is reserved and cannot be defined in Manifest{}. Reserved commands: {}",
                 command_name, 
                 context,
                 reserved_commands.join(", ")
@@ -866,7 +866,7 @@ impl ApiSpecificationParser {
     fn validate_model(
         model_name: &str,
         model_spec: &crate::specification::ModelSpec,
-        _api_spec: &ApiSpecification,
+        _manifest: &Manifest,
         file_path: Option<&str>,
     ) -> Result<(), JanusError> {
         let context = file_path
@@ -935,6 +935,66 @@ impl ApiSpecificationParser {
         Ok(())
     }
 
+    /// Parse multiple Manifest files and merge them
+    pub async fn parse_multiple_files(file_paths: &[String]) -> Result<Manifest, JanusError> {
+        if file_paths.is_empty() {
+            return Err(JanusError::IoError("No files provided".to_string()));
+        }
+
+        info!("Parsing {} Manifest files", file_paths.len());
+        
+        // Parse first file as base
+        let mut base_spec = Self::from_file(&file_paths[0]).await?;
+        info!("Base specification loaded from: {}", file_paths[0]);
+        
+        // Merge additional files
+        for file_path in &file_paths[1..] {
+            info!("Merging specification from: {}", file_path);
+            let additional_spec = Self::from_file(file_path).await?;
+            Self::merge_specifications(&mut base_spec, &additional_spec)?;
+        }
+        
+        // Validate merged specification
+        Self::validate(&base_spec)?;
+        
+        info!("Successfully merged {} specification files", file_paths.len());
+        Ok(base_spec)
+    }
+
+    /// Merge two Manifests
+    pub fn merge_specifications(base: &mut Manifest, additional: &Manifest) -> Result<(), JanusError> {
+        info!("Merging Manifests");
+        
+        // Merge channels
+        for (channel_id, channel_spec) in &additional.channels {
+            if base.channels.contains_key(channel_id) {
+                return Err(JanusError::InvalidChannel(format!(
+                    "Channel '{}' already exists in base specification", 
+                    channel_id
+                )));
+            }
+            base.channels.insert(channel_id.clone(), channel_spec.clone());
+        }
+        
+        // Merge models if present
+        if let Some(additional_models) = &additional.models {
+            let base_models = base.models.get_or_insert_with(std::collections::HashMap::new);
+            
+            for (model_name, model_spec) in additional_models {
+                if base_models.contains_key(model_name) {
+                    return Err(JanusError::MalformedData(format!(
+                        "Model '{}' already exists in base specification", 
+                        model_name
+                    )));
+                }
+                base_models.insert(model_name.clone(), model_spec.clone());
+            }
+        }
+        
+        info!("Specifications merged successfully");
+        Ok(())
+    }
+
     /// Get JSON value type name
     fn get_value_type_name(value: &serde_json::Value) -> &'static str {
         match value {
@@ -948,6 +1008,41 @@ impl ApiSpecificationParser {
     }
 }
 
+// Static interface methods for convenience (matching Go/Swift patterns)
+impl ManifestParser {
+    /// Static method for parsing JSON
+    pub fn parse_json(json_str: &str) -> Result<Manifest, JanusError> {
+        Self::from_json(json_str)
+    }
+
+    /// Static method for parsing YAML
+    #[cfg(feature = "yaml-support")]
+    pub fn parse_yaml(yaml_str: &str) -> Result<Manifest, JanusError> {
+        Self::from_yaml(yaml_str)
+    }
+
+    /// Static method for parsing from file
+    pub async fn parse_from_file(path: &str) -> Result<Manifest, JanusError> {
+        Self::from_file(path).await
+    }
+
+    /// Static method for validation
+    pub fn validate_specification(manifest: &Manifest) -> Result<(), JanusError> {
+        Self::validate(manifest)
+    }
+
+    /// Static method for JSON serialization
+    pub fn serialize_to_json(manifest: &Manifest) -> Result<String, JanusError> {
+        Self::to_json(manifest)
+    }
+
+    /// Static method for YAML serialization
+    #[cfg(feature = "yaml-support")]
+    pub fn serialize_to_yaml(manifest: &Manifest) -> Result<String, JanusError> {
+        Self::to_yaml(manifest)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -955,8 +1050,8 @@ mod tests {
         ArgumentSpec, ChannelSpec, CommandSpec, ResponseSpec, ValidationSpec,
     };
 
-    fn create_test_api_spec() -> ApiSpecification {
-        let mut api_spec = ApiSpecification::new("1.0.0".to_string());
+    fn create_test_manifest() -> Manifest {
+        let mut manifest = Manifest::new("1.0.0".to_string());
 
         let mut channel = ChannelSpec::new("Test channel".to_string());
 
@@ -971,84 +1066,84 @@ mod tests {
 
         command.add_argument("test_arg".to_string(), arg);
         channel.add_command("test_cmd".to_string(), command);
-        api_spec.add_channel("test_channel".to_string(), channel);
+        manifest.add_channel("test_channel".to_string(), channel);
 
-        api_spec
+        manifest
     }
 
     #[test]
     fn test_json_serialization() {
-        let api_spec = create_test_api_spec();
+        let manifest = create_test_manifest();
 
-        let json_str = ApiSpecificationParser::to_json(&api_spec).unwrap();
+        let json_str = ManifestParser::to_json(&manifest).unwrap();
         assert!(!json_str.is_empty());
 
-        let parsed_spec = ApiSpecificationParser::from_json(&json_str).unwrap();
-        assert_eq!(parsed_spec.version, api_spec.version);
-        assert_eq!(parsed_spec.channels.len(), api_spec.channels.len());
+        let parsed_spec = ManifestParser::from_json(&json_str).unwrap();
+        assert_eq!(parsed_spec.version, manifest.version);
+        assert_eq!(parsed_spec.channels.len(), manifest.channels.len());
     }
 
     #[cfg(feature = "yaml-support")]
     #[test]
     fn test_yaml_serialization() {
-        let api_spec = create_test_api_spec();
+        let manifest = create_test_manifest();
 
-        let yaml_str = ApiSpecificationParser::to_yaml(&api_spec).unwrap();
+        let yaml_str = ManifestParser::to_yaml(&manifest).unwrap();
         assert!(!yaml_str.is_empty());
 
-        let parsed_spec = ApiSpecificationParser::from_yaml(&yaml_str).unwrap();
-        assert_eq!(parsed_spec.version, api_spec.version);
-        assert_eq!(parsed_spec.channels.len(), api_spec.channels.len());
+        let parsed_spec = ManifestParser::from_yaml(&yaml_str).unwrap();
+        assert_eq!(parsed_spec.version, manifest.version);
+        assert_eq!(parsed_spec.channels.len(), manifest.channels.len());
     }
 
     #[test]
     fn test_validation_success() {
-        let api_spec = create_test_api_spec();
-        let result = ApiSpecificationParser::validate(&api_spec);
+        let manifest = create_test_manifest();
+        let result = ManifestParser::validate(&manifest);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_validation_empty_version() {
-        let mut api_spec = create_test_api_spec();
-        api_spec.version = String::new();
+        let mut manifest = create_test_manifest();
+        manifest.version = String::new();
 
-        let result = ApiSpecificationParser::validate(&api_spec);
+        let result = ManifestParser::validate(&manifest);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validation_invalid_version() {
-        let mut api_spec = create_test_api_spec();
-        api_spec.version = "invalid".to_string();
+        let mut manifest = create_test_manifest();
+        manifest.version = "invalid".to_string();
 
-        let result = ApiSpecificationParser::validate(&api_spec);
+        let result = ManifestParser::validate(&manifest);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validation_empty_channels() {
-        let mut api_spec = create_test_api_spec();
-        api_spec.channels.clear();
+        let mut manifest = create_test_manifest();
+        manifest.channels.clear();
 
-        let result = ApiSpecificationParser::validate(&api_spec);
+        let result = ManifestParser::validate(&manifest);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_version_validation() {
-        assert!(ApiSpecificationParser::is_valid_version("1.0.0"));
-        assert!(ApiSpecificationParser::is_valid_version("10.20.30"));
-        assert!(!ApiSpecificationParser::is_valid_version("1.0"));
-        assert!(!ApiSpecificationParser::is_valid_version("1.0.0.0"));
-        assert!(!ApiSpecificationParser::is_valid_version("v1.0.0"));
-        assert!(!ApiSpecificationParser::is_valid_version("1.0.0-beta"));
+        assert!(ManifestParser::is_valid_version("1.0.0"));
+        assert!(ManifestParser::is_valid_version("10.20.30"));
+        assert!(!ManifestParser::is_valid_version("1.0"));
+        assert!(!ManifestParser::is_valid_version("1.0.0.0"));
+        assert!(!ManifestParser::is_valid_version("v1.0.0"));
+        assert!(!ManifestParser::is_valid_version("1.0.0-beta"));
     }
 
     #[test]
     fn test_malformed_json() {
         let malformed_json = r#"{"version": "1.0.0", "channels": }"#;
-        let result = ApiSpecificationParser::from_json(malformed_json);
+        let result = ManifestParser::from_json(malformed_json);
         assert!(result.is_err());
     }
 
@@ -1058,16 +1153,90 @@ mod tests {
         let number_value = serde_json::Value::Number(serde_json::Number::from(42));
 
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &string_value, "string", None).is_ok()
+            ManifestParser::validate_value_type("test", &string_value, "string", None).is_ok()
         );
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &number_value, "number", None).is_ok()
+            ManifestParser::validate_value_type("test", &number_value, "number", None).is_ok()
         );
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &string_value, "number", None).is_err()
+            ManifestParser::validate_value_type("test", &string_value, "number", None).is_err()
         );
         assert!(
-            ApiSpecificationParser::validate_value_type("test", &number_value, "string", None).is_err()
+            ManifestParser::validate_value_type("test", &number_value, "string", None).is_err()
         );
+    }
+
+    #[test]
+    fn test_specification_merging() {
+        let mut base_spec = create_test_manifest();
+        
+        // Create additional specification
+        let mut additional_spec = Manifest::new("1.0.0".to_string());
+        let mut additional_channel = ChannelSpec::new("Additional Channel".to_string());
+        let additional_command = CommandSpec::new(
+            "Additional Command".to_string(),
+            ResponseSpec::new("object".to_string()),
+        );
+        additional_channel.add_command("additional_cmd".to_string(), additional_command);
+        additional_spec.add_channel("additional_channel".to_string(), additional_channel);
+        
+        // Merge specifications
+        let result = ManifestParser::merge_specifications(&mut base_spec, &additional_spec);
+        assert!(result.is_ok());
+        
+        // Verify merge results
+        assert_eq!(base_spec.channels.len(), 2);
+        assert!(base_spec.channels.contains_key("test_channel"));
+        assert!(base_spec.channels.contains_key("additional_channel"));
+    }
+
+    #[test]
+    fn test_specification_merging_conflict() {
+        let mut base_spec = create_test_manifest();
+        
+        // Create conflicting specification (same channel name)
+        let mut conflicting_spec = Manifest::new("1.0.0".to_string());
+        let mut conflicting_channel = ChannelSpec::new("Conflicting Channel".to_string());
+        let conflicting_command = CommandSpec::new(
+            "Conflicting Command".to_string(), 
+            ResponseSpec::new("object".to_string()),
+        );
+        conflicting_channel.add_command("conflicting_cmd".to_string(), conflicting_command);
+        conflicting_spec.add_channel("test_channel".to_string(), conflicting_channel); // Same name as base
+        
+        // Merge should fail due to conflict
+        let result = ManifestParser::merge_specifications(&mut base_spec, &conflicting_spec);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_static_methods() {
+        let manifest = create_test_manifest();
+        
+        // Test static JSON serialization
+        let json_str = ManifestParser::serialize_to_json(&manifest).unwrap();
+        assert!(!json_str.is_empty());
+        
+        // Test static JSON parsing
+        let parsed_spec = ManifestParser::parse_json(&json_str).unwrap();
+        assert_eq!(parsed_spec.version, manifest.version);
+        
+        // Test static validation
+        let result = ManifestParser::validate_specification(&parsed_spec);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "yaml-support")]
+    #[test]
+    fn test_static_yaml_methods() {
+        let manifest = create_test_manifest();
+        
+        // Test static YAML serialization
+        let yaml_str = ManifestParser::serialize_to_yaml(&manifest).unwrap();
+        assert!(!yaml_str.is_empty());
+        
+        // Test static YAML parsing
+        let parsed_spec = ManifestParser::parse_yaml(&yaml_str).unwrap();
+        assert_eq!(parsed_spec.version, manifest.version);
     }
 }

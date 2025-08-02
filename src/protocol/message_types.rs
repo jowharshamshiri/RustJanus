@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 // Note: chrono types removed as they are not used in current SOCK_DGRAM implementation
-use crate::error::SocketError;
+use crate::error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData, JanusError};
 
 /// Socket command structure (exact cross-language parity with Go/Swift/TypeScript)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[allow(non_snake_case)]
 pub struct SocketCommand {
     /// Unique identifier for command tracking
@@ -87,22 +87,22 @@ impl SocketCommand {
     }
     
     /// Validate command structure
-    pub fn validate(&self) -> Result<(), SocketError> {
+    pub fn validate(&self) -> Result<(), JanusError> {
         if self.id.is_empty() {
-            return Err(SocketError::ValidationFailed("Command ID cannot be empty".to_string()));
+            return Err(JanusError::ValidationError("Command ID cannot be empty".to_string()));
         }
         
         if self.channelId.is_empty() {
-            return Err(SocketError::ValidationFailed("Channel ID cannot be empty".to_string()));
+            return Err(JanusError::ValidationError("Channel ID cannot be empty".to_string()));
         }
         
         if self.command.is_empty() {
-            return Err(SocketError::ValidationFailed("Command name cannot be empty".to_string()));
+            return Err(JanusError::ValidationError("Command name cannot be empty".to_string()));
         }
         
         if let Some(timeout) = self.timeout {
             if timeout <= 0.0 {
-                return Err(SocketError::ValidationFailed("Timeout must be positive".to_string()));
+                return Err(JanusError::ValidationError("Timeout must be positive".to_string()));
             }
         }
         
@@ -126,8 +126,8 @@ pub struct SocketResponse {
     /// Response data (optional)
     pub result: Option<serde_json::Value>,
     
-    /// Error information (optional)
-    pub error: Option<SocketError>,
+    /// Error information (optional) - JSON-RPC 2.0 compliant
+    pub error: Option<JSONRPCError>,
     
     /// Response timestamp (Unix timestamp as f64)
     pub timestamp: f64,
@@ -151,12 +151,12 @@ impl SocketResponse {
         }
     }
     
-    /// Create error response
+    /// Create error response with JSON-RPC 2.0 error
     #[allow(non_snake_case)]
     pub fn error(
         commandId: String,
         channelId: String,
-        error: SocketError,
+        error: JSONRPCError,
     ) -> Self {
         Self {
             commandId,
@@ -167,6 +167,7 @@ impl SocketResponse {
             timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         }
     }
+
     
     /// Create internal error response
     #[allow(non_snake_case)]
@@ -175,11 +176,10 @@ impl SocketResponse {
         channelId: String,
         message: String,
     ) -> Self {
-        Self::error(
-            commandId,
-            channelId,
-            SocketError::InternalError(message),
-        )
+        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
+        
+        let jsonrpc_error = JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(message));
+        Self::error(commandId, channelId, jsonrpc_error)
     }
     
     /// Create timeout error response
@@ -189,31 +189,41 @@ impl SocketResponse {
         channelId: String,
         timeout_seconds: f64,
     ) -> Self {
-        Self::error(
-            commandId.clone(),
-            channelId,
-            SocketError::HandlerTimeout(commandId, timeout_seconds),
-        )
+        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData};
+        use std::collections::HashMap;
+        
+        let context = HashMap::from([
+            ("commandId".to_string(), serde_json::Value::String(commandId.clone())),
+            ("timeoutSeconds".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(timeout_seconds).unwrap())),
+        ]);
+        
+        let jsonrpc_error = JSONRPCError::with_context(
+            JSONRPCErrorCode::HandlerTimeout,
+            Some(format!("Handler timed out after {} seconds", timeout_seconds)),
+            context,
+        );
+        
+        Self::error(commandId, channelId, jsonrpc_error)
     }
     
     /// Validate response structure
-    pub fn validate(&self) -> Result<(), SocketError> {
+    pub fn validate(&self) -> Result<(), JanusError> {
         if self.commandId.is_empty() {
-            return Err(SocketError::ValidationFailed("Command ID cannot be empty".to_string()));
+            return Err(JanusError::ValidationError("Command ID cannot be empty".to_string()));
         }
         
         if self.channelId.is_empty() {
-            return Err(SocketError::ValidationFailed("Channel ID cannot be empty".to_string()));
+            return Err(JanusError::ValidationError("Channel ID cannot be empty".to_string()));
         }
         
         // If success is true, should not have error
         if self.success && self.error.is_some() {
-            return Err(SocketError::ValidationFailed("Successful response cannot have error".to_string()));
+            return Err(JanusError::ValidationError("Successful response cannot have error".to_string()));
         }
         
         // If success is false, should have error
         if !self.success && self.error.is_none() {
-            return Err(SocketError::ValidationFailed("Failed response must have error".to_string()));
+            return Err(JanusError::ValidationError("Failed response must have error".to_string()));
         }
         
         Ok(())
@@ -284,21 +294,21 @@ impl SocketMessage {
     }
     
     /// Validate message structure
-    pub fn validate(&self) -> Result<(), SocketError> {
+    pub fn validate(&self) -> Result<(), JanusError> {
         if self.payload.is_empty() {
-            return Err(SocketError::ValidationFailed("Message payload cannot be empty".to_string()));
+            return Err(JanusError::ValidationError("Message payload cannot be empty".to_string()));
         }
         
         // Try to decode based on type to ensure payload is valid
         match self.message_type {
             MessageType::Command => {
                 let command = self.decode_command()
-                    .map_err(|e| SocketError::ValidationFailed(format!("Invalid command payload: {}", e)))?;
+                    .map_err(|e| JanusError::ValidationError(format!("Invalid command payload: {}", e)))?;
                 command.validate()?;
             },
             MessageType::Response => {
                 let response = self.decode_response()
-                    .map_err(|e| SocketError::ValidationFailed(format!("Invalid response payload: {}", e)))?;
+                    .map_err(|e| JanusError::ValidationError(format!("Invalid response payload: {}", e)))?;
                 response.validate()?;
             },
         }
@@ -341,10 +351,13 @@ impl SocketMessage {
     
     /// Create a simple error response
     pub fn simple_error(command_id: &str, channel_id: &str, error_message: &str) -> Result<Self, serde_json::Error> {
+        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
+        
+        let jsonrpc_error = JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(error_message.to_string()));
         let response = SocketResponse::error(
             command_id.to_string(),
             channel_id.to_string(),
-            SocketError::ProcessingError(error_message.to_string()),
+            jsonrpc_error,
         );
         
         Self::response(response)

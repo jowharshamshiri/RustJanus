@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// API specification structure (exact SwiftJanus parity)
+/// Manifest structure (exact SwiftJanus parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ApiSpecification {
+pub struct Manifest {
     /// API version
     pub version: String,
     
@@ -14,8 +14,8 @@ pub struct ApiSpecification {
     pub models: Option<HashMap<String, ModelSpec>>,
 }
 
-impl ApiSpecification {
-    /// Create a new API specification
+impl Manifest {
+    /// Create a new Manifest
     pub fn new(version: String) -> Self {
         Self {
             version,
@@ -24,9 +24,9 @@ impl ApiSpecification {
         }
     }
     
-    /// Load API specification from file (async wrapper)
+    /// Load Manifest from file (async wrapper)
     pub async fn from_file(path: &str) -> Result<Self, crate::error::JanusError> {
-        crate::specification::ApiSpecificationParser::from_file(path).await
+        crate::specification::ManifestParser::from_file(path).await
     }
     
     /// Add a channel to the specification
@@ -469,15 +469,15 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_api_specification_creation() {
-        let mut api_spec = ApiSpecification::new("1.0.0".to_string());
+    fn test_manifest_creation() {
+        let mut manifest = Manifest::new("1.0.0".to_string());
         
         let channel = ChannelSpec::new("Test channel".to_string());
-        api_spec.add_channel("test".to_string(), channel);
+        manifest.add_channel("test".to_string(), channel);
         
-        assert_eq!(api_spec.version, "1.0.0");
-        assert_eq!(api_spec.channels.len(), 1);
-        assert!(api_spec.get_channel("test").is_some());
+        assert_eq!(manifest.version, "1.0.0");
+        assert_eq!(manifest.channels.len(), 1);
+        assert!(manifest.get_channel("test").is_some());
     }
     
     #[test]
@@ -567,21 +567,21 @@ mod tests {
     }
     
     #[test]
-    fn test_api_spec_command_lookup() {
-        let mut api_spec = ApiSpecification::new("1.0.0".to_string());
+    fn test_manifest_command_lookup() {
+        let mut manifest = Manifest::new("1.0.0".to_string());
         
         let mut channel = ChannelSpec::new("Test channel".to_string());
         let response = ResponseSpec::new("string".to_string());
         let command = CommandSpec::new("Test command".to_string(), response);
         channel.add_command("test-cmd".to_string(), command);
         
-        api_spec.add_channel("test-channel".to_string(), channel);
+        manifest.add_channel("test-channel".to_string(), channel);
         
-        assert!(api_spec.has_command("test-channel", "test-cmd"));
-        assert!(!api_spec.has_command("test-channel", "nonexistent"));
-        assert!(!api_spec.has_command("nonexistent", "test-cmd"));
+        assert!(manifest.has_command("test-channel", "test-cmd"));
+        assert!(!manifest.has_command("test-channel", "nonexistent"));
+        assert!(!manifest.has_command("nonexistent", "test-cmd"));
         
-        let cmd_spec = api_spec.get_command_spec("test-channel", "test-cmd");
+        let cmd_spec = manifest.get_command_spec("test-channel", "test-cmd");
         assert!(cmd_spec.is_some());
         assert_eq!(cmd_spec.unwrap().description, "Test command");
     }

@@ -65,6 +65,9 @@ pub enum JanusError {
     
     #[error("Specification error in {file}:{line}: {message}")]
     SpecificationError { file: String, line: u32, message: String },
+    
+    #[error("Message framing error: {0}")]
+    MessageFramingError(String),
 }
 
 impl From<std::io::Error> for JanusError {

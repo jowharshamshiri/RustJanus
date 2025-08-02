@@ -1,10 +1,10 @@
 /*!
  * Response Validator for Rust Janus Implementation
- * Validates command handler responses against API specification ResponseSpec models
+ * Validates command handler responses against Manifest ResponseSpec models
  * Achieves 100% parity with TypeScript and Go implementations
  */
 
-use crate::specification::model_registry::{ApiSpecification, ResponseSpec, ArgumentSpec, ModelSpec};
+use crate::specification::model_registry::{Manifest, ResponseSpec, ArgumentSpec, ModelSpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Instant;
@@ -56,14 +56,14 @@ pub struct ValidationResult {
 }
 
 /// Response validator that validates command handler responses
-/// against API specification ResponseSpec models
+/// against Manifest ResponseSpec models
 pub struct ResponseValidator {
-    specification: ApiSpecification,
+    specification: Manifest,
 }
 
 impl ResponseValidator {
-    /// Create a new response validator with the given API specification
-    pub fn new(specification: ApiSpecification) -> Self {
+    /// Create a new response validator with the given Manifest
+    pub fn new(specification: Manifest) -> Self {
         Self { specification }
     }
 
@@ -98,7 +98,7 @@ impl ResponseValidator {
                     valid: false,
                     errors: vec![ValidationError {
                         field: "channelId".to_string(),
-                        message: format!("Channel '{}' not found in API specification", channel_id),
+                        message: format!("Channel '{}' not found in Manifest", channel_id),
                         expected: "valid channel ID".to_string(),
                         actual: Value::String(channel_id.to_string()),
                         context: None,

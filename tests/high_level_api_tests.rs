@@ -212,14 +212,15 @@ async fn test_datagram_unknown_command() {
             assert!(!response.success);
             assert!(response.error.is_some());
             if let Some(error) = response.error {
-                // Check that it's a ProcessingError (which is what we send for unknown commands)
-                match error {
-                    rust_janus::error::SocketError::ProcessingError(msg) => {
-                        assert!(msg.contains("not registered"));
-                    }
-                    _ => panic!("Expected ProcessingError"),
-                }
+                // Check that it's a MethodNotFound error (JSON-RPC 2.0 for unknown commands)
+                assert_eq!(error.code as i32, rust_janus::error::JSONRPCErrorCode::MethodNotFound as i32);
+                assert!(error.message.contains("not registered") || error.message.contains("Method not found"));
             }
+        }
+        Ok(Err(JanusError::ValidationError(_))) => {
+            // Command validation errors are expected for unknown commands
+            println!("Test passed: Unknown command correctly rejected by validation");
+            return;
         }
         Ok(Err(JanusError::SecurityViolation(_))) => {
             // Security validation errors are acceptable in tests

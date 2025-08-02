@@ -1,7 +1,7 @@
 use crate::core::{CoreJanusClient, SecurityValidator};
 use crate::error::JanusError;
 use crate::config::JanusClientConfig;
-use crate::specification::ApiSpecification;
+use crate::specification::Manifest;
 use crate::protocol::message_types::{SocketCommand, SocketResponse};
 use crate::protocol::response_tracker::{ResponseTracker, TrackerConfig, CommandStatistics};
 use std::collections::HashMap;
@@ -11,27 +11,63 @@ use uuid::Uuid;
 // Note: SocketCommand, SocketResponse, and SocketError types are imported from message_types module
 // This ensures cross-language parity and eliminates type duplication
 
+/// Simulate connection state for SOCK_DGRAM compatibility
+#[derive(Debug, Clone)]
+pub struct ConnectionState {
+    pub is_connected: bool,
+    pub last_activity: std::time::SystemTime,
+    pub messages_sent: u64,
+    pub responses_received: u64,
+}
+
+impl ConnectionState {
+    pub fn new() -> Self {
+        Self {
+            is_connected: false,
+            last_activity: std::time::SystemTime::now(),
+            messages_sent: 0,
+            responses_received: 0,
+        }
+    }
+    
+    pub fn with_connection(is_connected: bool) -> Self {
+        Self {
+            is_connected,
+            last_activity: std::time::SystemTime::now(),
+            messages_sent: 0,
+            responses_received: 0,
+        }
+    }
+}
+
 /// High-level API client for SOCK_DGRAM Unix socket communication
 /// Connectionless implementation with command validation and response correlation
 #[derive(Debug)]
 pub struct JanusClient {
     socket_path: String,
     channel_id: String,
-    api_spec: Option<ApiSpecification>,
+    manifest: Option<Manifest>,
     config: JanusClientConfig,
     core_client: CoreJanusClient,
     response_tracker: ResponseTracker,
+    connection_state: std::sync::Mutex<ConnectionState>,
     // Note: SecurityValidator is used via static methods, no instance needed
 }
 
 impl JanusClient {
     /// Create a new datagram API client
-    /// API specification will be fetched during operations when needed
+    /// Manifest will be fetched during operations when needed
     pub async fn new(
         socket_path: String,
         channel_id: String,
         config: JanusClientConfig,
     ) -> Result<Self, JanusError> {
+        // Validate socket path
+        SecurityValidator::validate_socket_path(&socket_path)?;
+        
+        // Validate channel ID
+        SecurityValidator::validate_channel_id(&channel_id, &config)?;
+        
         let core_client = CoreJanusClient::new(socket_path.clone(), config.clone())?;
         
         // Initialize response tracker for advanced client features
@@ -45,26 +81,32 @@ impl JanusClient {
         Ok(Self {
             socket_path,
             channel_id,
-            api_spec: None,  // Will be fetched during operations when needed
+            manifest: None,  // Will be fetched during operations when needed
             config,
             core_client,
             response_tracker,
+            connection_state: std::sync::Mutex::new(ConnectionState::new()),
         })
     }
     
-    /// Fetch API specification from server
+    /// Fetch Manifest from server
     async fn fetch_specification_from_server(
         core_client: &CoreJanusClient,
         _config: &JanusClientConfig,
-    ) -> Result<ApiSpecification, JanusError> {
+    ) -> Result<Manifest, JanusError> {
         // Generate response socket path
         let response_socket_path = core_client.generate_response_socket_path();
         
-        // Create spec command
-        let spec_command = serde_json::json!({
-            "command": "spec",
-            "reply_to": response_socket_path
-        });
+        // Create proper SocketCommand for spec request
+        let spec_command = SocketCommand {
+            id: uuid::Uuid::new_v4().to_string(),
+            channelId: "system".to_string(), // Use system channel for spec requests
+            command: "spec".to_string(),
+            reply_to: Some(response_socket_path.clone()),
+            args: None,
+            timeout: Some(10.0),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+        };
         
         let command_data = serde_json::to_vec(&spec_command)
             .map_err(|e| JanusError::SerializationError {
@@ -78,8 +120,8 @@ impl JanusClient {
             .send_datagram(&command_data, &response_socket_path)
             .await?;
         
-        // Parse response JSON
-        let response: serde_json::Value = serde_json::from_slice(&response_data)
+        // Parse response as SocketResponse
+        let response: SocketResponse = serde_json::from_slice(&response_data)
             .map_err(|e| JanusError::SerializationError {
                 file: "janus_client.rs".to_string(),
                 line: 83,
@@ -87,16 +129,20 @@ impl JanusClient {
             })?;
         
         // Check for error in response
-        if let Some(error) = response.get("error") {
+        if !response.success {
+            let error_msg = response.error
+                .as_ref()
+                .map(|e| e.message.clone())
+                .unwrap_or_else(|| "Unknown error".to_string());
             return Err(JanusError::ProtocolError {
                 file: "janus_client.rs".to_string(),
                 line: 91,
-                message: format!("Server returned error: {}", error),
+                message: format!("Server returned error: {}", error_msg),
             });
         }
         
         // Extract specification from response
-        let spec_data = response.get("result")
+        let spec_data = response.result.as_ref()
             .ok_or_else(|| JanusError::ProtocolError {
                 file: "janus_client.rs".to_string(),
                 line: 99,
@@ -104,19 +150,19 @@ impl JanusClient {
             })?;
         
         // Parse the specification
-        let api_spec: ApiSpecification = serde_json::from_value(spec_data.clone())
+        let manifest: Manifest = serde_json::from_value(spec_data.clone())
             .map_err(|e| JanusError::SerializationError {
                 file: "janus_client.rs".to_string(),
                 line: 107,
                 message: format!("Failed to parse server specification: {}", e),
             })?;
         
-        Ok(api_spec)
+        Ok(manifest)
     }
     
-    /// Ensure API specification is loaded, fetching from server if needed
-    async fn ensure_api_spec_loaded(&mut self) -> Result<(), JanusError> {
-        if self.api_spec.is_some() {
+    /// Ensure Manifest is loaded, fetching from server if needed
+    async fn ensure_manifest_loaded(&mut self) -> Result<(), JanusError> {
+        if self.manifest.is_some() {
             return Ok(()); // Already loaded
         }
         
@@ -134,7 +180,7 @@ impl JanusClient {
             ));
         }
         
-        self.api_spec = Some(fetched_spec);
+        self.manifest = Some(fetched_spec);
         Ok(())
     }
     
@@ -160,26 +206,33 @@ impl JanusClient {
             timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         };
         
-        // Ensure API specification is loaded for validation
-        if self.config.enable_validation {
-            self.ensure_api_spec_loaded().await?;
-        }
-        
-        // Validate command against API specification
-        if let Some(ref spec) = self.api_spec {
-            self.validate_command_against_spec(spec, &socket_command)?;
-        }
-        
         // Apply security validation
+        SecurityValidator::validate_command_name(command, &self.config)?;
+        SecurityValidator::validate_args_size(&socket_command.args, &self.config)?;
         SecurityValidator::validate_socket_path(&response_socket_path)?;
         
-        // Serialize command
+        // Serialize command for message size validation
         let command_data = serde_json::to_vec(&socket_command)
             .map_err(|e| JanusError::SerializationError { 
                 file: "janus_client.rs".to_string(), 
-                line: 111, 
+                line: 193, 
                 message: format!("Failed to serialize command: {}", e) 
             })?;
+        
+        // Validate message size
+        SecurityValidator::validate_message_size(command_data.len(), &self.config)?;
+        
+        // Ensure Manifest is loaded for validation
+        if self.config.enable_validation {
+            self.ensure_manifest_loaded().await?;
+        }
+        
+        // Validate command against Manifest (skip for built-in commands)
+        if let Some(ref spec) = self.manifest {
+            if !Self::is_builtin_command(command) {
+                self.validate_command_against_spec(spec, &socket_command)?;
+            }
+        }
         
         // Send datagram and wait for response
         let response_data = self.core_client
@@ -217,6 +270,9 @@ impl JanusClient {
             });
         }
         
+        // Update connection state after successful communication
+        self.update_connection_state(1, 1);
+        
         Ok(response)
     }
     
@@ -240,12 +296,11 @@ impl JanusClient {
             timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
         };
         
-        // Validate command against API specification
-        if let Some(ref spec) = self.api_spec {
-            self.validate_command_against_spec(spec, &socket_command)?;
-        }
+        // Apply security validation
+        SecurityValidator::validate_command_name(command, &self.config)?;
+        SecurityValidator::validate_args_size(&socket_command.args, &self.config)?;
         
-        // Serialize command
+        // Serialize command for message size validation
         let command_data = serde_json::to_vec(&socket_command)
             .map_err(|e| JanusError::SerializationError { 
                 file: "janus_client.rs".to_string(), 
@@ -253,8 +308,19 @@ impl JanusClient {
                 message: format!("Failed to serialize command: {}", e) 
             })?;
         
+        // Validate message size
+        SecurityValidator::validate_message_size(command_data.len(), &self.config)?;
+        
+        // Validate command against Manifest
+        if let Some(ref spec) = self.manifest {
+            self.validate_command_against_spec(spec, &socket_command)?;
+        }
+        
         // Send datagram without waiting for response
         self.core_client.send_datagram_no_response(&command_data).await?;
+        
+        // Update connection state after successful send
+        self.update_connection_state(1, 0);
         
         Ok(())
     }
@@ -264,17 +330,17 @@ impl JanusClient {
         self.core_client.test_connection().await
     }
     
-    /// Validate command against API specification
+    /// Validate command against Manifest
     fn validate_command_against_spec(
         &self,
-        spec: &ApiSpecification,
+        spec: &Manifest,
         command: &SocketCommand,
     ) -> Result<(), JanusError> {
-        // Check if command is reserved (built-in commands should never be in API specs)
+        // Check if command is reserved (built-in commands should never be in Manifests)
         let builtin_commands = ["ping", "echo", "get_info", "validate", "slow_process", "spec"];
         if builtin_commands.contains(&command.command.as_str()) {
             return Err(JanusError::ValidationError(format!(
-                "Command '{}' is reserved and cannot be used from API specification",
+                "Command '{}' is reserved and cannot be used from Manifest",
                 command.command
             )));
         }
@@ -282,7 +348,7 @@ impl JanusClient {
         // Check if channel exists
         let channel = spec.channels.get(&command.channelId).ok_or_else(|| {
             JanusError::ValidationError(format!(
-                "Channel {} not found in API specification",
+                "Channel {} not found in Manifest",
                 command.channelId
             ))
         })?;
@@ -377,9 +443,9 @@ impl JanusClient {
         &self.socket_path
     }
     
-    /// Get API specification
-    pub fn api_specification(&self) -> Option<&ApiSpecification> {
-        self.api_spec.as_ref()
+    /// Get Manifest
+    pub fn manifest(&self) -> Option<&Manifest> {
+        self.manifest.as_ref()
     }
     
     /// Get configuration for backward compatibility
@@ -388,8 +454,8 @@ impl JanusClient {
     }
     
     /// Get specification for backward compatibility  
-    pub fn specification(&self) -> Option<&ApiSpecification> {
-        self.api_spec.as_ref()
+    pub fn specification(&self) -> Option<&Manifest> {
+        self.manifest.as_ref()
     }
     
     /// Send a ping command and return success/failure
@@ -402,11 +468,11 @@ impl JanusClient {
     }
     
     /// Register command handler - validates command exists in specification (SOCK_DGRAM compatibility)
-    /// This validates that the command exists in the API specification for the client's channel.
+    /// This validates that the command exists in the Manifest for the client's channel.
     /// SOCK_DGRAM doesn't actually use handlers, but validation ensures compatibility.
     pub fn register_command_handler<T>(&self, command: &str, _handler: T) -> Result<(), JanusError> {
-        // Validate command exists in the API specification for the client's channel
-        if let Some(ref spec) = self.api_spec {
+        // Validate command exists in the Manifest for the client's channel
+        if let Some(ref spec) = self.manifest {
             if let Some(channel) = spec.channels.get(&self.channel_id) {
                 if !channel.commands.contains_key(command) {
                     return Err(JanusError::InvalidArgument(
@@ -432,10 +498,28 @@ impl JanusClient {
         Ok(())
     }
     
-    /// Always returns true for backward compatibility (SOCK_DGRAM doesn't track connections)
+    /// Check if connected (legacy compatibility - SOCK_DGRAM doesn't maintain connections)
     pub fn is_connected(&self) -> bool {
-        // SOCK_DGRAM doesn't track connections - return true for backward compatibility
-        true
+        // In SOCK_DGRAM, we don't maintain persistent connections
+        // Check if we can reach the server by checking if socket file exists
+        std::path::Path::new(&self.socket_path).exists()
+    }
+
+    // MARK: - Connection State Simulation
+    
+    /// Get simulated connection state
+    pub fn get_connection_state(&self) -> ConnectionState {
+        self.connection_state.lock().unwrap().clone()
+    }
+    
+    /// Update connection state after successful operation
+    fn update_connection_state(&self, messages_sent: u64, responses_received: u64) {
+        if let Ok(mut state) = self.connection_state.lock() {
+            state.is_connected = true;
+            state.last_activity = std::time::SystemTime::now();
+            state.messages_sent += messages_sent;
+            state.responses_received += responses_received;
+        }
     }
 
     // MARK: - Advanced Client Features (Response Correlation System)
@@ -456,7 +540,7 @@ impl JanusClient {
         // Send the command asynchronously
         let core_client = self.core_client.clone();
         let channel_id = self.channel_id.clone();
-        let api_spec = self.api_spec.clone();
+        let manifest = self.manifest.clone();
         let enable_validation = self.config.enable_validation;
         let response_tracker = self.response_tracker.clone();
         let cmd_id = command_id.clone();
@@ -479,7 +563,7 @@ impl JanusClient {
 
             // Validate command if needed
             if enable_validation {
-                if let Some(spec) = &api_spec {
+                if let Some(spec) = &manifest {
                     if !Self::is_builtin_command(&command) {
                         // Perform validation (simplified for async context)
                         // Full validation would be more complex
@@ -661,10 +745,11 @@ impl Clone for JanusClient {
         Self {
             socket_path: self.socket_path.clone(),
             channel_id: self.channel_id.clone(),
-            api_spec: self.api_spec.clone(),
+            manifest: self.manifest.clone(),
             config: self.config.clone(),
             core_client: self.core_client.clone(),
             response_tracker,
+            connection_state: std::sync::Mutex::new(ConnectionState::new()),
         }
     }
 }

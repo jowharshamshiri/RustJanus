@@ -2,13 +2,13 @@
 //!
 //! Enterprise-grade Unix domain socket API communication library for Rust.
 //! This version achieves exact functional parity with SwiftJanus, providing
-//! stateless communication, comprehensive security, and API specification-driven development.
+//! stateless communication, comprehensive security, and Manifest-driven development.
 //!
 //! ## Features
 //!
 //! - **Stateless Communication**: Ephemeral connections with UUID tracking
 //! - **Security Framework**: Path validation, resource limits, attack prevention
-//! - **API Specification**: JSON/YAML specification-driven development
+//! - **Manifest**: JSON/YAML specification-driven development
 //! - **Bilateral Timeouts**: Caller and handler timeout management
 //! - **Connection Pooling**: Efficient connection reuse with limits
 //! - **Comprehensive Validation**: Input sanitization and type checking
@@ -16,15 +16,15 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use rust_janus::{JanusClient, ApiSpecification, JanusClientConfig};
+//! use rust_janus::{JanusClient, Manifest, JanusClientConfig};
 //! use std::collections::HashMap;
 //! use serde_json::json;
 //! use std::time::Duration;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Load API specification
-//!     let api_spec = ApiSpecification::from_file("api-spec.json").await?;
+//!     // Load Manifest
+//!     let manifest = Manifest::from_file("manifest.json").await?;
 //!     
 //!     // Create client configuration
 //!     let config = JanusClientConfig::default();
@@ -33,7 +33,7 @@
 //!     let client = JanusClient::new(
 //!         "/tmp/my_socket.sock".to_string(),
 //!         "my-channel".to_string(),
-//!         Some(api_spec),
+//!         Some(manifest),
 //!         config
 //!     )?;
 //!     
@@ -80,16 +80,16 @@ pub use server::{JanusServer, JanusCommandHandler};
 
 // Specification exports (API definition layer)
 pub use specification::{
-    ApiSpecification, ChannelSpec, CommandSpec, ArgumentSpec,
+    Manifest, ChannelSpec, CommandSpec, ArgumentSpec,
     ValidationSpec, ResponseSpec, ErrorCodeSpec, ModelSpec,
-    ApiSpecificationParser, ValidationEngine, ArgumentValidator
+    ManifestParser, ValidationEngine, ArgumentValidator
 };
 
 // Configuration exports
 pub use config::JanusClientConfig;
 
 // Error exports
-pub use error::{JanusError, SocketError};
+pub use error::JanusError;
 
 // Result type alias
 pub type Result<T> = std::result::Result<T, JanusError>;
@@ -105,11 +105,11 @@ pub use chrono::{DateTime, Utc};
 /// Prelude module for convenient importing
 pub mod prelude {
     pub use crate::{
-        JanusClient, CoreJanusClient, ApiSpecification, JanusClientConfig,
+        JanusClient, CoreJanusClient, Manifest, JanusClientConfig,
         // Connection-based classes removed
         SocketCommand, SocketResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
-        JanusError, SocketError, Result,
+        JanusError, Result,
         ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,
         Deserialize, Serialize, JsonValue, json,
         DateTime, Utc,

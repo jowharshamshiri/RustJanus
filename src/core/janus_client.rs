@@ -143,9 +143,9 @@ impl CoreJanusClient {
             .as_nanos();
         let pid = std::process::id();
         let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let thread_id = std::thread::current().id();
         
-        format!("/tmp/rust_janus_client_{}_{}_{:?}_{}.sock", pid, timestamp, thread_id, counter)
+        // Use only allowed characters for security validator
+        format!("/tmp/rust_janus_client_{}_{}__{}.sock", pid, timestamp, counter)
     }
     
     /// Get socket path

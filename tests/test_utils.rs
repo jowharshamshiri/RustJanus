@@ -11,9 +11,9 @@ pub fn create_test_socket_path() -> (TempDir, PathBuf) {
     (temp_dir, socket_path)
 }
 
-/// Fetch API specification from a running test server
+/// Fetch Manifest from a running test server
 /// This replaces hardcoded specifications with dynamic fetching for better test accuracy
-pub async fn fetch_test_api_spec(server_socket_path: &str) -> ApiSpecification {
+pub async fn fetch_test_manifest(server_socket_path: &str) -> Manifest {
     use rust_janus::core::CoreJanusClient;
     use rust_janus::config::JanusClientConfig;
     
@@ -66,22 +66,22 @@ pub async fn fetch_test_api_spec(server_socket_path: &str) -> ApiSpecification {
     let spec_data = response.get("result")
         .expect("Missing 'result' field in spec response");
     
-    // Parse API specification
-    ApiSpecificationParser::from_json(&serde_json::to_string(spec_data).unwrap())
-        .expect("Failed to parse API specification from server response")
+    // Parse Manifest
+    ManifestParser::from_json(&serde_json::to_string(spec_data).unwrap())
+        .expect("Failed to parse Manifest from server response")
 }
 
-/// Load test API specification from test-api-spec.json file
-pub fn load_test_api_spec() -> ApiSpecification {
-    let spec_path = "test-api-spec.json";
+/// Load test Manifest from test-manifest.json file
+pub fn load_test_manifest() -> Manifest {
+    let spec_path = "test-manifest.json";
     let spec_data = std::fs::read_to_string(spec_path)
-        .expect("Failed to read test-api-spec.json");
+        .expect("Failed to read test-manifest.json");
     
     let _spec_json: serde_json::Value = serde_json::from_str(&spec_data)
-        .expect("Failed to parse test-api-spec.json");
+        .expect("Failed to parse test-manifest.json");
     
-    ApiSpecificationParser::from_json(&spec_data)
-        .expect("Failed to parse API specification from test-api-spec.json")
+    ManifestParser::from_json(&spec_data)
+        .expect("Failed to parse Manifest from test-manifest.json")
 }
 
 

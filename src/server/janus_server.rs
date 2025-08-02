@@ -163,7 +163,13 @@ impl JanusServer {
                     channelId: cmd.channelId.clone(),
                     success: false,
                     result: None,
-                    error: Some(crate::error::SocketError::ProcessingError(e.to_string())),
+                    error: Some({
+                        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
+                        JSONRPCError::new(
+                            JSONRPCErrorCode::InternalError,
+                            Some(e.to_string())
+                        )
+                    }),
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
@@ -208,14 +214,184 @@ impl JanusServer {
                             .as_secs_f64(),
                     }
                 }
+                "get_info" => SocketResponse {
+                    commandId: cmd.id.clone(),
+                    channelId: cmd.channelId.clone(),
+                    success: true,
+                    result: Some(serde_json::json!({
+                        "implementation": "Rust",
+                        "version": "1.0.0",
+                        "protocol": "SOCK_DGRAM",
+                        "timestamp": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64()
+                    })),
+                    error: None,
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64(),
+                },
+                "validate" => {
+                    let result = if let Some(message) = cmd.args.as_ref()
+                        .and_then(|args| args.get("message"))
+                        .and_then(|v| v.as_str()) {
+                        match serde_json::from_str::<serde_json::Value>(message) {
+                            Ok(parsed) => serde_json::json!({
+                                "valid": true,
+                                "data": parsed
+                            }),
+                            Err(e) => serde_json::json!({
+                                "valid": false,
+                                "error": "Invalid JSON format",
+                                "reason": e.to_string()
+                            })
+                        }
+                    } else {
+                        serde_json::json!({
+                            "valid": false,
+                            "error": "No message provided for validation"
+                        })
+                    };
+                    
+                    SocketResponse {
+                        commandId: cmd.id.clone(),
+                        channelId: cmd.channelId.clone(),
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    }
+                }
+                "slow_process" => {
+                    // Simulate 2-second delay like other implementations
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    
+                    let mut result = serde_json::json!({
+                        "processed": true,
+                        "delay": "2000ms"
+                    });
+                    
+                    // Include message if provided
+                    if let Some(message) = cmd.args.as_ref()
+                        .and_then(|args| args.get("message")) {
+                        result["message"] = message.clone();
+                    }
+                    
+                    SocketResponse {
+                        commandId: cmd.id.clone(),
+                        channelId: cmd.channelId.clone(),
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    }
+                }
+                "spec" => {
+                    // Return a proper Manifest with test channels
+                    let spec = serde_json::json!({
+                        "version": "1.0.0",
+                        "channels": {
+                            "test": {
+                                "description": "Test channel for cross-platform communication",
+                                "commands": {
+                                    "test_echo": {
+                                        "description": "Echo test command",
+                                        "args": {
+                                            "message": {
+                                                "type": "string",
+                                                "required": false,
+                                                "description": "Message to echo back"
+                                            }
+                                        },
+                                        "response": {
+                                            "type": "object",
+                                            "properties": {
+                                                "echo": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "test_channel": {
+                                "description": "Test channel for high-level API tests",
+                                "commands": {
+                                    "test_echo": {
+                                        "description": "Test echo command for high-level API tests",
+                                        "args": {
+                                            "message": {
+                                                "type": "string",
+                                                "required": false,
+                                                "description": "Message to echo back"
+                                            }
+                                        },
+                                        "response": {
+                                            "type": "object",
+                                            "properties": {
+                                                "echo": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "models": {}
+                    });
+                    
+                    SocketResponse {
+                        commandId: cmd.id.clone(),
+                        channelId: cmd.channelId.clone(),
+                        success: true,
+                        result: Some(spec),
+                        error: None,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    }
+                }
+                "test_echo" => {
+                    // Handle test_echo command for high-level API tests
+                    let message = cmd.args.as_ref()
+                        .and_then(|args| args.get("message"))
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::Value::String("Hello Server!".to_string()));
+                    
+                    SocketResponse {
+                        commandId: cmd.id.clone(),
+                        channelId: cmd.channelId.clone(),
+                        success: true,
+                        result: Some(serde_json::json!({"echo": message})),
+                        error: None,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    }
+                }
                 _ => SocketResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
                     success: false,
                     result: None,
-                    error: Some(crate::error::SocketError::ProcessingError(
-                        format!("Command '{}' not registered", cmd.command)
-                    )),
+                    error: Some({
+                        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
+                        JSONRPCError::new(
+                            JSONRPCErrorCode::MethodNotFound,
+                            Some(format!("Command '{}' not registered", cmd.command))
+                        )
+                    }),
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()

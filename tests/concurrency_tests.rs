@@ -4,21 +4,22 @@ use test_utils::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
+use tokio::sync::Mutex;
 
 /// Concurrency Tests (13 tests) - Exact SwiftJanus parity
 /// Tests high concurrency, race conditions, thread safety, deadlock prevention
 
 #[tokio::test]
 async fn test_high_concurrency_command_execution() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     let success_count = Arc::new(AtomicUsize::new(0));
     let error_count = Arc::new(AtomicUsize::new(0));
@@ -34,7 +35,7 @@ async fn test_high_concurrency_command_execution() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
             
-            match client_clone.send_command(
+            match client_clone.lock().await.send_command(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -61,7 +62,7 @@ async fn test_high_concurrency_command_execution() {
 
 #[tokio::test]
 async fn test_concurrent_client_creation() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -69,7 +70,7 @@ async fn test_concurrent_client_creation() {
     let mut tasks = Vec::new();
     for i in 0..50 {
         let socket_path_clone = socket_path.clone();
-        let _api_spec_clone = _api_spec.clone();
+        let _manifest_clone = _manifest.clone();
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
@@ -101,15 +102,15 @@ async fn test_concurrent_client_creation() {
 
 #[tokio::test]
 async fn test_concurrent_handler_registration() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // Register 20 handlers concurrently
     let mut tasks = Vec::new();
@@ -119,7 +120,7 @@ async fn test_concurrent_handler_registration() {
         tasks.push(tokio::spawn(async move {
             let mut args = HashMap::new();
             args.insert("handler_id".to_string(), serde_json::Value::String(format!("handler-{}", i)));
-            client_clone.send_command(
+            client_clone.lock().await.send_command(
                 "echo-test",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -146,16 +147,16 @@ async fn test_concurrent_handler_registration() {
 
 #[tokio::test]
 async fn test_concurrent_connection_pool_usage() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let mut config = create_test_config();
     config.max_concurrent_connections = 10; // Limited pool
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // 50 operations on 10-connection pool
     let mut tasks = Vec::new();
@@ -166,7 +167,7 @@ async fn test_concurrent_connection_pool_usage() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("pool_test_{}", i)));
             
-            client_clone.send_command(
+            client_clone.lock().await.send_command(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -199,15 +200,15 @@ async fn test_concurrent_connection_pool_usage() {
 
 #[tokio::test]
 async fn test_concurrent_state_modification() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     let counter = Arc::new(AtomicUsize::new(0));
     
@@ -219,8 +220,8 @@ async fn test_concurrent_state_modification() {
         
         tasks.push(tokio::spawn(async move {
             // Access client configuration concurrently
-            let _config = client_clone.configuration();
-            let _spec = client_clone.specification();
+            let _config = client_clone.lock().await.configuration();
+            let _spec = client_clone.lock().await.specification();
             
             counter_clone.fetch_add(1, Ordering::SeqCst);
         }));
@@ -233,7 +234,7 @@ async fn test_concurrent_state_modification() {
 
 #[tokio::test]
 async fn test_concurrent_connection_management() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -241,7 +242,7 @@ async fn test_concurrent_connection_management() {
     let mut tasks = Vec::new();
     for i in 0..30 {
         let socket_path_clone = socket_path.clone();
-        let _api_spec_clone = _api_spec.clone();
+        let _manifest_clone = _manifest.clone();
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
@@ -276,15 +277,15 @@ async fn test_concurrent_connection_management() {
 
 #[tokio::test]
 async fn test_thread_safety_of_configuration() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // 100 concurrent configuration accesses
     let mut tasks = Vec::new();
@@ -292,7 +293,7 @@ async fn test_thread_safety_of_configuration() {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
-            let config = client_clone.configuration();
+            let config = client_clone.lock().await.configuration();
             assert!(config.max_concurrent_connections > 0);
             assert!(config.max_message_size > 0);
             assert!(config.connection_timeout.as_secs() > 0);
@@ -303,16 +304,16 @@ async fn test_thread_safety_of_configuration() {
 }
 
 #[tokio::test]
-async fn test_thread_safety_of_api_spec_access() {
-    let _api_spec = load_test_api_spec();
+async fn test_thread_safety_of_manifest_access() {
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // 100 concurrent specification accesses
     let mut tasks = Vec::new();
@@ -320,7 +321,7 @@ async fn test_thread_safety_of_api_spec_access() {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
-            let spec = client_clone.specification().unwrap();
+            let spec = client_clone.lock().await.specification().unwrap();
             assert_eq!(spec.version, "1.0.0");
             assert!(!spec.channels.is_empty());
         }));
@@ -331,15 +332,15 @@ async fn test_thread_safety_of_api_spec_access() {
 
 #[tokio::test]
 async fn test_no_deadlock_under_load() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // 50 tasks with 10-second timeout to detect deadlocks
     let mut tasks = Vec::new();
@@ -353,7 +354,7 @@ async fn test_no_deadlock_under_load() {
                     let mut args = HashMap::new();
                     args.insert("test_arg".to_string(), serde_json::Value::String(format!("deadlock_test_{}", i)));
                     
-                    client_clone.send_command(
+                    client_clone.lock().await.send_command(
                         "echo",
                         Some(args),
                         Some(std::time::Duration::from_millis(100)),
@@ -381,15 +382,15 @@ async fn test_no_deadlock_under_load() {
 
 #[tokio::test]
 async fn test_no_deadlock_with_mixed_operations() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     let mut tasks = Vec::new();
     
@@ -400,7 +401,7 @@ async fn test_no_deadlock_with_mixed_operations() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("mixed_test_{}", i)));
             
-            client_clone.send_command(
+            client_clone.lock().await.send_command(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -414,7 +415,7 @@ async fn test_no_deadlock_with_mixed_operations() {
         tasks.push(tokio::spawn(async move {
             let mut args = HashMap::new();
             args.insert("handler_id".to_string(), serde_json::Value::String(format!("mixed_handler_{}", i)));
-            client_clone.send_command(
+            client_clone.lock().await.send_command(
                 "echo-test",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -426,8 +427,8 @@ async fn test_no_deadlock_with_mixed_operations() {
     for _ in 0..10 {
         let client_clone = client.clone();
         tasks.push(tokio::spawn(async move {
-            let _config = client_clone.configuration();
-            let _spec = client_clone.specification();
+            let _config = client_clone.lock().await.configuration();
+            let _spec = client_clone.lock().await.specification();
             // Convert to SocketResponse for consistency
             Ok(SocketResponse::success("config_access".to_string(), "test".to_string(), Some(serde_json::json!({}))))
         }));
@@ -445,15 +446,15 @@ async fn test_no_deadlock_with_mixed_operations() {
 
 #[tokio::test]
 async fn test_memory_safety_under_concurrent_access() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // 100 concurrent operations with memory pressure
     let large_data = Arc::new(create_large_test_data(100)); // 100KB each
@@ -467,7 +468,7 @@ async fn test_memory_safety_under_concurrent_access() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("{}_{}_{}", large_data_clone, i, i)));
             
-            client_clone.send_command(
+            client_clone.lock().await.send_command(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -490,7 +491,7 @@ async fn test_memory_safety_under_concurrent_access() {
 
 #[tokio::test]
 async fn test_concurrent_resource_cleanup() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -498,7 +499,7 @@ async fn test_concurrent_resource_cleanup() {
     let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();
     for i in 0..20 {
         let socket_path_clone = socket_path.clone();
-        let _api_spec_clone = _api_spec.clone();
+        let _manifest_clone = _manifest.clone();
         let config_clone = config.clone();
         
         tasks.push(tokio::spawn(async move {
@@ -540,16 +541,16 @@ async fn test_concurrent_resource_cleanup() {
 
 #[tokio::test]
 async fn test_connection_pool_thread_safety() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let mut config = create_test_config();
     config.max_concurrent_connections = 5; // Small pool for contention
     let socket_path = create_valid_socket_path();
     
-    let client = Arc::new(JanusClient::new(
+    let client = Arc::new(Mutex::new(JanusClient::new(
         socket_path,
         "test".to_string(),
         config,
-    ).await.unwrap());
+    ).await.unwrap()));
     
     // 30 operations on 5-connection pool
     let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();
@@ -560,7 +561,7 @@ async fn test_connection_pool_thread_safety() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("pool_safety_{}", i)));
             
-            client_clone.send_command(
+            client_clone.lock().await.send_command(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),

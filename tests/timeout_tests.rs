@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_command_with_timeout() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -54,7 +54,7 @@ async fn test_command_with_timeout() {
 
 #[tokio::test]
 async fn test_command_timeout_error_message() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -92,7 +92,7 @@ async fn test_command_timeout_error_message() {
 
 #[tokio::test]
 async fn test_uuid_generation() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -136,7 +136,7 @@ async fn test_uuid_generation() {
 
 #[tokio::test]
 async fn test_multiple_commands_with_different_timeouts() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -234,7 +234,7 @@ async fn test_socket_command_without_timeout() {
 
 #[tokio::test]
 async fn test_default_timeout() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -274,7 +274,7 @@ async fn test_default_timeout() {
 
 #[tokio::test]
 async fn test_concurrent_timeouts() {
-    let _api_spec = load_test_api_spec();
+    let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -329,26 +329,36 @@ async fn test_concurrent_timeouts() {
 
 #[tokio::test]
 async fn test_command_handler_timeout_error() {
-    // Test SocketError::HandlerTimeout structure
-    let handler_timeout_error = SocketError::HandlerTimeout(
-        "echo-123".to_string(),
-        5.0, // 5 seconds
-    );
+    // Test JSONRPCError::HandlerTimeout structure
+    use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData};
+    use std::collections::HashMap;
+    
+    let mut data = HashMap::new();
+    data.insert("command_id".to_string(), serde_json::Value::String("echo-123".to_string()));
+    data.insert("timeout_seconds".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(5.0).unwrap()));
+    
+    let handler_timeout_error = JSONRPCError {
+        code: JSONRPCErrorCode::HandlerTimeout,
+        message: "Handler timeout".to_string(),
+        data: Some(JSONRPCErrorData::Object(data)),
+    };
     
     // Serialize and verify structure
     let json = serde_json::to_string(&handler_timeout_error).unwrap();
-    assert!(json.contains("HandlerTimeout"));
+    assert!(json.contains("HANDLER_TIMEOUT") || json.contains("-32006"));
     assert!(json.contains("echo-123"));
     assert!(json.contains("5.0") || json.contains("5"));
     
     // Deserialize and verify
-    let deserialized: SocketError = serde_json::from_str(&json).unwrap();
-    match deserialized {
-        SocketError::HandlerTimeout(command_id, timeout_seconds) => {
-            assert_eq!(command_id, "echo-123");
-            assert_eq!(timeout_seconds, 5.0);
-        },
-        other => panic!("Expected HandlerTimeout, got: {:?}", other),
+    let deserialized: JSONRPCError = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.code, JSONRPCErrorCode::HandlerTimeout);
+    assert_eq!(deserialized.message, "Handler timeout");
+    
+    if let Some(JSONRPCErrorData::Object(data)) = deserialized.data {
+        assert_eq!(data.get("command_id").unwrap().as_str().unwrap(), "echo-123");
+        assert_eq!(data.get("timeout_seconds").unwrap().as_f64().unwrap(), 5.0);
+    } else {
+        panic!("Expected object data in JSONRPCError");
     }
     
     // Test error message format
@@ -392,11 +402,14 @@ async fn test_handler_timeout_api_error() {
     assert!(timeout_response.result.is_none());
     assert!(timeout_response.error.is_some());
     
-    match timeout_response.error.unwrap() {
-        SocketError::HandlerTimeout(command_id, timeout_seconds) => {
-            assert_eq!(command_id, "echo-789");
-            assert_eq!(timeout_seconds, 15.0);
-        },
-        other => panic!("Expected HandlerTimeout in response, got: {:?}", other),
+    let error = timeout_response.error.unwrap();
+    assert_eq!(error.code, JSONRPCErrorCode::HandlerTimeout);
+    assert_eq!(error.message, "Handler timeout");
+    
+    if let Some(JSONRPCErrorData::Object(data)) = error.data {
+        assert_eq!(data.get("command_id").unwrap().as_str().unwrap(), "echo-789");
+        assert_eq!(data.get("timeout_seconds").unwrap().as_f64().unwrap(), 15.0);
+    } else {
+        panic!("Expected object data in timeout error response");
     }
 }

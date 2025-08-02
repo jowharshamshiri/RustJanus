@@ -3,7 +3,7 @@ use serde_json;
 use std::os::unix::net::UnixDatagram;
 // Note: std::path::Path not needed in current SOCK_DGRAM implementation
 use std::fs;
-use rust_janus::specification::{ApiSpecification, ApiSpecificationParser};
+use rust_janus::specification::{Manifest, ManifestParser};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -273,7 +273,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arg::new("spec")
                 .long("spec")
                 .value_name("PATH")
-                .help("API specification file (required for validation)"),
+                .help("Manifest file (required for validation)"),
         )
         .arg(
             Arg::new("channel")
@@ -286,23 +286,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let socket_path = matches.get_one::<String>("socket").unwrap();
     
-    // Load API specification if provided
-    let api_spec = if let Some(spec_path) = matches.get_one::<String>("spec") {
+    // Load Manifest if provided
+    let manifest = if let Some(spec_path) = matches.get_one::<String>("spec") {
         match fs::read_to_string(spec_path) {
             Ok(spec_content) => {
-                match ApiSpecificationParser::from_json(&spec_content) {
+                match ManifestParser::from_json(&spec_content) {
                     Ok(spec) => {
-                        println!("Loaded API specification v{}", spec.version);
+                        println!("Loaded Manifest v{}", spec.version);
                         Some(spec)
                     }
                     Err(e) => {
-                        eprintln!("Failed to parse API specification: {}", e);
+                        eprintln!("Failed to parse Manifest: {}", e);
                         std::process::exit(1);
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Failed to read API specification file: {}", e);
+                eprintln!("Failed to read Manifest file: {}", e);
                 std::process::exit(1);
             }
         }
@@ -311,7 +311,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if matches.get_flag("listen") {
-        listen_for_datagrams(socket_path, api_spec).await
+        listen_for_datagrams(socket_path, manifest).await
     } else if let Some(target) = matches.get_one::<String>("send-to") {
         let command = matches.get_one::<String>("command").unwrap();
         let message = matches.get_one::<String>("message").unwrap();
@@ -322,7 +322,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn listen_for_datagrams(socket_path: &str, api_spec: Option<ApiSpecification>) -> Result<(), Box<dyn std::error::Error>> {
+async fn listen_for_datagrams(socket_path: &str, manifest: Option<Manifest>) -> Result<(), Box<dyn std::error::Error>> {
     println!("Listening for SOCK_DGRAM on: {}", socket_path);
     
     // Initialize server config and event system
@@ -400,7 +400,7 @@ async fn listen_for_datagrams(socket_path: &str, api_spec: Option<ApiSpecificati
                 
                 // Send response via reply_to if specified
                 if let Some(reply_to) = &cmd.reply_to {
-                    if let Ok(response) = send_response(&cmd.id, &cmd.channel_id, &cmd.command, &cmd.args, reply_to, &api_spec, &server_state, &client_id) {
+                    if let Ok(response) = send_response(&cmd.id, &cmd.channel_id, &cmd.command, &cmd.args, reply_to, &manifest, &server_state, &client_id) {
                         // Emit response event
                         let response_data = serde_json::json!({
                             "response": response,
@@ -524,13 +524,13 @@ fn execute_with_timeout(
 // Get built-in command handler
 fn get_builtin_command_handler(
     command: &str,
-    api_spec: &Option<ApiSpecification>,
+    manifest: &Option<Manifest>,
     server_state: &Arc<ServerState>,
     client_id: &str,
 ) -> Option<CommandHandler> {
     match command {
         "spec" => {
-            let spec_clone = api_spec.clone();
+            let spec_clone = manifest.clone();
             Some(Box::new(move |_args| {
                 if let Some(spec) = &spec_clone {
                     match serde_json::to_value(spec) {
@@ -539,10 +539,10 @@ fn get_builtin_command_handler(
                             result.insert("specification".to_string(), spec_value);
                             Ok(result)
                         }
-                        Err(e) => Err(format!("Failed to serialize API specification: {}", e))
+                        Err(e) => Err(format!("Failed to serialize Manifest: {}", e))
                     }
                 } else {
-                    Err("No API specification loaded on server".to_string())
+                    Err("No Manifest loaded on server".to_string())
                 }
             }))
         }
@@ -676,7 +676,7 @@ fn send_response(
     command: &str,
     args: &Option<std::collections::HashMap<String, serde_json::Value>>,
     reply_to: &str,
-    api_spec: &Option<ApiSpecification>,
+    manifest: &Option<Manifest>,
     server_state: &Arc<ServerState>,
     client_id: &str,
 ) -> Result<SocketResponse, Box<dyn std::error::Error>> {
@@ -693,17 +693,17 @@ fn send_response(
     }
     // spec and ping commands don't need message arguments
     
-    // Validate command against API specification if provided
-    // Built-in commands bypass API spec validation
-    let (mut result, mut success) = if let Some(spec) = api_spec {
+    // Validate command against Manifest if provided
+    // Built-in commands bypass Manifest validation
+    let (mut result, mut success) = if let Some(spec) = manifest {
         if !built_in_commands.contains(&command) {
-            // Check if command exists in the API specification
+            // Check if command exists in the Manifest
             if let Some(channel) = spec.channels.get(channel_id) {
                 if channel.commands.contains_key(command) {
                     // Command exists, validation would happen here
                     (None, true)
                 } else {
-                    // Command not found in API spec
+                    // Command not found in Manifest
                     let mut error_result = std::collections::HashMap::new();
                     error_result.insert("error".to_string(), serde_json::Value::String(format!("Command '{}' not found in channel '{}'", command, channel_id)));
                     (Some(error_result), false)
@@ -715,18 +715,18 @@ fn send_response(
                 (Some(error_result), false)
             }
         } else {
-            // Built-in command, skip API spec validation
+            // Built-in command, skip Manifest validation
             (None, true)
         }
     } else {
-        // No API spec loaded, allow all commands
+        // No Manifest loaded, allow all commands
         (None, true)
     };
     
     // Only process command if validation passed
     if success && result.is_none() {
         // Get built-in command handler
-        if let Some(handler) = get_builtin_command_handler(command, api_spec, server_state, client_id) {
+        if let Some(handler) = get_builtin_command_handler(command, manifest, server_state, client_id) {
             // Execute with timeout (default 30 seconds for built-in commands)
             let timeout_seconds = if command == "slow_process" { 5 } else { 30 };
             

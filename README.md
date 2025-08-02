@@ -8,7 +8,7 @@ A production-ready Unix domain socket communication library for Rust with **asyn
 - **Cross-Language Compatibility**: Seamless communication with Go and Swift implementations
 - **Persistent Connections**: Efficient async connection management with proper response tracking
 - **Security Framework**: Comprehensive path validation, resource limits, and attack prevention
-- **API Specification Engine**: JSON/YAML-driven command validation and type safety
+- **Manifest Engine**: JSON/YAML-driven command validation and type safety
 - **Performance Optimized**: Async patterns optimized for Unix socket inherent async nature
 - **Production Ready**: Enterprise-grade error handling and resource management
 - **Cross-Platform**: Works on all Unix-like systems (Linux, macOS, BSD)
@@ -31,9 +31,9 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load API specification
-    let spec_data = std::fs::read_to_string("api-spec.json")?;
-    let spec = ApiSpecificationParser::from_json(&spec_data)?;
+    // Load Manifest
+    let spec_data = std::fs::read_to_string("manifest.json")?;
+    let spec = ManifestParser::from_json(&spec_data)?;
     
     // Create async client with proper configuration
     let client = JanusClient::new(
