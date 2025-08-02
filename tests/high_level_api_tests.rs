@@ -3,24 +3,42 @@ use tokio::time::timeout;
 use serde_json::json;
 
 use rust_janus::{JanusServer, JanusClient, JanusClientConfig};
-use rust_janus::error::JanusError;
+use rust_janus::server::janus_server::ServerConfig;
+use rust_janus::error::jsonrpc_error::JSONRPCError;
 
 #[tokio::test]
 async fn test_janus_server_creation() {
-    let server = JanusServer::new();
+    let server_config = ServerConfig {
+        socket_path: "/tmp/test_creation.sock".to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let server = JanusServer::new(server_config);
     assert!(!server.is_running());
 }
 
 #[tokio::test]
 async fn test_janus_server_start_stop() {
-    let mut server = JanusServer::new();
     let socket_path = "/tmp/test_server_start_stop.sock";
     
     // Clean up any existing socket
     let _ = std::fs::remove_file(socket_path);
     
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    
     // Start server
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    server.start_listening().await.expect("Failed to start server");
     assert!(server.is_running());
     
     // Stop server
@@ -33,7 +51,15 @@ async fn test_janus_server_start_stop() {
 
 #[tokio::test]
 async fn test_janus_server_register_handler() {
-    let mut server = JanusServer::new();
+    let server_config = ServerConfig {
+        socket_path: "/tmp/test_register_handler.sock".to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
     
     // Register a custom handler
     server.register_handler("test_cmd", |cmd| {
@@ -50,7 +76,15 @@ async fn test_janus_client_server_communication() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
     
     // Register custom handler
     server.register_handler("test_echo", |cmd| {
@@ -62,7 +96,7 @@ async fn test_janus_client_server_communication() {
         Ok(json!({"echo": "no message", "default": true}))
     }).await;
     
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -93,14 +127,9 @@ async fn test_janus_client_server_communication() {
                 assert_eq!(result["echo"], "Hello Server!");
             }
         }
-        Ok(Err(JanusError::SecurityViolation(_))) => {
-            // Security validation errors are acceptable in tests
-            println!("Test skipped due to security validation");
-            return;
-        }
-        Ok(Err(JanusError::InvalidSocketPath(_))) => {
-            // Socket path validation errors are acceptable in tests  
-            println!("Test skipped due to socket path validation");
+        Ok(Err(err)) if err.code == -32005 => {
+            // ValidationFailed errors (security/socket path) are acceptable in tests
+            println!("Test skipped due to validation error: {}", err);
             return;
         }
         Ok(Err(e)) => panic!("Client error: {}", e),
@@ -131,8 +160,16 @@ async fn test_datagram_default_ping_handler() {
     }
     
     // Start server with no custom handlers
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -160,14 +197,9 @@ async fn test_datagram_default_ping_handler() {
                 assert!(result.get("timestamp").is_some());
             }
         }
-        Ok(Err(JanusError::SecurityViolation(_))) => {
-            // Security validation errors are acceptable in tests
-            println!("Test skipped due to security validation");
-            return;
-        }
-        Ok(Err(JanusError::InvalidSocketPath(_))) => {
-            // Socket path validation errors are acceptable in tests  
-            println!("Test skipped due to socket path validation");
+        Ok(Err(err)) if err.code == -32005 => {
+            // ValidationFailed errors (security/socket path) are acceptable in tests
+            println!("Test skipped due to validation error: {}", err);
             return;
         }
         Ok(Err(e)) => panic!("Client error: {}", e),
@@ -187,8 +219,16 @@ async fn test_datagram_unknown_command() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -217,19 +257,14 @@ async fn test_datagram_unknown_command() {
                 assert!(error.message.contains("not registered") || error.message.contains("Method not found"));
             }
         }
-        Ok(Err(JanusError::ValidationError(_))) => {
-            // Command validation errors are expected for unknown commands
-            println!("Test passed: Unknown command correctly rejected by validation");
+        Ok(Err(err)) if err.code == -32005 => {
+            // ValidationFailed errors are expected for unknown commands
+            println!("Test passed: Unknown command correctly rejected by validation: {}", err);
             return;
         }
-        Ok(Err(JanusError::SecurityViolation(_))) => {
-            // Security validation errors are acceptable in tests
-            println!("Test skipped due to security validation");
-            return;
-        }
-        Ok(Err(JanusError::InvalidSocketPath(_))) => {
-            // Socket path validation errors are acceptable in tests  
-            println!("Test skipped due to socket path validation");
+        Ok(Err(err)) if err.code == -32005 => {
+            // ValidationFailed errors (security/socket path) are acceptable in tests
+            println!("Test skipped due to validation error: {}", err);
             return;
         }
         Ok(Err(e)) => panic!("Client error: {}", e),
@@ -249,8 +284,16 @@ async fn test_janus_server_cleanup_on_drop() {
     let _ = std::fs::remove_file(socket_path);
     
     {
-        let mut server = JanusServer::new();
-        server.start_listening(socket_path).await.expect("Failed to start server");
+        let server_config = ServerConfig {
+            socket_path: socket_path.to_string(),
+            max_connections: 100,
+            default_timeout: 30,
+            max_message_size: 65536,
+            cleanup_on_start: true,
+            cleanup_on_shutdown: true,
+        };
+        let mut server = JanusServer::new(server_config);
+        server.start_listening().await.expect("Failed to start server");
         assert!(server.is_running());
         
         // Server should stop when dropped

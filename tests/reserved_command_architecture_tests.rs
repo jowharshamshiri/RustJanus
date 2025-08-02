@@ -1,4 +1,5 @@
 use rust_janus::*;
+use rust_janus::server::janus_server::ServerConfig;
 use rust_janus::specification::manifest_parser::ManifestParser;
 use serde_json::json;
 use std::collections::HashMap;
@@ -96,8 +97,16 @@ async fn test_builtin_command_hardcoding_all_six_commands() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server without registering ANY handlers
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -144,8 +153,16 @@ async fn test_builtin_command_hardcoding_without_handlers() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start completely empty server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -253,8 +270,16 @@ async fn test_command_architecture_enforcement_builtin_bypass_validation() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -290,8 +315,16 @@ async fn test_command_architecture_enforcement_custom_vs_builtin() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -371,8 +404,16 @@ async fn test_reserved_command_architecture_comprehensive() {
     assert!(parse_result.is_err(), "Manifest with 'spec' reserved command should be rejected");
     
     // 2. Test built-in command hardcoding
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     tokio::time::sleep(Duration::from_millis(100)).await;
     
     let mut config = create_test_config();

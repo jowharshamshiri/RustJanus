@@ -9,28 +9,58 @@ use std::fs;
 use crate::protocol::message_types::{JanusCommand, JanusResponse};
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
 
-/// Command handler function type for SOCK_DGRAM server
+/// Server configuration structure matching other implementations
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    pub socket_path: String,
+    pub max_connections: usize,
+    pub default_timeout: u64,
+    pub max_message_size: usize,
+    pub cleanup_on_start: bool,
+    pub cleanup_on_shutdown: bool,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            socket_path: String::new(),
+            max_connections: 100,
+            default_timeout: 30,
+            max_message_size: 65536,
+            cleanup_on_start: true,
+            cleanup_on_shutdown: true,
+        }
+    }
+}
+
+/// Command handler function type for SOCK_DGRAM server (sync)
 pub type JanusCommandHandler = Box<dyn Fn(JanusCommand) -> Result<serde_json::Value, JSONRPCError> + Send + Sync>;
+
+/// Async command handler function type for SOCK_DGRAM server
+pub type JanusAsyncCommandHandler = Box<dyn Fn(JanusCommand) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, JSONRPCError>> + Send>> + Send + Sync>;
 
 /// High-level SOCK_DGRAM Unix socket server
 /// Handles command routing and response generation for connectionless communication
 pub struct JanusServer {
+    config: ServerConfig,
     handlers: Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
+    async_handlers: Arc<Mutex<HashMap<String, JanusAsyncCommandHandler>>>,
     is_running: Arc<AtomicBool>,
-    socket_path: Option<String>,
 }
 
 impl JanusServer {
-    /// Create a new SOCK_DGRAM server
-    pub fn new() -> Self {
+    /// Create a new SOCK_DGRAM server with configuration
+    /// Matches constructor signatures of Go, Swift, and TypeScript implementations
+    pub fn new(config: ServerConfig) -> Self {
         Self {
+            config,
             handlers: Arc::new(Mutex::new(HashMap::new())),
+            async_handlers: Arc::new(Mutex::new(HashMap::new())),
             is_running: Arc::new(AtomicBool::new(false)),
-            socket_path: None,
         }
     }
 
-    /// Register a command handler
+    /// Register a command handler (synchronous)
     pub async fn register_handler<F>(&mut self, command: &str, handler: F)
     where
         F: Fn(JanusCommand) -> Result<serde_json::Value, JSONRPCError> + Send + Sync + 'static,
@@ -39,18 +69,44 @@ impl JanusServer {
         handlers.insert(command.to_string(), Box::new(handler));
     }
 
-    /// Start listening on the specified socket path using SOCK_DGRAM
+    /// Register an asynchronous command handler
+    pub async fn register_async_handler<F, Fut>(&mut self, command: &str, handler: F)
+    where
+        F: Fn(JanusCommand) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<serde_json::Value, JSONRPCError>> + Send + 'static,
+    {
+        let async_handler: JanusAsyncCommandHandler = Box::new(move |cmd| {
+            Box::pin(handler(cmd))
+        });
+        let mut async_handlers = self.async_handlers.lock().await;
+        async_handlers.insert(command.to_string(), async_handler);
+    }
+
+    /// Start listening on the configured socket path using SOCK_DGRAM
     /// Returns immediately, runs server in background task
-    pub async fn start_listening(&mut self, socket_path: &str) -> Result<(), JSONRPCError> {
-        self.socket_path = Some(socket_path.to_string());
+    pub async fn start_listening(&mut self) -> Result<(), JSONRPCError> {
+        if self.config.socket_path.is_empty() {
+            return Err(JSONRPCError::new(
+                JSONRPCErrorCode::InvalidRequest,
+                Some("Socket path not configured".to_string()),
+            ));
+        }
+        
+        // Clean up existing socket file if configured
+        if self.config.cleanup_on_start {
+            let _ = fs::remove_file(&self.config.socket_path);
+        }
+        
         self.is_running.store(true, Ordering::SeqCst);
 
-        let path = socket_path.to_string();
+        let path = self.config.socket_path.clone();
         let handlers = Arc::clone(&self.handlers);
+        let async_handlers = Arc::clone(&self.async_handlers);
         let is_running = Arc::clone(&self.is_running);
+        let cleanup_on_shutdown = self.config.cleanup_on_shutdown;
 
         tokio::spawn(async move {
-            if let Err(e) = Self::listen_loop(path, handlers, is_running).await {
+            if let Err(e) = Self::listen_loop(path, handlers, async_handlers, is_running).await {
                 eprintln!("Server error: {}", e);
             }
         });
@@ -64,9 +120,9 @@ impl JanusServer {
     pub fn stop(&self) {
         self.is_running.store(false, Ordering::SeqCst);
         
-        // Clean up socket file
-        if let Some(ref path) = self.socket_path {
-            let _ = fs::remove_file(path);
+        // Clean up socket file if configured
+        if self.config.cleanup_on_shutdown && !self.config.socket_path.is_empty() {
+            let _ = fs::remove_file(&self.config.socket_path);
         }
     }
 
@@ -79,6 +135,7 @@ impl JanusServer {
     async fn listen_loop(
         socket_path: String,
         handlers: Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
+        async_handlers: Arc<Mutex<HashMap<String, JanusAsyncCommandHandler>>>,
         is_running: Arc<AtomicBool>,
     ) -> Result<(), JSONRPCError> {
         // Remove existing socket
@@ -99,7 +156,7 @@ impl JanusServer {
             match socket.recv_from(&mut buffer) {
                 Ok((size, _)) => {
                     let data = &buffer[..size];
-                    Self::process_datagram(data, &handlers).await;
+                    Self::process_datagram(data, &handlers, &async_handlers).await;
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     // Non-blocking socket would block, continue polling
@@ -122,6 +179,7 @@ impl JanusServer {
     async fn process_datagram(
         data: &[u8],
         handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
+        async_handlers: &Arc<Mutex<HashMap<String, JanusAsyncCommandHandler>>>,
     ) {
         match serde_json::from_slice::<JanusCommand>(data) {
             Ok(cmd) => {
@@ -129,7 +187,7 @@ impl JanusServer {
 
                 // Process command and send response if reply_to is specified
                 if let Some(ref reply_to) = cmd.reply_to {
-                    let response = Self::process_command(&cmd, handlers).await;
+                    let response = Self::process_command(&cmd, handlers, async_handlers).await;
                     Self::send_response(response, reply_to).await;
                 }
             }
@@ -142,11 +200,14 @@ impl JanusServer {
     async fn process_command(
         cmd: &JanusCommand,
         handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
+        async_handlers: &Arc<Mutex<HashMap<String, JanusAsyncCommandHandler>>>,
     ) -> JanusResponse {
-        let handlers_guard = handlers.lock().await;
-        
-        let response = if let Some(handler) = handlers_guard.get(&cmd.command) {
-            match handler(cmd.clone()) {
+        // Check async handlers first
+        let async_handlers_guard = async_handlers.lock().await;
+        let response = if let Some(async_handler) = async_handlers_guard.get(&cmd.command) {
+            let future = async_handler(cmd.clone());
+            drop(async_handlers_guard); // Release lock before await
+            match future.await {
                 Ok(result) => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
@@ -163,13 +224,7 @@ impl JanusServer {
                     channelId: cmd.channelId.clone(),
                     success: false,
                     result: None,
-                    error: Some({
-                        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
-                        JSONRPCError::new(
-                            JSONRPCErrorCode::InternalError,
-                            Some(e.to_string())
-                        )
-                    }),
+                    error: Some(e),
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
@@ -177,8 +232,40 @@ impl JanusServer {
                 },
             }
         } else {
-            // Default handlers (matching main binary)
-            match cmd.command.as_str() {
+            drop(async_handlers_guard);
+            
+            // Check sync handlers
+            let handlers_guard = handlers.lock().await;
+            if let Some(handler) = handlers_guard.get(&cmd.command) {
+                match handler(cmd.clone()) {
+                    Ok(result) => JanusResponse {
+                        commandId: cmd.id.clone(),
+                        channelId: cmd.channelId.clone(),
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    },
+                    Err(e) => JanusResponse {
+                        commandId: cmd.id.clone(),
+                        channelId: cmd.channelId.clone(),
+                        success: false,
+                        result: None,
+                        error: Some(e),
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64(),
+                    },
+                }
+            } else {
+                drop(handlers_guard);
+                
+                // Default handlers (matching main binary)
+                match cmd.command.as_str() {
                 "ping" => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
@@ -397,6 +484,7 @@ impl JanusServer {
                         .unwrap()
                         .as_secs_f64(),
                 },
+                }
             }
         };
 
@@ -429,6 +517,6 @@ impl Drop for JanusServer {
 
 impl Default for JanusServer {
     fn default() -> Self {
-        Self::new()
+        Self::new(ServerConfig::default())
     }
 }

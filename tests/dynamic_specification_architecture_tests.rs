@@ -117,11 +117,8 @@ async fn test_auto_fetch_during_validation() {
     
     // Verify error is connection-related, not specification-related
     match command_result.unwrap_err() {
-        JanusError::ConnectionError(_) => {
-            println!("✅ Auto-fetch attempted (connection failed as expected)");
-        },
-        JanusError::IoError(_) => {
-            println!("✅ Auto-fetch attempted (IO error as expected)");
+        err if err.code == -32000 => {
+            println!("✅ Auto-fetch attempted (server/IO error as expected): {}", err);
         },
         other => {
             println!("⚠️ Unexpected error type, but auto-fetch mechanism exists: {:?}", other);
@@ -167,8 +164,8 @@ async fn test_server_provided_spec_validation() {
     assert!(builtin_result.is_err(), "Built-in command should fail due to no server");
     
     match builtin_result.unwrap_err() {
-        JanusError::ConnectionError(_) | JanusError::IoError(_) => {
-            println!("✅ Built-in command bypassed specification validation correctly");
+        err if err.code == -32000 => {
+            println!("✅ Built-in command bypassed specification validation correctly: {}", err);
         },
         other => {
             println!("⚠️ Built-in command handling: {:?}", other);
@@ -200,8 +197,8 @@ async fn test_spec_command_implementation() {
     
     // But the failure should be connection-related, proving spec command is implemented
     match spec_result.unwrap_err() {
-        JanusError::ConnectionError(_) | JanusError::IoError(_) => {
-            println!("✅ Spec command implementation exists (connection failed as expected)");
+        err if err.code == -32000 => {
+            println!("✅ Spec command implementation exists (connection failed as expected): {}", err);
         },
         other => {
             println!("⚠️ Spec command error: {:?}", other);
@@ -327,14 +324,8 @@ async fn test_specification_fetch_error_handling() {
     
     // Verify error handling is appropriate
     match command_result.unwrap_err() {
-        JanusError::ConnectionError(_) => {
-            println!("✅ Proper connection error handling for spec fetch failure");
-        },
-        JanusError::IoError(_) => {
-            println!("✅ Proper socket error handling for spec fetch failure");
-        },
-        JanusError::CommandTimeout(_, _) => {
-            println!("✅ Proper timeout error handling for spec fetch failure");
+        err if err.code == -32000 => {
+            println!("✅ Proper error handling for spec fetch failure: {}", err);
         },
         other => {
             println!("⚠️ Spec fetch error handling: {:?}", other);
@@ -369,11 +360,11 @@ async fn test_validation_disabled_behavior() {
     
     // Verify failure is connection-related, not validation-related
     match command_result.unwrap_err() {
-        JanusError::ConnectionError(_) | JanusError::IoError(_) => {
-            println!("✅ Validation disabled - no specification fetch attempted");
+        err if err.code == -32000 => {
+            println!("✅ Validation disabled - no specification fetch attempted: {}", err);
         },
-        JanusError::UnknownCommand(_) => {
-            panic!("❌ Validation should be disabled - no command validation should occur");
+        err if err.code == -32601 => {
+            panic!("❌ Validation should be disabled - no command validation should occur: {}", err);
         },
         other => {
             println!("⚠️ Validation disabled behavior: {:?}", other);

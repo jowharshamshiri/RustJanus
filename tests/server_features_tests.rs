@@ -8,33 +8,41 @@ use tokio::time::sleep;
 use serde_json;
 use std::fs;
 
-use rust_janus::server::janus_server::JanusServer;
+use rust_janus::server::janus_server::{JanusServer, ServerConfig};
 use rust_janus::protocol::message_types::{JanusCommand, JanusResponse};
 use rust_janus::error::jsonrpc_error::JSONRPCError;
 
 // Helper function to create test server
 async fn create_test_server() -> (JanusServer, String) {
     let socket_path = format!("/tmp/janus-server-test-{}", std::process::id());
-    let mut server = JanusServer::new();
+    let server_config = ServerConfig {
+        socket_path: socket_path.clone(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let server = JanusServer::new(server_config);
     (server, socket_path)
 }
 
 // Helper function to send command and get response
-async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout_ms: u64) -> Result<JanusResponse, Box<dyn std::error::Error>> {
-    let client_socket = UnixDatagram::unbound()?;
+async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout_ms: u64) -> Result<JanusResponse, String> {
+    let client_socket = UnixDatagram::unbound().map_err(|e| e.to_string())?;
     
     // Create response socket
     let response_path = format!("/tmp/janus-client-response-{}-{}", std::process::id(), command.id);
     let _ = fs::remove_file(&response_path); // Clean up any existing file
-    let response_socket = UnixDatagram::bind(&response_path)?;
+    let response_socket = UnixDatagram::bind(&response_path).map_err(|e| e.to_string())?;
     
     // Update command with response path
     let mut cmd_with_response = command;
     cmd_with_response.reply_to = Some(response_path.clone());
     
     // Send command
-    let cmd_data = serde_json::to_vec(&cmd_with_response)?;
-    client_socket.send_to(&cmd_data, socket_path)?;
+    let cmd_data = serde_json::to_vec(&cmd_with_response).map_err(|e| e.to_string())?;
+    client_socket.send_to(&cmd_data, socket_path).map_err(|e| e.to_string())?;
     
     // Wait for response with timeout
     let start = Instant::now();
@@ -47,7 +55,7 @@ async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout
         match response_socket.recv(&mut buffer) {
             Ok(size) => {
                 let response_data = &buffer[..size];
-                let response: JanusResponse = serde_json::from_slice(response_data)?;
+                let response: JanusResponse = serde_json::from_slice(response_data).map_err(|e| e.to_string())?;
                 let _ = fs::remove_file(&response_path); // Cleanup
                 return Ok(response);
             }
@@ -55,7 +63,7 @@ async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout
                 std::thread::sleep(Duration::from_millis(10));
                 continue;
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e.to_string()),
         }
     }
 }
@@ -70,7 +78,7 @@ async fn test_command_handler_registry() {
     }).await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     
     // Give server time to start
     sleep(Duration::from_millis(100)).await;
@@ -109,7 +117,7 @@ async fn test_multi_client_connection_management() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Test multiple concurrent clients
@@ -158,7 +166,7 @@ async fn test_event_driven_architecture() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Test that server processes events by sending a command
@@ -195,7 +203,7 @@ async fn test_graceful_shutdown() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Verify server is running by connecting
@@ -224,7 +232,7 @@ async fn test_connection_processing_loop() {
     let processed_commands_clone = Arc::clone(&processed_commands);
     
     // Register handler that tracks commands 
-    server.register_handler("track_test", move |cmd| {
+    server.register_async_handler("track_test", move |cmd| {
         let processed = Arc::clone(&processed_commands_clone);
         async move {
             let mut list = processed.lock().await;
@@ -234,7 +242,7 @@ async fn test_connection_processing_loop() {
     }).await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Send multiple commands to test processing loop
@@ -287,7 +295,7 @@ async fn test_error_response_generation() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Start server (no custom handlers registered)
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Send command that doesn't have a handler (should generate error)
@@ -325,7 +333,7 @@ async fn test_client_activity_tracking() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Send multiple commands from same "client" (same channel)
@@ -359,7 +367,7 @@ async fn test_command_execution_with_timeout() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Register slow handler that should timeout
-    server.register_handler("slow_command", |_cmd| {
+    server.register_async_handler("slow_command", |_cmd| {
         async move {
             sleep(Duration::from_secs(10)).await; // Much longer than reasonable timeout
             Ok(serde_json::json!({"should": "not reach here"}))
@@ -367,7 +375,7 @@ async fn test_command_execution_with_timeout() {
     }).await;
     
     // Start server
-    server.start_listening(&socket_path).await.expect("Server should start");
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Send slow command with short timeout
@@ -418,8 +426,16 @@ async fn test_socket_file_cleanup() {
     assert!(std::fs::metadata(&socket_path).is_ok(), "Test socket file should exist");
     
     // Create and start server (should cleanup existing file)
-    let mut server = JanusServer::new();
-    server.start_listening(&socket_path).await.expect("Server should start");
+    let server_config = ServerConfig {
+        socket_path: socket_path.clone(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
     // Verify server created new socket (can connect)

@@ -81,8 +81,9 @@ async fn test_response_correlation_system() {
                 Duration::from_secs(5)
             ).await;
             
-            // Verify commands are tracked properly (even if they fail due to no server)
-            assert!(result1.is_err() || result2.is_err(), "Commands should fail without server but correlation should be tracked");
+            // Verify commands are tracked properly (send_command_with_correlation returns receivers immediately)
+            // The actual connection failure happens later when trying to read from the receiver
+            assert!(result1.is_ok() && result2.is_ok(), "Command correlation should be set up successfully even without server");
             
             println!("✅ Response correlation system tracks commands correctly");
         }

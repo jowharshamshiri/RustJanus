@@ -1,4 +1,5 @@
 use rust_janus::*;
+use rust_janus::server::janus_server::ServerConfig;
 use serde_json::json;
 use std::collections::HashMap;
 use tokio::time::{timeout, Duration};
@@ -16,8 +17,16 @@ async fn test_ping_command_with_server() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -59,8 +68,16 @@ async fn test_echo_command_with_server() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -102,8 +119,16 @@ async fn test_get_info_command_with_server() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -147,8 +172,16 @@ async fn test_validate_command_valid_json() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -191,8 +224,16 @@ async fn test_validate_command_invalid_json() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -236,8 +277,16 @@ async fn test_slow_process_command() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -285,8 +334,16 @@ async fn test_spec_command() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -328,8 +385,16 @@ async fn test_all_builtin_commands_recognized() {
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
-    let mut server = JanusServer::new();
-    server.start_listening(socket_path).await.expect("Failed to start server");
+    let server_config = ServerConfig {
+        socket_path: socket_path.to_string(),
+        max_connections: 100,
+        default_timeout: 30,
+        max_message_size: 65536,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    let mut server = JanusServer::new(server_config);
+    server.start_listening().await.expect("Failed to start server");
     
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;

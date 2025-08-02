@@ -27,7 +27,7 @@ async fn test_stateless_command_validation() {
     
     // Should fail at connection, not validation
     match result {
-        Err(JanusError::ConnectionError(_)) | Err(JanusError::CommandTimeout(_, _)) => {},
+        Err(err) if err.code == -32000 => {}, // ServerError (connection/timeout)
         other => println!("Stateless validation result: {:?}", other),
     }
 }

@@ -134,10 +134,14 @@ impl MessageFraming {
                 }
                 Err(e) => {
                     if e.code == JSONRPCErrorCode::MessageFramingError.code() {
-                        // Check if it's a partial message error by looking at the message
-                        if e.message.contains("Buffer too small") {
-                            // Not enough data for complete message, save remaining buffer
-                            break;
+                        // Check if it's a partial message error by looking at the details
+                        if let Some(data) = &e.data {
+                            if let Some(details) = &data.details {
+                                if details.contains("Buffer too small") {
+                                    // Not enough data for complete message, save remaining buffer
+                                    break;
+                                }
+                            }
                         }
                     }
                     return Err(e);
@@ -399,7 +403,11 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, JSONRPCErrorCode::MessageFramingError.code());
-            assert!(e.message.contains("Buffer too small"));
+            if let Some(data) = &e.data {
+                if let Some(details) = &data.details {
+                    assert!(details.contains("Buffer too small"));
+                }
+            }
         }
         
         // Test zero length message
@@ -408,7 +416,11 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, JSONRPCErrorCode::MessageFramingError.code());
-            assert!(e.message.contains("Message length cannot be zero"));
+            if let Some(data) = &e.data {
+                if let Some(details) = &data.details {
+                    assert!(details.contains("Message length cannot be zero"));
+                }
+            }
         }
     }
 }

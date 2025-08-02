@@ -567,7 +567,7 @@ mod tests {
         
         let operation = async {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            Ok::<i32, JanusError>(42)
+            Ok::<i32, JSONRPCError>(42)
         };
         
         let result = manager.execute_with_timeout(
@@ -589,7 +589,7 @@ mod tests {
         
         let operation = async {
             tokio::time::sleep(Duration::from_millis(100)).await;
-            Ok::<i32, JanusError>(42)
+            Ok::<i32, JSONRPCError>(42)
         };
         
         let result = manager.execute_with_timeout(
@@ -601,11 +601,11 @@ mod tests {
         
         assert!(result.is_err());
         match result.unwrap_err() {
-            JSONRPCErrorCode::CommandTimeout(id, duration) => {
-                assert_eq!(id, command_id);
-                assert_eq!(duration, timeout);
+            err if err.code == JSONRPCErrorCode::HandlerTimeout as i32 => {
+                // HandlerTimeout error - validate the error contains timeout info
+                assert!(err.message.contains("timeout"));
             },
-            _ => panic!("Expected CommandTimeout error"),
+            _ => panic!("Expected HandlerTimeout error"),
         }
     }
     

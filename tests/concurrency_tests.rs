@@ -1,4 +1,5 @@
 use rust_janus::*;
+use rust_janus::error::{JSONRPCError, JSONRPCErrorCode};
 mod test_utils;
 use test_utils::*;
 use std::sync::Arc;
@@ -184,11 +185,9 @@ async fn test_concurrent_connection_pool_usage() {
     for result in results {
         match result.unwrap() {
             Ok(_) => success_count += 1,
-            Err(JanusError::CommandTimeout(_, _)) => timeout_count += 1,
-            Err(JanusError::ResourceLimit(_)) => error_count += 1,
-            Err(JanusError::ConnectionError(_)) => error_count += 1,
-            Err(JanusError::SecurityViolation(_)) => error_count += 1,
-            Err(JanusError::InvalidSocketPath(_)) => error_count += 1,
+            Err(err) if err.code == -32000 => timeout_count += 1, // ServerError (includes timeout)
+            Err(err) if err.code == -32010 => error_count += 1, // ResourceLimitExceeded
+            Err(err) if err.code == -32005 => error_count += 1, // ValidationFailed (includes security)
             Err(err) => panic!("Unexpected error: {:?}", err),
         }
     }
@@ -366,7 +365,7 @@ async fn test_no_deadlock_under_load() {
             
             match timeout {
                 Ok(result) => result,
-                Err(_) => Err(JanusError::CommandTimeout("deadlock_test".to_string(), std::time::Duration::from_secs(10))),
+                Err(_) => Err(JSONRPCError::new(JSONRPCErrorCode::ServerError, Some("Deadlock test timeout after 10 seconds".to_string()))),
             }
         }));
     }
