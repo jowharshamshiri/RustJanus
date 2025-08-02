@@ -244,7 +244,7 @@ async fn test_janus_client_initialization() {
     
     assert!(invalid_client.is_err());
     match invalid_client.unwrap_err() {
-        JanusError::InvalidChannel(_) => {},
+        JSONRPCError { code: -32600, .. } => {},
         err => panic!("Expected InvalidChannel, got: {:?}", err),
     }
 }
@@ -272,10 +272,10 @@ async fn test_command_validation() {
     // Should either succeed or fail with expected errors (connection/timeout/security)
     match result.await {
         Ok(_) => {},
-        Err(JanusError::ConnectionError(_)) => {},
-        Err(JanusError::CommandTimeout(_, _)) => {},
-        Err(JanusError::SecurityViolation(_)) => {},
-        Err(JanusError::InvalidSocketPath(_)) => {},
+        Err(JSONRPCError { code: -32603, .. }) => {},
+        Err(JSONRPCError { code: -32000, .. }) => {},
+        Err(JSONRPCError { code: -32005, .. }) => {},
+        Err(JSONRPCError { code: -32011, .. }) => {},
         Err(err) => panic!("Unexpected error for valid command: {:?}", err),
     }
     
@@ -289,11 +289,11 @@ async fn test_command_validation() {
     // May fail with validation error or connection error
     match invalid_result.await {
         Ok(_) => {},
-        Err(JanusError::UnknownCommand(_)) => {},
-        Err(JanusError::ConnectionError(_)) => {},
-        Err(JanusError::CommandTimeout(_, _)) => {},
-        Err(JanusError::SecurityViolation(_)) => {},
-        Err(JanusError::InvalidSocketPath(_)) => {},
+        Err(JSONRPCError { code: -32601, .. }) => {},
+        Err(JSONRPCError { code: -32603, .. }) => {},
+        Err(JSONRPCError { code: -32000, .. }) => {},
+        Err(JSONRPCError { code: -32005, .. }) => {},
+        Err(JSONRPCError { code: -32011, .. }) => {},
         Err(err) => panic!("Unexpected error for invalid command: {:?}", err),
     }
 }
@@ -367,10 +367,10 @@ async fn test_send_command_no_response() {
     
     // Should be connection error, not timeout error
     match result.unwrap_err() {
-        JanusError::ConnectionError(_) => {
+        JSONRPCError { code: -32603, .. } => {
             // Expected - connection error is fine
         },
-        JanusError::CommandTimeout(_, _) => {
+        JSONRPCError { code: -32000, .. } => {
             panic!("Got timeout error when expecting connection error for fire-and-forget");
         },
         other => {
@@ -423,10 +423,10 @@ async fn test_dynamic_message_size_detection() {
     
     // Should be connection error, not message size error
     match result.unwrap_err() {
-        JanusError::ConnectionError(_) => {
+        JSONRPCError { code: -32603, .. } => {
             // Expected - connection error is fine
         },
-        JanusError::CommandTimeout(_, _) => {
+        JSONRPCError { code: -32000, .. } => {
             // Also acceptable - timeout due to no server
         },
         other => {
@@ -455,8 +455,8 @@ async fn test_dynamic_message_size_detection() {
     
     // Check if it's a size-related error (implementation may vary)
     match result.unwrap_err() {
-        JanusError::ValidationError(msg) => {
-            println!("Got validation error for large message: {}", msg);
+        JSONRPCError { code: -32005, message, .. } => {
+            println!("Got validation error for large message: {}", message);
         },
         other => {
             println!("Got error for large message (may be size-related): {:?}", other);
@@ -505,10 +505,10 @@ async fn test_socket_cleanup_management() {
     assert!(result.is_err(), "Expected error since no server is running");
     
     match result.unwrap_err() {
-        JanusError::ConnectionError(_) => {
+        JSONRPCError { code: -32603, .. } => {
             println!("Socket cleanup test: Connection error (expected with no server)");
         },
-        JanusError::CommandTimeout(_, _) => {
+        JSONRPCError { code: -32000, .. } => {
             println!("Socket cleanup test: Timeout error (expected with no server)");
         },
         other => {
@@ -530,10 +530,10 @@ async fn test_socket_cleanup_management() {
         // All operations should fail gracefully (no server running)
         // but should not cause resource leaks or socket issues
         match result {
-            Err(JanusError::ConnectionError(_)) => {
+            Err(JSONRPCError { code: -32603, .. }) => {
                 // Expected - connection cleanup working
             },
-            Err(JanusError::CommandTimeout(_, _)) => {
+            Err(JSONRPCError { code: -32000, .. }) => {
                 // Expected - timeout cleanup working
             },
             other => {
@@ -551,7 +551,7 @@ async fn test_socket_cleanup_management() {
     
     // Should handle cleanup for fire-and-forget as well
     match result {
-        Err(JanusError::ConnectionError(_)) => {
+        Err(JSONRPCError { code: -32603, .. }) => {
             println!("Fire-and-forget cleanup test: Connection error handled");
         },
         other => {
@@ -583,10 +583,10 @@ async fn test_connection_testing() {
     assert!(result.is_err(), "Expected connection error since no server is running");
     
     match result.unwrap_err() {
-        JanusError::ConnectionError(_) => {
+        JSONRPCError { code: -32603, .. } => {
             println!("Connection test correctly detected no server (expected)");
         },
-        JanusError::CommandTimeout(_, _) => {
+        JSONRPCError { code: -32000, .. } => {
             println!("Connection test timeout (expected with no server)");
         },
         other => {

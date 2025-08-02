@@ -1,5 +1,5 @@
 use rust_janus::protocol::janus_client::JanusClient;
-use rust_janus::error::JanusError;
+use rust_janus::error::jsonrpc_error::JSONRPCError;
 use std::time::Duration;
 use std::collections::HashMap;
 

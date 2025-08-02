@@ -10,7 +10,7 @@ use std::fs;
 
 use rust_janus::server::janus_server::JanusServer;
 use rust_janus::protocol::message_types::{JanusCommand, JanusResponse};
-use rust_janus::error::JanusError;
+use rust_janus::error::jsonrpc_error::JSONRPCError;
 
 // Helper function to create test server
 async fn create_test_server() -> (JanusServer, String) {
