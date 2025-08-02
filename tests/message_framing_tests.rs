@@ -1,4 +1,4 @@
-use rust_janus::protocol::{MessageFraming, MessageFramingMessage, SocketCommand, SocketResponse};
+use rust_janus::protocol::{MessageFraming, MessageFramingMessage, JanusCommand, JanusResponse};
 use std::collections::HashMap;
 
 #[tokio::test]
@@ -6,7 +6,7 @@ async fn test_message_framing_encode_message() {
     let framing = MessageFraming::new();
     
     // Test command encoding
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -23,7 +23,7 @@ async fn test_message_framing_encode_message() {
     assert_eq!(message_length, encoded.len() - 4);
     
     // Test response encoding
-    let response = SocketResponse::success(
+    let response = JanusResponse::success(
         "550e8400-e29b-41d4-a716-446655440000".to_string(),
         "test-service".to_string(),
         Some(serde_json::json!({"pong": true})),
@@ -43,7 +43,7 @@ async fn test_message_framing_encode_large_message() {
     let mut large_args = HashMap::new();
     large_args.insert("data".to_string(), serde_json::Value::String("x".repeat(20 * 1024 * 1024))); // 20MB
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "large".to_string(),
         Some(large_args),
@@ -64,7 +64,7 @@ async fn test_message_framing_decode_message() {
     let framing = MessageFraming::new();
     
     // Test command decoding
-    let original_command = SocketCommand::new(
+    let original_command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -86,7 +86,7 @@ async fn test_message_framing_decode_message() {
     }
     
     // Test response decoding
-    let original_response = SocketResponse::success(
+    let original_response = JanusResponse::success(
         "550e8400-e29b-41d4-a716-446655440000".to_string(),
         "test-service".to_string(),
         Some(serde_json::json!({"pong": true})),
@@ -110,14 +110,14 @@ async fn test_message_framing_decode_message() {
 async fn test_message_framing_multiple_messages() {
     let framing = MessageFraming::new();
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let response = SocketResponse::success(
+    let response = JanusResponse::success(
         "550e8400-e29b-41d4-a716-446655440000".to_string(),
         "test-service".to_string(),
         Some(serde_json::json!({"pong": true})),
@@ -153,7 +153,7 @@ async fn test_message_framing_decode_errors() {
     }
     
     // Test incomplete message
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -183,14 +183,14 @@ async fn test_message_framing_extract_messages() {
     let framing = MessageFraming::new();
     
     // Test multiple complete messages
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let response = SocketResponse::success(
+    let response = JanusResponse::success(
         "550e8400-e29b-41d4-a716-446655440000".to_string(),
         "test-service".to_string(),
         Some(serde_json::json!({"pong": true})),
@@ -215,14 +215,14 @@ async fn test_message_framing_extract_messages() {
 async fn test_message_framing_partial_messages() {
     let framing = MessageFraming::new();
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let response = SocketResponse::success(
+    let response = JanusResponse::success(
         "550e8400-e29b-41d4-a716-446655440000".to_string(),
         "test-service".to_string(),
         Some(serde_json::json!({"pong": true})),
@@ -271,7 +271,7 @@ async fn test_message_framing_partial_length_prefix() {
 async fn test_message_framing_calculate_framed_size() {
     let framing = MessageFraming::new();
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -290,7 +290,7 @@ async fn test_message_framing_direct_message() {
     let framing = MessageFraming::new();
     
     // Test direct message encoding
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -324,7 +324,7 @@ async fn test_message_framing_direct_roundtrip() {
     let framing = MessageFraming::new();
     
     // Test command roundtrip
-    let original_command = SocketCommand::new(
+    let original_command = JanusCommand::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -345,7 +345,7 @@ async fn test_message_framing_direct_roundtrip() {
     }
     
     // Test response roundtrip
-    let original_response = SocketResponse::success(
+    let original_response = JanusResponse::success(
         "550e8400-e29b-41d4-a716-446655440000".to_string(),
         "test-service".to_string(),
         Some(serde_json::json!({"pong": true})),

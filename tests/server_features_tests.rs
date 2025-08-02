@@ -9,7 +9,7 @@ use serde_json;
 use std::fs;
 
 use rust_janus::server::janus_server::JanusServer;
-use rust_janus::protocol::message_types::{SocketCommand, SocketResponse};
+use rust_janus::protocol::message_types::{JanusCommand, JanusResponse};
 use rust_janus::error::JanusError;
 
 // Helper function to create test server
@@ -20,7 +20,7 @@ async fn create_test_server() -> (JanusServer, String) {
 }
 
 // Helper function to send command and get response
-async fn send_command_and_wait(socket_path: &str, command: SocketCommand, timeout_ms: u64) -> Result<SocketResponse, Box<dyn std::error::Error>> {
+async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout_ms: u64) -> Result<JanusResponse, Box<dyn std::error::Error>> {
     let client_socket = UnixDatagram::unbound()?;
     
     // Create response socket
@@ -47,7 +47,7 @@ async fn send_command_and_wait(socket_path: &str, command: SocketCommand, timeou
         match response_socket.recv(&mut buffer) {
             Ok(size) => {
                 let response_data = &buffer[..size];
-                let response: SocketResponse = serde_json::from_slice(response_data)?;
+                let response: JanusResponse = serde_json::from_slice(response_data)?;
                 let _ = fs::remove_file(&response_path); // Cleanup
                 return Ok(response);
             }
@@ -76,7 +76,7 @@ async fn test_command_handler_registry() {
     sleep(Duration::from_millis(100)).await;
     
     // Send test command
-    let command = SocketCommand {
+    let command = JanusCommand {
         id: "test-001".to_string(),
         channelId: "test".to_string(),
         command: "test_command".to_string(),
@@ -119,7 +119,7 @@ async fn test_multi_client_connection_management() {
     for i in 0..client_count {
         let socket_path = socket_path.clone();
         let handle = tokio::spawn(async move {
-            let command = SocketCommand {
+            let command = JanusCommand {
                 id: format!("client-{}", i),
                 channelId: format!("test-client-{}", i),
                 command: "ping".to_string(),
@@ -162,7 +162,7 @@ async fn test_event_driven_architecture() {
     sleep(Duration::from_millis(100)).await;
     
     // Test that server processes events by sending a command
-    let command = SocketCommand {
+    let command = JanusCommand {
         id: "event-test".to_string(),
         channelId: "test".to_string(),
         command: "ping".to_string(),
@@ -245,7 +245,7 @@ async fn test_connection_processing_loop() {
         let socket_path = socket_path.clone();
         let cmd_id = cmd_id.to_string();
         let handle = tokio::spawn(async move {
-            let command = SocketCommand {
+            let command = JanusCommand {
                 id: cmd_id,
                 channelId: "test".to_string(),
                 command: "track_test".to_string(),
@@ -291,7 +291,7 @@ async fn test_error_response_generation() {
     sleep(Duration::from_millis(100)).await;
     
     // Send command that doesn't have a handler (should generate error)
-    let command = SocketCommand {
+    let command = JanusCommand {
         id: "error-test".to_string(),
         channelId: "test".to_string(),
         command: "nonexistent_command".to_string(),
@@ -330,7 +330,7 @@ async fn test_client_activity_tracking() {
     
     // Send multiple commands from same "client" (same channel)
     for i in 0..3 {
-        let command = SocketCommand {
+        let command = JanusCommand {
             id: format!("activity-test-{}", i),
             channelId: "test-client".to_string(), // Same channel = same client
             command: "ping".to_string(),
@@ -371,7 +371,7 @@ async fn test_command_execution_with_timeout() {
     sleep(Duration::from_millis(100)).await;
     
     // Send slow command with short timeout
-    let command = SocketCommand {
+    let command = JanusCommand {
         id: "timeout-test".to_string(),
         channelId: "test".to_string(),
         command: "slow_command".to_string(),

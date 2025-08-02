@@ -8,8 +8,8 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_datagram_message_structure() {
-    // Test SocketCommand serialization for SOCK_DGRAM
-    let socket_command = SocketCommand {
+    // Test JanusCommand serialization for SOCK_DGRAM
+    let socket_command = JanusCommand {
         id: "test-id".to_string(),
         channelId: "test".to_string(),
         command: "echo".to_string(),
@@ -26,7 +26,7 @@ async fn test_datagram_message_structure() {
     assert!(json_str.contains("reply_to"));
     
     // Test deserialization
-    let deserialized: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let deserialized: JanusCommand = serde_json::from_str(&json_str).unwrap();
     assert_eq!(deserialized.id, "test-id");
     assert_eq!(deserialized.channelId, "test");
     assert_eq!(deserialized.reply_to, Some("/tmp/response.sock".to_string()));
@@ -44,7 +44,7 @@ async fn test_datagram_size_validation() {
     ];
     
     for (name, args) in test_cases {
-        let socket_command = SocketCommand {
+        let socket_command = JanusCommand {
             id: "test-id".to_string(),
             channelId: "test".to_string(),
             command: "echo".to_string(),
@@ -69,7 +69,7 @@ async fn test_datagram_size_validation() {
 #[tokio::test]
 async fn test_datagram_json_validation() {
     // Test valid SOCK_DGRAM command
-    let valid_command = SocketCommand {
+    let valid_command = JanusCommand {
         id: "test-id".to_string(),
         channelId: "test".to_string(),
         command: "echo".to_string(),
@@ -81,7 +81,7 @@ async fn test_datagram_json_validation() {
     
     // Test JSON serialization/deserialization
     let json_str = serde_json::to_string(&valid_command).unwrap();
-    let deserialized: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let deserialized: JanusCommand = serde_json::from_str(&json_str).unwrap();
     assert_eq!(deserialized.id, valid_command.id);
     assert_eq!(deserialized.channelId, valid_command.channelId);
     
@@ -93,15 +93,15 @@ async fn test_datagram_json_validation() {
     ];
     
     for (i, malformed_json) in malformed_json_patterns.iter().enumerate() {
-        let result: std::result::Result<SocketCommand, _> = serde_json::from_str(malformed_json);
+        let result: std::result::Result<JanusCommand, _> = serde_json::from_str(malformed_json);
         assert!(result.is_err(), "Malformed JSON {} should fail deserialization", i);
     }
 }
 
 #[tokio::test]
 async fn test_socket_response_structure() {
-    // Test SocketResponse for SOCK_DGRAM
-    let socket_response = SocketResponse {
+    // Test JanusResponse for SOCK_DGRAM
+    let socket_response = JanusResponse {
         commandId: "cmd-123".to_string(),
         channelId: "test".to_string(),
         success: true,
@@ -121,7 +121,7 @@ async fn test_socket_response_structure() {
     assert!(json_str.contains("response_data"));
     
     // Test deserialization
-    let deserialized: SocketResponse = serde_json::from_str(&json_str).unwrap();
+    let deserialized: JanusResponse = serde_json::from_str(&json_str).unwrap();
     assert_eq!(deserialized.commandId, "cmd-123");
     assert_eq!(deserialized.channelId, "test");
     assert_eq!(deserialized.success, true);
@@ -137,7 +137,7 @@ async fn test_timestamp_values() {
     ];
     
     for timestamp in timestamps {
-        let command = SocketCommand {
+        let command = JanusCommand {
             id: "test-id".to_string(),
             channelId: "test".to_string(),
             command: "echo".to_string(),
@@ -149,7 +149,7 @@ async fn test_timestamp_values() {
         
         // Should serialize and deserialize successfully
         let json_str = serde_json::to_string(&command).unwrap();
-        let deserialized: SocketCommand = serde_json::from_str(&json_str).unwrap();
+        let deserialized: JanusCommand = serde_json::from_str(&json_str).unwrap();
         assert_eq!(deserialized.timestamp, timestamp);
     }
 }

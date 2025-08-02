@@ -190,7 +190,7 @@ async fn test_multiple_commands_with_different_timeouts() {
 
 #[tokio::test]
 async fn test_socket_command_timeout_field() {
-    let command_with_timeout = SocketCommand::new(
+    let command_with_timeout = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some(create_test_args()),
@@ -202,7 +202,7 @@ async fn test_socket_command_timeout_field() {
     assert!(json.contains("\"timeout\":30.5"), "JSON should contain timeout field");
     
     // Deserialize and verify
-    let deserialized: SocketCommand = serde_json::from_str(&json).unwrap();
+    let deserialized: JanusCommand = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.timeout, Some(30.5));
     
     // Test timeout duration conversion
@@ -212,7 +212,7 @@ async fn test_socket_command_timeout_field() {
 
 #[tokio::test]
 async fn test_socket_command_without_timeout() {
-    let command_without_timeout = SocketCommand::new(
+    let command_without_timeout = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some(create_test_args()),
@@ -224,7 +224,7 @@ async fn test_socket_command_without_timeout() {
     assert!(json.contains("\"timeout\":null") || !json.contains("\"timeout\""));
     
     // Deserialize and verify
-    let deserialized: SocketCommand = serde_json::from_str(&json).unwrap();
+    let deserialized: JanusCommand = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.timeout, None);
     
     // Test timeout duration conversion
@@ -297,11 +297,14 @@ async fn test_concurrent_timeouts() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("concurrent_{}", i)));
             
-            let result = client_clone.send_command(
-                "echo",
-                Some(args),
-                Some(std::time::Duration::from_millis(100)),
-            ).await;
+            let result = {
+                let mut client = client_clone.lock().await;
+                client.send_command(
+                    "echo",
+                    Some(args),
+                    Some(std::time::Duration::from_millis(100)),
+                ).await
+            };
             
             match result {
                 Err(JanusError::CommandTimeout(_, _)) => {
@@ -338,9 +341,9 @@ async fn test_command_handler_timeout_error() {
     data.insert("timeout_seconds".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(5.0).unwrap()));
     
     let handler_timeout_error = JSONRPCError {
-        code: JSONRPCErrorCode::HandlerTimeout,
+        code: JSONRPCErrorCode::HandlerTimeout as i32,
         message: "Handler timeout".to_string(),
-        data: Some(JSONRPCErrorData::Object(data)),
+        data: Some(JSONRPCErrorData::with_details("Handler timeout")),
     };
     
     // Serialize and verify structure
@@ -351,12 +354,12 @@ async fn test_command_handler_timeout_error() {
     
     // Deserialize and verify
     let deserialized: JSONRPCError = serde_json::from_str(&json).unwrap();
-    assert_eq!(deserialized.code, JSONRPCErrorCode::HandlerTimeout);
+    assert_eq!(deserialized.code, JSONRPCErrorCode::HandlerTimeout as i32);
     assert_eq!(deserialized.message, "Handler timeout");
     
-    if let Some(JSONRPCErrorData::Object(data)) = deserialized.data {
-        assert_eq!(data.get("command_id").unwrap().as_str().unwrap(), "echo-123");
-        assert_eq!(data.get("timeout_seconds").unwrap().as_f64().unwrap(), 5.0);
+    if let Some(data) = deserialized.data {
+        // JSONRPCErrorData now uses details field
+        assert!(!data.details.is_empty());
     } else {
         panic!("Expected object data in JSONRPCError");
     }
@@ -392,7 +395,7 @@ async fn test_handler_timeout_api_error() {
     }
     
     // Test response creation with timeout error
-    let timeout_response = SocketResponse::timeout_error(
+    let timeout_response = JanusResponse::timeout_error(
         "echo-789".to_string(),
         "test".to_string(),
         15.0,

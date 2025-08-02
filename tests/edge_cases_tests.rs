@@ -7,7 +7,7 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_anyccodable_with_null_values() {
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -19,7 +19,7 @@ async fn test_anyccodable_with_null_values() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let binding = parsed.args.unwrap();
     let null_value = binding.get("null_value").unwrap();
@@ -40,7 +40,7 @@ async fn test_deeply_nested_json_structures() {
         }
     });
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "process_nested".to_string(),
         Some({
@@ -52,7 +52,7 @@ async fn test_deeply_nested_json_structures() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     assert!(parsed.args.is_some());
     let args = parsed.args.unwrap();
@@ -64,7 +64,7 @@ async fn test_deeply_nested_json_structures() {
 async fn test_large_string_values() {
     let large_string = "x".repeat(10000); // 10KB string
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "process_large".to_string(),
         Some({
@@ -76,7 +76,7 @@ async fn test_large_string_values() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     let large_value = args.get("large_data").unwrap().as_str().unwrap();
@@ -97,7 +97,7 @@ async fn test_special_unicode_characters() {
     ];
     
     for (i, test_case) in unicode_test_cases.iter().enumerate() {
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test".to_string(),
             "unicode_test".to_string(),
             Some({
@@ -109,7 +109,7 @@ async fn test_special_unicode_characters() {
         );
         
         let json_str = serde_json::to_string(&command).unwrap();
-        let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+        let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
         
         let args = parsed.args.unwrap();
         let unicode_value = args.get(&format!("unicode_{}", i)).unwrap().as_str().unwrap();
@@ -128,7 +128,7 @@ async fn test_array_with_mixed_types() {
         [1, 2, 3]
     ]);
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "mixed_array".to_string(),
         Some({
@@ -140,7 +140,7 @@ async fn test_array_with_mixed_types() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     let mixed = args.get("mixed").unwrap().as_array().unwrap();
@@ -153,7 +153,7 @@ async fn test_array_with_mixed_types() {
 
 #[tokio::test]
 async fn test_empty_values_handling() {
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "empty_test".to_string(),
         Some({
@@ -167,7 +167,7 @@ async fn test_empty_values_handling() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     assert_eq!(args.get("empty_string").unwrap().as_str().unwrap(), "");
@@ -177,7 +177,7 @@ async fn test_empty_values_handling() {
 
 #[tokio::test]
 async fn test_numeric_edge_cases() {
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "numeric_test".to_string(),
         Some({
@@ -192,7 +192,7 @@ async fn test_numeric_edge_cases() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     assert_eq!(args.get("max_int").unwrap().as_i64().unwrap(), i64::MAX);
@@ -211,7 +211,7 @@ async fn test_malformed_json_recovery() {
     ];
     
     for malformed in malformed_json_cases {
-        let result: Result<SocketCommand, _> = serde_json::from_str(malformed);
+        let result: std::result::Result<JanusCommand, _> = serde_json::from_str(malformed);
         assert!(result.is_err(), "Should fail parsing malformed JSON: {}", malformed);
     }
 }
@@ -229,7 +229,7 @@ async fn test_command_id_edge_cases() {
     ];
     
     for test_id in edge_case_ids {
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test".to_string(),
             test_id.clone(),
             None,
@@ -237,7 +237,7 @@ async fn test_command_id_edge_cases() {
         );
         
         let json_str = serde_json::to_string(&command).unwrap();
-        let parsed: SocketCommand = serde_json::from_str(&json_str).unwrap();
+        let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
         
         assert_eq!(parsed.command, test_id);
     }

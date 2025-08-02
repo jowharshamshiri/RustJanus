@@ -293,7 +293,8 @@ async fn test_thread_safety_of_configuration() {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
-            let config = client_clone.lock().await.configuration();
+            let binding = client_clone.lock().await;
+            let config = binding.configuration();
             assert!(config.max_concurrent_connections > 0);
             assert!(config.max_message_size > 0);
             assert!(config.connection_timeout.as_secs() > 0);
@@ -321,7 +322,8 @@ async fn test_thread_safety_of_manifest_access() {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
-            let spec = client_clone.lock().await.specification().unwrap();
+            let binding = client_clone.lock().await;
+            let spec = binding.specification().unwrap();
             assert_eq!(spec.version, "1.0.0");
             assert!(!spec.channels.is_empty());
         }));
@@ -429,8 +431,8 @@ async fn test_no_deadlock_with_mixed_operations() {
         tasks.push(tokio::spawn(async move {
             let _config = client_clone.lock().await.configuration();
             let _spec = client_clone.lock().await.specification();
-            // Convert to SocketResponse for consistency
-            Ok(SocketResponse::success("config_access".to_string(), "test".to_string(), Some(serde_json::json!({}))))
+            // Convert to JanusResponse for consistency
+            Ok(JanusResponse::success("config_access".to_string(), "test".to_string(), Some(serde_json::json!({}))))
         }));
     }
     
@@ -496,7 +498,7 @@ async fn test_concurrent_resource_cleanup() {
     let socket_path = create_valid_socket_path();
     
     // 20 concurrent client lifecycles
-    let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();
+    let mut tasks: Vec<tokio::task::JoinHandle<Result<JanusResponse>>> = Vec::new();
     for i in 0..20 {
         let socket_path_clone = socket_path.clone();
         let _manifest_clone = _manifest.clone();
@@ -521,7 +523,7 @@ async fn test_concurrent_resource_cleanup() {
             );
             
             // Client should be cleaned up automatically when dropped
-            Ok(SocketResponse::success("timeout_test".to_string(), "test".to_string(), Some(serde_json::json!({}))))
+            Ok(JanusResponse::success("timeout_test".to_string(), "test".to_string(), Some(serde_json::json!({}))))
         }));
     }
     
@@ -553,7 +555,7 @@ async fn test_connection_pool_thread_safety() {
     ).await.unwrap()));
     
     // 30 operations on 5-connection pool
-    let mut tasks: Vec<tokio::task::JoinHandle<Result<SocketResponse>>> = Vec::new();
+    let mut tasks: Vec<tokio::task::JoinHandle<Result<JanusResponse>>> = Vec::new();
     for i in 0..30 {
         let client_clone = client.clone();
         

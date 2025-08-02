@@ -3,7 +3,7 @@ use rust_janus::prelude::*;
 use std::collections::HashMap;
 
 fn benchmark_message_serialization(c: &mut Criterion) {
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test_channel".to_string(),
         "test_command".to_string(),
         Some({
@@ -23,7 +23,7 @@ fn benchmark_message_serialization(c: &mut Criterion) {
     let serialized = serde_json::to_string(&command).unwrap();
     c.bench_function("deserialize_socket_command", |b| {
         b.iter(|| {
-            black_box(serde_json::from_str::<SocketCommand>(&serialized).unwrap());
+            black_box(serde_json::from_str::<JanusCommand>(&serialized).unwrap());
         })
     });
 }

@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 // Note: chrono types removed as they are not used in current SOCK_DGRAM implementation
-use crate::error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData, JanusError};
+use crate::error::{JSONRPCError, JSONRPCErrorCode, JanusError};
 
 /// Socket command structure (exact cross-language parity with Go/Swift/TypeScript)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[allow(non_snake_case)]
-pub struct SocketCommand {
+pub struct JanusCommand {
     /// Unique identifier for command tracking
     pub id: String,
     
@@ -30,7 +30,7 @@ pub struct SocketCommand {
     pub timestamp: f64,
 }
 
-impl SocketCommand {
+impl JanusCommand {
     /// Create a new socket command with UUID
     #[allow(non_snake_case)]
     pub fn new(
@@ -113,7 +113,7 @@ impl SocketCommand {
 /// Socket response structure (exact SwiftJanus parity)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[allow(non_snake_case)]
-pub struct SocketResponse {
+pub struct JanusResponse {
     /// Command ID for correlation
     pub commandId: String,
     
@@ -133,7 +133,7 @@ pub struct SocketResponse {
     pub timestamp: f64,
 }
 
-impl SocketResponse {
+impl JanusResponse {
     /// Create successful response
     #[allow(non_snake_case)]
     pub fn success(
@@ -189,7 +189,7 @@ impl SocketResponse {
         channelId: String,
         timeout_seconds: f64,
     ) -> Self {
-        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData};
+        use crate::error::jsonrpc_error::{JSONRPCError};
         use std::collections::HashMap;
         
         let context = HashMap::from([
@@ -249,7 +249,7 @@ pub struct SocketMessage {
 
 impl SocketMessage {
     /// Create command message
-    pub fn command(command: SocketCommand) -> Result<Self, serde_json::Error> {
+    pub fn command(command: JanusCommand) -> Result<Self, serde_json::Error> {
         let payload = serde_json::to_vec(&command)?;
         Ok(Self {
             message_type: MessageType::Command,
@@ -258,7 +258,7 @@ impl SocketMessage {
     }
     
     /// Create response message
-    pub fn response(response: SocketResponse) -> Result<Self, serde_json::Error> {
+    pub fn response(response: JanusResponse) -> Result<Self, serde_json::Error> {
         let payload = serde_json::to_vec(&response)?;
         Ok(Self {
             message_type: MessageType::Response,
@@ -267,7 +267,7 @@ impl SocketMessage {
     }
     
     /// Decode command from payload
-    pub fn decode_command(&self) -> Result<SocketCommand, serde_json::Error> {
+    pub fn decode_command(&self) -> Result<JanusCommand, serde_json::Error> {
         if self.message_type != MessageType::Command {
             return Err(serde_json::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -278,7 +278,7 @@ impl SocketMessage {
     }
     
     /// Decode response from payload
-    pub fn decode_response(&self) -> Result<SocketResponse, serde_json::Error> {
+    pub fn decode_response(&self) -> Result<JanusResponse, serde_json::Error> {
         if self.message_type != MessageType::Response {
             return Err(serde_json::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -324,7 +324,7 @@ impl SocketMessage {
         let mut args = HashMap::new();
         args.insert("text".to_string(), serde_json::Value::String(text.to_string()));
         
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             channel_id.to_string(),
             command.to_string(),
             Some(args),
@@ -340,7 +340,7 @@ impl SocketMessage {
             "message": message
         });
         
-        let response = SocketResponse::success(
+        let response = JanusResponse::success(
             command_id.to_string(),
             channel_id.to_string(),
             Some(result),
@@ -354,7 +354,7 @@ impl SocketMessage {
         use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
         
         let jsonrpc_error = JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(error_message.to_string()));
-        let response = SocketResponse::error(
+        let response = JanusResponse::error(
             command_id.to_string(),
             channel_id.to_string(),
             jsonrpc_error,
@@ -373,7 +373,7 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("test".to_string(), serde_json::Value::String("value".to_string()));
         
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             Some(args),
@@ -392,7 +392,7 @@ mod tests {
     fn test_socket_response_creation() {
         let result = serde_json::json!({"status": "ok"});
         
-        let response = SocketResponse::success(
+        let response = JanusResponse::success(
             "test-id".to_string(),
             "test-channel".to_string(),
             Some(result),
@@ -408,7 +408,7 @@ mod tests {
     
     #[test]
     fn test_socket_message_command() {
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,
@@ -427,7 +427,7 @@ mod tests {
     
     #[test]
     fn test_socket_message_response() {
-        let response = SocketResponse::success(
+        let response = JanusResponse::success(
             "test-id".to_string(),
             "test-channel".to_string(),
             None,
@@ -445,7 +445,7 @@ mod tests {
     
     #[test]
     fn test_message_validation() {
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,
@@ -466,7 +466,7 @@ mod tests {
     
     #[test]
     fn test_timeout_duration_conversion() {
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,
@@ -476,7 +476,7 @@ mod tests {
         let duration = command.timeout_duration().unwrap();
         assert_eq!(duration, std::time::Duration::from_secs_f64(30.5));
         
-        let command_no_timeout = SocketCommand::new(
+        let command_no_timeout = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,

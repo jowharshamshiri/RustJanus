@@ -71,7 +71,7 @@ pub use core::{CoreJanusClient, SecurityValidator};
 
 // Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
-    SocketCommand, SocketResponse, SocketMessage, MessageType,
+    JanusCommand, JanusResponse, SocketMessage, MessageType,
     JanusClient, TimeoutManager
 };
 
@@ -107,7 +107,7 @@ pub mod prelude {
     pub use crate::{
         JanusClient, CoreJanusClient, Manifest, JanusClientConfig,
         // Connection-based classes removed
-        SocketCommand, SocketResponse, SocketMessage, MessageType,
+        JanusCommand, JanusResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
         JanusError, Result,
         ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,

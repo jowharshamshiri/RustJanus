@@ -2,13 +2,13 @@ use crate::core::{CoreJanusClient, SecurityValidator};
 use crate::error::JanusError;
 use crate::config::JanusClientConfig;
 use crate::specification::Manifest;
-use crate::protocol::message_types::{SocketCommand, SocketResponse};
+use crate::protocol::message_types::{JanusCommand, JanusResponse};
 use crate::protocol::response_tracker::{ResponseTracker, TrackerConfig, CommandStatistics};
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
-// Note: SocketCommand, SocketResponse, and SocketError types are imported from message_types module
+// Note: JanusCommand, JanusResponse, and SocketError types are imported from message_types module
 // This ensures cross-language parity and eliminates type duplication
 
 /// Simulate connection state for SOCK_DGRAM compatibility
@@ -97,8 +97,8 @@ impl JanusClient {
         // Generate response socket path
         let response_socket_path = core_client.generate_response_socket_path();
         
-        // Create proper SocketCommand for spec request
-        let spec_command = SocketCommand {
+        // Create proper JanusCommand for spec request
+        let spec_command = JanusCommand {
             id: uuid::Uuid::new_v4().to_string(),
             channelId: "system".to_string(), // Use system channel for spec requests
             command: "spec".to_string(),
@@ -120,8 +120,8 @@ impl JanusClient {
             .send_datagram(&command_data, &response_socket_path)
             .await?;
         
-        // Parse response as SocketResponse
-        let response: SocketResponse = serde_json::from_slice(&response_data)
+        // Parse response as JanusResponse
+        let response: JanusResponse = serde_json::from_slice(&response_data)
             .map_err(|e| JanusError::SerializationError {
                 file: "janus_client.rs".to_string(),
                 line: 83,
@@ -190,13 +190,13 @@ impl JanusClient {
         command: &str,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<Duration>,
-    ) -> Result<SocketResponse, JanusError> {
+    ) -> Result<JanusResponse, JanusError> {
         // Generate command ID and response socket path
         let command_id = Uuid::new_v4().to_string();
         let response_socket_path = self.core_client.generate_response_socket_path();
         
         // Create socket command
-        let socket_command = SocketCommand {
+        let socket_command = JanusCommand {
             id: command_id.clone(),
             channelId: self.channel_id.clone(),
             command: command.to_string(),
@@ -240,7 +240,7 @@ impl JanusClient {
             .await?;
         
         // Deserialize response
-        let response: SocketResponse = serde_json::from_slice(&response_data)
+        let response: JanusResponse = serde_json::from_slice(&response_data)
             .map_err(|e| JanusError::SerializationError { 
                 file: "janus_client.rs".to_string(), 
                 line: 124, 
@@ -286,7 +286,7 @@ impl JanusClient {
         let command_id = Uuid::new_v4().to_string();
         
         // Create socket command (no reply_to field)
-        let socket_command = SocketCommand {
+        let socket_command = JanusCommand {
             id: command_id,
             channelId: self.channel_id.clone(),
             command: command.to_string(),
@@ -334,7 +334,7 @@ impl JanusClient {
     fn validate_command_against_spec(
         &self,
         spec: &Manifest,
-        command: &SocketCommand,
+        command: &JanusCommand,
     ) -> Result<(), JanusError> {
         // Check if command is reserved (built-in commands should never be in Manifests)
         let builtin_commands = ["ping", "echo", "get_info", "validate", "slow_process", "spec"];
@@ -530,7 +530,7 @@ impl JanusClient {
         command: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Duration,
-    ) -> Result<(tokio::sync::oneshot::Receiver<SocketResponse>, String), JanusError> {
+    ) -> Result<(tokio::sync::oneshot::Receiver<JanusResponse>, String), JanusError> {
         let command_id = Uuid::new_v4().to_string();
         
         // Track the command in response tracker
@@ -551,7 +551,7 @@ impl JanusClient {
 
             // Create socket command with specific ID
             let timeout_seconds = timeout.as_secs_f64();
-            let socket_command = SocketCommand {
+            let socket_command = JanusCommand {
                 id: cmd_id.clone(),
                 channelId: channel_id,
                 command: command.clone(),
@@ -563,7 +563,7 @@ impl JanusClient {
 
             // Validate command if needed
             if enable_validation {
-                if let Some(spec) = &manifest {
+                if let Some(_spec) = &manifest {
                     if !Self::is_builtin_command(&command) {
                         // Perform validation (simplified for async context)
                         // Full validation would be more complex
@@ -577,7 +577,7 @@ impl JanusClient {
                     match core_client.send_datagram(&command_bytes, &response_socket_path).await {
                         Ok(response_bytes) => {
                             // Parse response
-                            match serde_json::from_slice::<SocketResponse>(&response_bytes) {
+                            match serde_json::from_slice::<JanusResponse>(&response_bytes) {
                                 Ok(response) => {
                                     // Handle response through tracker
                                     response_tracker.handle_response(response);
@@ -700,7 +700,7 @@ pub struct ParallelCommand {
 #[derive(Debug, Clone)]
 pub struct ParallelResult {
     pub command_id: String,
-    pub response: Option<SocketResponse>,
+    pub response: Option<JanusResponse>,
     pub error: Option<String>,
 }
 
@@ -717,7 +717,7 @@ impl ChannelProxy {
         &self,
         command: String,
         args: Option<HashMap<String, serde_json::Value>>,
-    ) -> Result<SocketResponse, JanusError> {
+    ) -> Result<JanusResponse, JanusError> {
         // Create a temporary client with the proxy's channel ID
         let mut proxy_client = self.client.clone();
         proxy_client.channel_id = self.channel_id.clone();

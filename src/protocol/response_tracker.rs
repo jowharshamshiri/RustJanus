@@ -1,4 +1,4 @@
-use crate::protocol::message_types::{SocketResponse};
+use crate::protocol::message_types::{JanusResponse};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 /// Represents a command awaiting response
 #[derive(Debug)]
 pub struct PendingCommand {
-    pub resolve: oneshot::Sender<SocketResponse>,
+    pub resolve: oneshot::Sender<JanusResponse>,
     pub timestamp: Instant,
     pub timeout: Duration,
 }
@@ -96,7 +96,7 @@ impl ResponseTracker {
         &self,
         command_id: String,
         timeout_duration: Duration,
-    ) -> Result<oneshot::Receiver<SocketResponse>, ResponseTrackerError> {
+    ) -> Result<oneshot::Receiver<JanusResponse>, ResponseTrackerError> {
         let timeout = if timeout_duration.is_zero() {
             self.config.default_timeout
         } else {
@@ -139,7 +139,7 @@ impl ResponseTracker {
     }
 
     /// Handle an incoming response
-    pub fn handle_response(&self, response: SocketResponse) -> bool {
+    pub fn handle_response(&self, response: JanusResponse) -> bool {
         let mut pending = self.pending_commands.lock().unwrap();
         
         if let Some(pending_command) = pending.remove(&response.commandId) {

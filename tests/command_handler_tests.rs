@@ -1,6 +1,6 @@
 use rust_janus::error::{JSONRPCError, JSONRPCErrorCode};
 use rust_janus::protocol::command_handler::*;
-use rust_janus::protocol::message_types::SocketCommand;
+use rust_janus::protocol::message_types::JanusCommand;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -18,8 +18,8 @@ fn create_test_command(
     command: Option<String>,
     args: std::collections::HashMap<String, serde_json::Value>,
     reply_to: Option<String>,
-) -> SocketCommand {
-    SocketCommand {
+) -> JanusCommand {
+    JanusCommand {
         id: id.unwrap_or_else(|| "test-id".to_string()),
         channelId: channel_id.unwrap_or_else(|| "test-channel".to_string()),
         command: command.unwrap_or_else(|| "test-command".to_string()),

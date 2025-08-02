@@ -51,7 +51,7 @@ async fn test_manifest_json_serialization() {
 
 #[tokio::test]
 async fn test_socket_command_serialization() {
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some(create_test_args()),
@@ -67,7 +67,7 @@ async fn test_socket_command_serialization() {
     assert!(json_str.contains("30"));
     
     // Deserialize from JSON
-    let parsed_command: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     // Verify round-trip integrity
     assert_eq!(parsed_command.id, command.id);
@@ -80,14 +80,14 @@ async fn test_socket_command_serialization() {
 #[tokio::test]
 async fn test_socket_response_serialization() {
     // Test success response
-    let success_response = SocketResponse::success(
+    let success_response = JanusResponse::success(
         "echo-123".to_string(),
         "test".to_string(),
         Some(serde_json::json!({"result": "success", "data": "test"})),
     );
     
     let json_str = serde_json::to_string(&success_response).unwrap();
-    let parsed_response: SocketResponse = serde_json::from_str(&json_str).unwrap();
+    let parsed_response: JanusResponse = serde_json::from_str(&json_str).unwrap();
     
     assert_eq!(parsed_response.commandId, success_response.commandId);
     assert_eq!(parsed_response.success, true);
@@ -96,14 +96,14 @@ async fn test_socket_response_serialization() {
     
     // Test error response
     let jsonrpc_error = JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Test validation error".to_string()));
-    let error_response = SocketResponse::error(
+    let error_response = JanusResponse::error(
         "echo-456".to_string(),
         "test".to_string(),
         jsonrpc_error,
     );
     
     let json_str = serde_json::to_string(&error_response).unwrap();
-    let parsed_response: SocketResponse = serde_json::from_str(&json_str).unwrap();
+    let parsed_response: JanusResponse = serde_json::from_str(&json_str).unwrap();
     
     assert_eq!(parsed_response.commandId, error_response.commandId);
     assert_eq!(parsed_response.success, false);
@@ -115,7 +115,7 @@ async fn test_socket_response_serialization() {
 async fn test_anyccodable_string_value() {
     let string_value = serde_json::Value::String("Hello World".to_string());
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -127,7 +127,7 @@ async fn test_anyccodable_string_value() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed_command.args.unwrap();
     let parsed_value = args.get("string_arg").unwrap();
@@ -139,7 +139,7 @@ async fn test_anyccodable_string_value() {
 async fn test_anyccodable_integer_value() {
     let integer_value = serde_json::Value::Number(serde_json::Number::from(42));
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -151,7 +151,7 @@ async fn test_anyccodable_integer_value() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let binding = parsed_command.args.unwrap();
     let parsed_value = binding.get("integer_arg").unwrap();
@@ -163,7 +163,7 @@ async fn test_anyccodable_integer_value() {
 async fn test_anyccodable_boolean_value() {
     let boolean_value = serde_json::Value::Bool(true);
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -175,7 +175,7 @@ async fn test_anyccodable_boolean_value() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let binding = parsed_command.args.unwrap();
     let parsed_value = binding.get("boolean_arg").unwrap();
@@ -191,7 +191,7 @@ async fn test_anyccodable_array_value() {
         serde_json::Value::Bool(true),
     ]);
     
-    let command = SocketCommand::new(
+    let command = JanusCommand::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -203,7 +203,7 @@ async fn test_anyccodable_array_value() {
     );
     
     let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: SocketCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
     
     let binding = parsed_command.args.unwrap();
     let parsed_value = binding.get("array_arg").unwrap();

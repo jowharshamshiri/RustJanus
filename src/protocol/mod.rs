@@ -5,7 +5,7 @@ pub mod timeout_manager;
 pub mod response_tracker;
 pub mod command_handler;
 
-pub use message_types::{SocketCommand, SocketResponse, SocketMessage, MessageType};
+pub use message_types::{JanusCommand, JanusResponse, SocketMessage, MessageType};
 pub use message_framing::{MessageFraming, MessageFramingMessage, MessageFramingError};
 pub use janus_client::{JanusClient, ConnectionState};
 pub use timeout_manager::TimeoutManager;

@@ -201,7 +201,7 @@ impl ServerState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct SocketCommand {
+struct JanusCommand {
     id: String,
     #[serde(rename = "channelId")]
     channel_id: String,
@@ -214,7 +214,7 @@ struct SocketCommand {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct SocketResponse {
+struct JanusResponse {
     #[serde(rename = "commandId")]
     command_id: String,
     #[serde(rename = "channelId")]
@@ -383,7 +383,7 @@ async fn listen_for_datagrams(socket_path: &str, manifest: Option<Manifest>) -> 
         
         let data = &buffer[..size];
         
-        match serde_json::from_slice::<SocketCommand>(data) {
+        match serde_json::from_slice::<JanusCommand>(data) {
             Ok(cmd) => {
                 // Track client activity
                 let client_id = server_state.add_client(format!("{:?}", addr));
@@ -456,7 +456,7 @@ async fn send_datagram(target_socket: &str, command: &str, message: &str) -> Res
     let mut args = HashMap::new();
     args.insert("message".to_string(), serde_json::Value::String(message.to_string()));
     
-    let cmd = SocketCommand {
+    let cmd = JanusCommand {
         id: generate_id(),
         channel_id: "test".to_string(),
         command: command.to_string(),
@@ -477,7 +477,7 @@ async fn send_datagram(target_socket: &str, command: &str, message: &str) -> Res
     let (size, _) = response_sock.recv_from(&mut buffer)?;
     
     let response_data = &buffer[..size];
-    match serde_json::from_slice::<SocketResponse>(response_data) {
+    match serde_json::from_slice::<JanusResponse>(response_data) {
         Ok(response) => {
             println!("Response: Success={}, Result={:?}", response.success, response.result);
         }
@@ -679,7 +679,7 @@ fn send_response(
     manifest: &Option<Manifest>,
     server_state: &Arc<ServerState>,
     client_id: &str,
-) -> Result<SocketResponse, Box<dyn std::error::Error>> {
+) -> Result<JanusResponse, Box<dyn std::error::Error>> {
     // Built-in commands are always allowed and hardcoded (matches Go implementation exactly)
     let built_in_commands = vec!["spec", "ping", "echo", "get_info", "validate", "slow_process"];
     
@@ -756,7 +756,7 @@ fn send_response(
         }
     }
     
-    let response = SocketResponse {
+    let response = JanusResponse {
         command_id: cmd_id.to_string(),
         channel_id: channel_id.to_string(),
         success,

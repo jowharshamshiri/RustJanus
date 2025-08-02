@@ -129,7 +129,7 @@ async fn test_command_id_uniqueness() {
     
     for _ in 0..5 {
         // Create commands but don't send them to avoid connection errors
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test".to_string(),
             "ping".to_string(),
             None,

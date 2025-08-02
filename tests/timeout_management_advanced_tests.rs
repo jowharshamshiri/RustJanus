@@ -1,6 +1,6 @@
 use std::time::Duration;
 use tokio::time::sleep;
-use janus::protocol::timeout_manager::{TimeoutManager, TimeoutHandler};
+use rust_janus::protocol::timeout_manager::{TimeoutManager, TimeoutHandler};
 
 /// Test timeout extension capability (matches Go/TypeScript implementation)
 #[tokio::test]

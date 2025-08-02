@@ -1,5 +1,5 @@
 use crate::error::JanusError;
-use crate::protocol::message_types::{SocketCommand, SocketResponse};
+use crate::protocol::message_types::{JanusCommand, JanusResponse};
 use serde::{Deserialize, Serialize};
 
 const LENGTH_PREFIX_SIZE: usize = 4;
@@ -160,7 +160,7 @@ impl MessageFraming {
 
         // Parse payload JSON directly
         let message = if envelope.message_type == "command" {
-            let cmd: SocketCommand = serde_json::from_str(&envelope.payload).map_err(|e| MessageFramingError {
+            let cmd: JanusCommand = serde_json::from_str(&envelope.payload).map_err(|e| MessageFramingError {
                 message: format!("Failed to parse command payload JSON: {}", e),
                 code: "INVALID_PAYLOAD_JSON".to_string(),
             })?;
@@ -169,7 +169,7 @@ impl MessageFraming {
             self.validate_command_structure(&cmd)?;
             MessageFramingMessage::Command(cmd)
         } else {
-            let resp: SocketResponse = serde_json::from_str(&envelope.payload).map_err(|e| MessageFramingError {
+            let resp: JanusResponse = serde_json::from_str(&envelope.payload).map_err(|e| MessageFramingError {
                 message: format!("Failed to parse response payload JSON: {}", e),
                 code: "INVALID_PAYLOAD_JSON".to_string(),
             })?;
@@ -280,13 +280,13 @@ impl MessageFraming {
 
         // Determine message type and parse accordingly
         let message = if raw_value.get("command").is_some() {
-            let cmd: SocketCommand = serde_json::from_slice(message_buffer).map_err(|e| MessageFramingError {
+            let cmd: JanusCommand = serde_json::from_slice(message_buffer).map_err(|e| MessageFramingError {
                 message: format!("Failed to parse command: {}", e),
                 code: "INVALID_COMMAND".to_string(),
             })?;
             MessageFramingMessage::Command(cmd)
         } else if raw_value.get("commandId").is_some() {
-            let resp: SocketResponse = serde_json::from_slice(message_buffer).map_err(|e| MessageFramingError {
+            let resp: JanusResponse = serde_json::from_slice(message_buffer).map_err(|e| MessageFramingError {
                 message: format!("Failed to parse response: {}", e),
                 code: "INVALID_RESPONSE".to_string(),
             })?;
@@ -302,7 +302,7 @@ impl MessageFraming {
     }
 
     /// Validate command structure
-    fn validate_command_structure(&self, cmd: &SocketCommand) -> Result<(), MessageFramingError> {
+    fn validate_command_structure(&self, cmd: &JanusCommand) -> Result<(), MessageFramingError> {
         if cmd.id.is_empty() {
             return Err(MessageFramingError {
                 message: "Command missing required string field: id".to_string(),
@@ -325,7 +325,7 @@ impl MessageFraming {
     }
 
     /// Validate response structure
-    fn validate_response_structure(&self, resp: &SocketResponse) -> Result<(), MessageFramingError> {
+    fn validate_response_structure(&self, resp: &JanusResponse) -> Result<(), MessageFramingError> {
         if resp.commandId.is_empty() {
             return Err(MessageFramingError {
                 message: "Response missing required field: commandId".to_string(),
@@ -345,8 +345,8 @@ impl MessageFraming {
 /// Message enum for framing operations
 #[derive(Debug, Clone)]
 pub enum MessageFramingMessage {
-    Command(SocketCommand),
-    Response(SocketResponse),
+    Command(JanusCommand),
+    Response(JanusResponse),
 }
 
 #[cfg(test)]
@@ -357,7 +357,7 @@ mod tests {
     fn test_encode_decode_command() {
         let framing = MessageFraming::new();
         
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,
@@ -384,7 +384,7 @@ mod tests {
     fn test_encode_decode_response() {
         let framing = MessageFraming::new();
         
-        let response = SocketResponse::success(
+        let response = JanusResponse::success(
             "test-id".to_string(),
             "test-channel".to_string(),
             Some(serde_json::json!({"status": "ok"})),
@@ -410,14 +410,14 @@ mod tests {
     fn test_extract_multiple_messages() {
         let framing = MessageFraming::new();
         
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,
             None,
         );
         
-        let response = SocketResponse::success(
+        let response = JanusResponse::success(
             "test-id".to_string(),
             "test-channel".to_string(),
             None,
@@ -445,7 +445,7 @@ mod tests {
     fn test_partial_message_handling() {
         let framing = MessageFraming::new();
         
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,
@@ -465,7 +465,7 @@ mod tests {
     fn test_direct_message_encoding() {
         let framing = MessageFraming::new();
         
-        let command = SocketCommand::new(
+        let command = JanusCommand::new(
             "test-channel".to_string(),
             "test-command".to_string(),
             None,

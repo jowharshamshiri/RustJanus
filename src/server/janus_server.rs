@@ -6,11 +6,11 @@ use tokio::sync::Mutex;
 use serde_json;
 use std::fs;
 
-use crate::protocol::message_types::{SocketCommand, SocketResponse};
+use crate::protocol::message_types::{JanusCommand, JanusResponse};
 use crate::error::JanusError;
 
 /// Command handler function type for SOCK_DGRAM server
-pub type JanusCommandHandler = Box<dyn Fn(SocketCommand) -> Result<serde_json::Value, JanusError> + Send + Sync>;
+pub type JanusCommandHandler = Box<dyn Fn(JanusCommand) -> Result<serde_json::Value, JanusError> + Send + Sync>;
 
 /// High-level SOCK_DGRAM Unix socket server
 /// Handles command routing and response generation for connectionless communication
@@ -33,7 +33,7 @@ impl JanusServer {
     /// Register a command handler
     pub async fn register_handler<F>(&mut self, command: &str, handler: F)
     where
-        F: Fn(SocketCommand) -> Result<serde_json::Value, JanusError> + Send + Sync + 'static,
+        F: Fn(JanusCommand) -> Result<serde_json::Value, JanusError> + Send + Sync + 'static,
     {
         let mut handlers = self.handlers.lock().await;
         handlers.insert(command.to_string(), Box::new(handler));
@@ -123,7 +123,7 @@ impl JanusServer {
         data: &[u8],
         handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
     ) {
-        match serde_json::from_slice::<SocketCommand>(data) {
+        match serde_json::from_slice::<JanusCommand>(data) {
             Ok(cmd) => {
                 println!("Received SOCK_DGRAM command: {} (ID: {})", cmd.command, cmd.id);
 
@@ -140,14 +140,14 @@ impl JanusServer {
     }
 
     async fn process_command(
-        cmd: &SocketCommand,
+        cmd: &JanusCommand,
         handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
-    ) -> SocketResponse {
+    ) -> JanusResponse {
         let handlers_guard = handlers.lock().await;
         
         let response = if let Some(handler) = handlers_guard.get(&cmd.command) {
             match handler(cmd.clone()) {
-                Ok(result) => SocketResponse {
+                Ok(result) => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
                     success: true,
@@ -158,7 +158,7 @@ impl JanusServer {
                         .unwrap()
                         .as_secs_f64(),
                 },
-                Err(e) => SocketResponse {
+                Err(e) => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
                     success: false,
@@ -179,7 +179,7 @@ impl JanusServer {
         } else {
             // Default handlers (matching main binary)
             match cmd.command.as_str() {
-                "ping" => SocketResponse {
+                "ping" => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
                     success: true,
@@ -202,7 +202,7 @@ impl JanusServer {
                         .cloned()
                         .unwrap_or_else(|| serde_json::Value::String("Hello from Rust SOCK_DGRAM server!".to_string()));
                     
-                    SocketResponse {
+                    JanusResponse {
                         commandId: cmd.id.clone(),
                         channelId: cmd.channelId.clone(),
                         success: true,
@@ -214,7 +214,7 @@ impl JanusServer {
                             .as_secs_f64(),
                     }
                 }
-                "get_info" => SocketResponse {
+                "get_info" => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
                     success: true,
@@ -255,7 +255,7 @@ impl JanusServer {
                         })
                     };
                     
-                    SocketResponse {
+                    JanusResponse {
                         commandId: cmd.id.clone(),
                         channelId: cmd.channelId.clone(),
                         success: true,
@@ -282,7 +282,7 @@ impl JanusServer {
                         result["message"] = message.clone();
                     }
                     
-                    SocketResponse {
+                    JanusResponse {
                         commandId: cmd.id.clone(),
                         channelId: cmd.channelId.clone(),
                         success: true,
@@ -349,7 +349,7 @@ impl JanusServer {
                         "models": {}
                     });
                     
-                    SocketResponse {
+                    JanusResponse {
                         commandId: cmd.id.clone(),
                         channelId: cmd.channelId.clone(),
                         success: true,
@@ -368,7 +368,7 @@ impl JanusServer {
                         .cloned()
                         .unwrap_or_else(|| serde_json::Value::String("Hello Server!".to_string()));
                     
-                    SocketResponse {
+                    JanusResponse {
                         commandId: cmd.id.clone(),
                         channelId: cmd.channelId.clone(),
                         success: true,
@@ -380,7 +380,7 @@ impl JanusServer {
                             .as_secs_f64(),
                     }
                 }
-                _ => SocketResponse {
+                _ => JanusResponse {
                     commandId: cmd.id.clone(),
                     channelId: cmd.channelId.clone(),
                     success: false,
@@ -403,7 +403,7 @@ impl JanusServer {
         response
     }
 
-    async fn send_response(response: SocketResponse, reply_to: &str) {
+    async fn send_response(response: JanusResponse, reply_to: &str) {
         match serde_json::to_vec(&response) {
             Ok(response_data) => {
                 if let Ok(client_sock) = UnixDatagram::unbound() {

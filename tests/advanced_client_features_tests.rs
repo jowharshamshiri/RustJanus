@@ -8,9 +8,9 @@ use std::time::Duration;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use rust_janus::protocol::janus_client::JanusClient;
+use rust_janus::protocol::janus_client::{JanusClient, ParallelCommand};
 use rust_janus::config::JanusClientConfig;
-use rust_janus::protocol::message_types::SocketCommand;
+use rust_janus::protocol::message_types::JanusCommand;
 
 /// Mock server for testing Advanced Client Features
 struct MockAdvancedServer {
@@ -36,14 +36,14 @@ async fn test_response_correlation_system() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Test multiple concurrent commands with different IDs
             let command1_id = Uuid::new_v4().to_string();
             let command2_id = Uuid::new_v4().to_string();
             
             // Create commands with different IDs
             let mut args1 = HashMap::new();
-            let command1 = SocketCommand {
+            let command1 = JanusCommand {
                 id: command1_id.clone(),
                 channelId: "test-channel".to_string(),
                 command: "ping".to_string(),
@@ -55,7 +55,7 @@ async fn test_response_correlation_system() {
             
             let mut args2 = HashMap::new();
             args2.insert("message".to_string(), serde_json::json!("test"));
-            let command2 = SocketCommand {
+            let command2 = JanusCommand {
                 id: command2_id.clone(),
                 channelId: "test-channel".to_string(),
                 command: "echo".to_string(),
@@ -70,8 +70,16 @@ async fn test_response_correlation_system() {
             assert_eq!(initial_count, 0, "Should start with no pending commands");
             
             // Send commands and verify correlation tracking
-            let result1 = client.send_command_with_correlation(command1).await;
-            let result2 = client.send_command_with_correlation(command2).await;
+            let result1 = client.send_command_with_correlation(
+                command1.command, 
+                command1.args, 
+                Duration::from_secs(5)
+            ).await;
+            let result2 = client.send_command_with_correlation(
+                command2.command, 
+                command2.args, 
+                Duration::from_secs(5)
+            ).await;
             
             // Verify commands are tracked properly (even if they fail due to no server)
             assert!(result1.is_err() || result2.is_err(), "Commands should fail without server but correlation should be tracked");
@@ -91,7 +99,7 @@ async fn test_command_cancellation() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             let command_id = Uuid::new_v4().to_string();
             
             // Test cancelling a non-existent command
@@ -117,7 +125,7 @@ async fn test_bulk_command_cancellation() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Test bulk cancellation when no commands are pending
             let cancelled_count = client.cancel_all_commands(Some("Bulk test cancellation"));
             assert_eq!(cancelled_count, 0, "Should cancel 0 commands when none are pending");
@@ -141,7 +149,7 @@ async fn test_pending_command_statistics() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Test initial statistics
             let pending_count = client.get_pending_command_count();
             assert_eq!(pending_count, 0, "Should start with 0 pending commands");
@@ -169,7 +177,7 @@ async fn test_multi_command_parallel_execution() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Create multiple test commands
             let mut args1 = HashMap::new();
             let mut args2 = HashMap::new();
@@ -178,14 +186,14 @@ async fn test_multi_command_parallel_execution() {
             args3.insert("message".to_string(), serde_json::json!("test2"));
             
             let commands = vec![
-                ("ping", args1),
-                ("echo", args2),
-                ("echo", args3),
+                ParallelCommand { id: Uuid::new_v4().to_string(), command: "ping".to_string(), args: Some(args1) },
+                ParallelCommand { id: Uuid::new_v4().to_string(), command: "echo".to_string(), args: Some(args2) },
+                ParallelCommand { id: Uuid::new_v4().to_string(), command: "echo".to_string(), args: Some(args3) },
             ];
             
             // Test parallel execution capability
             let start_time = std::time::Instant::now();
-            let results = client.execute_commands_in_parallel(commands, Some(Duration::from_secs(5))).await;
+            let results = client.execute_commands_in_parallel(commands).await;
             let execution_time = start_time.elapsed();
             
             // Verify parallel execution functionality exists (results will be errors due to no server)
@@ -194,7 +202,7 @@ async fn test_multi_command_parallel_execution() {
             
             // All results should be errors due to no server, but that's expected
             for result in results {
-                assert!(result.is_err(), "Commands should fail without server but parallel execution should work");
+                assert!(result.error.is_some(), "Commands should fail without server but parallel execution should work");
             }
             
             println!("✅ Multi-command parallel execution functionality works correctly");
@@ -212,7 +220,7 @@ async fn test_channel_proxy() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Test that channel proxy creation functionality exists (even if method name differs)
             // The concept of channel-specific execution is tested through the client itself
             
@@ -236,7 +244,7 @@ async fn test_dynamic_argument_validation() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Test dynamic argument validation functionality
             
             // Test valid JSON arguments
@@ -303,7 +311,7 @@ async fn test_command_timeout_and_correlation() {
     let config = JanusClientConfig::new();
     
     match JanusClient::new(socket_path.clone(), "test-channel".to_string(), config).await {
-        Ok(client) => {
+        Ok(mut client) => {
             // Test short timeout
             let short_timeout = Duration::from_millis(100);
             let start_time = std::time::Instant::now();
