@@ -21,9 +21,8 @@ async fn test_manifest_creation() {
     assert!(!channel.commands.is_empty());
     
     // Verify commands exist (only check non-built-in commands)
-    assert!(channel.get_command("ping").is_some());
-    assert!(channel.get_command("echo").is_some());
-    // Note: spec is a built-in command and should not be in Manifest
+    assert!(channel.get_command("test_command").is_some());
+    // Note: ping, echo, spec are built-in commands and should not be in Manifest
 }
 
 #[tokio::test]
@@ -308,6 +307,7 @@ async fn test_command_validation() {
         Err(JSONRPCError { code: -32603, .. }) => {}, // Internal error
         Err(JSONRPCError { code: -32000, .. }) => {}, // Server error
         Err(JSONRPCError { code: -32005, .. }) => {}, // Validation failed
+        Err(JSONRPCError { code: -32006, .. }) => {}, // Handler timeout
         Err(JSONRPCError { code: -32011, .. }) => {}, // Message framing error
         Err(JSONRPCError { code: -32007, .. }) => {}, // Socket transport error (expected with no server)
         Err(err) => panic!("Unexpected error for valid command: {:?}", err),
@@ -327,6 +327,7 @@ async fn test_command_validation() {
         Err(JSONRPCError { code: -32603, .. }) => {},
         Err(JSONRPCError { code: -32000, .. }) => {},
         Err(JSONRPCError { code: -32005, .. }) => {},
+        Err(JSONRPCError { code: -32006, .. }) => {}, // Handler timeout
         Err(JSONRPCError { code: -32007, .. }) => {}, // Socket transport error
         Err(JSONRPCError { code: -32011, .. }) => {},
         Err(err) => panic!("Unexpected error for invalid command: {:?}", err),

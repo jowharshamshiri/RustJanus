@@ -105,8 +105,8 @@ fn test_successful_parsing_logging() {
             "test": {
                 "description": "Test channel",
                 "commands": {
-                    "ping": {
-                        "description": "Ping command",
+                    "test_command": {
+                        "description": "Test command",
                         "response": {
                             "type": "object"
                         }

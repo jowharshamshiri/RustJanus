@@ -20,19 +20,19 @@ async fn test_timeout_extension() {
         .await
         .expect("Failed to start timeout");
     
-    // Wait 50ms, then extend by 100ms
+    // Wait 50ms, then extend by 200ms (much longer extension to avoid race condition)
     sleep(Duration::from_millis(50)).await;
-    let extended = manager.extend_timeout(&command_id, Duration::from_millis(100)).await;
+    let extended = manager.extend_timeout(&command_id, Duration::from_millis(200)).await;
     
     assert!(extended, "Expected timeout extension to succeed");
     
-    // Wait another 100ms (should not fire yet since we extended)
-    sleep(Duration::from_millis(100)).await;
+    // Wait another 150ms (should not fire yet since we extended by 200ms from 50ms point)
+    sleep(Duration::from_millis(150)).await;
     
     assert!(!timeout_fired.load(std::sync::atomic::Ordering::SeqCst), 
            "Callback should not have fired yet after extension");
     
-    // Wait for the extended timeout to fire
+    // Wait for the extended timeout to fire (additional 100ms should trigger it)
     sleep(Duration::from_millis(100)).await;
     
     assert!(timeout_fired.load(std::sync::atomic::Ordering::SeqCst), 

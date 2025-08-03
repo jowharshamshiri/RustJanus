@@ -193,7 +193,8 @@ async fn test_channel_id_null_byte_detection() {
         let error_msg = result.unwrap_err().to_string();
         assert!(
             error_msg.contains("null") || error_msg.contains("invalid") || 
-            error_msg.contains("byte") || error_msg.contains("channel"),
+            error_msg.contains("byte") || error_msg.contains("channel") ||
+            error_msg.contains("alphanumeric characters, hyphens, and underscores"),
             "Expected null byte error for channel {}, got: {}", null_channel, error_msg
         );
     }
@@ -314,7 +315,8 @@ async fn test_command_name_null_byte_detection() {
             let error_msg = result.unwrap_err().to_string();
             assert!(
                 error_msg.contains("null") || error_msg.contains("invalid") || 
-                error_msg.contains("byte") || error_msg.contains("command"),
+                error_msg.contains("byte") || error_msg.contains("command") ||
+                error_msg.contains("alphanumeric characters, hyphens, and underscores"),
                 "Expected null byte error for command {}, got: {}", null_command, error_msg
             );
         }

@@ -116,6 +116,7 @@ async fn test_command_argument_validation() {
         \"version\": \"1.0.0\",
         \"channels\": {
             \"test\": {
+                \"description\": \"Test channel\",
                 \"commands\": {
                     \"test_command\": {
                         \"description\": \"Test command with arguments\",
@@ -127,6 +128,12 @@ async fn test_command_argument_validation() {
                             \"optional_param\": {
                                 \"type\": \"integer\",
                                 \"required\": false
+                            }
+                        },
+                        \"response\": {
+                            \"type\": \"object\",
+                            \"properties\": {
+                                \"result\": {\"type\": \"string\"}
                             }
                         }
                     }
@@ -148,16 +155,27 @@ async fn test_model_reference_validation() {
             \"User\": {
                 \"type\": \"object\",
                 \"properties\": {
-                    \"name\": {\"type\": \"string\"},
-                    \"age\": {\"type\": \"integer\"}
+                    \"name\": {\"type\": \"string\", \"required\": true},
+                    \"age\": {\"type\": \"integer\", \"required\": false}
                 }
             }
         },
         \"channels\": {
             \"test\": {
+                \"description\": \"Test channel\",
                 \"commands\": {
                     \"get_user\": {
-                        \"response\": {\"$ref\": \"#/models/User\"}
+                        \"description\": \"Get user by ID\",
+                        \"arguments\": {
+                            \"id\": {
+                                \"type\": \"string\",
+                                \"required\": true
+                            }
+                        },
+                        \"response\": {
+                            \"type\": \"object\",
+                            \"$ref\": \"#/models/User\"
+                        }
                     }
                 }
             }

@@ -11,9 +11,69 @@ pub fn create_test_socket_path() -> (TempDir, PathBuf) {
     (temp_dir, socket_path)
 }
 
+/// Setup a test server with basic configuration for tests requiring server connection
+/// Returns (server, socket_path, temp_dir) - caller responsible for cleanup
+pub async fn setup_test_server() -> (rust_janus::server::janus_server::JanusServer, String, TempDir) {
+    use rust_janus::server::janus_server::{JanusServer, ServerConfig};
+    
+    let (temp_dir, socket_path) = create_test_socket_path();
+    let socket_path_str = socket_path.to_string_lossy().to_string();
+    
+    // Create server config
+    let config = ServerConfig {
+        socket_path: socket_path_str.clone(),
+        max_connections: 10,
+        default_timeout: 5,
+        max_message_size: 1024 * 1024,
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+    };
+    
+    let mut server = JanusServer::new(config);
+    
+    // Start server in background
+    server.start_listening().await.expect("Failed to start test server");
+    
+    // Give server time to initialize
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    
+    (server, socket_path_str, temp_dir)
+}
+
+/// Create a basic test manifest for server tests
+pub fn create_test_manifest() -> rust_janus::specification::model_registry::Manifest {
+    use rust_janus::specification::model_registry::{Manifest, ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec};
+    use std::collections::HashMap;
+    
+    let mut channels = HashMap::new();
+    
+    // Create test channel with basic commands
+    let mut commands = HashMap::new();
+    
+    let mut test_command = CommandSpec::new(
+        "Test command for server tests".to_string(),
+        ResponseSpec::new("object".to_string())
+    );
+    
+    let message_arg = ArgumentSpec::new("string".to_string())
+        .with_description("Test message".to_string());
+    test_command.add_argument("message".to_string(), message_arg);
+    
+    commands.insert("test_command".to_string(), test_command);
+    
+    let mut test_channel = ChannelSpec::new("Test channel".to_string());
+    test_channel.commands = commands;
+    
+    channels.insert("test".to_string(), test_channel);
+    
+    let mut manifest = Manifest::new("1.0.0".to_string());
+    manifest.channels = channels;
+    manifest
+}
+
 /// Fetch Manifest from a running test server
 /// This replaces hardcoded specifications with dynamic fetching for better test accuracy
-pub async fn fetch_test_manifest(server_socket_path: &str) -> Manifest {
+pub async fn fetch_test_manifest(server_socket_path: &str) -> rust_janus::specification::model_registry::Manifest {
     use rust_janus::core::CoreJanusClient;
     use rust_janus::config::JanusClientConfig;
     
@@ -103,7 +163,16 @@ pub fn create_test_config() -> JanusClientConfig {
 
 /// Create a valid socket path for testing
 pub fn create_valid_socket_path() -> String {
-    "/tmp/test_socket.sock".to_string()
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let pid = process::id();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    
+    format!("/tmp/rust_janus_test_{}_{}.sock", pid, timestamp)
 }
 
 /// Create malicious socket paths for security testing

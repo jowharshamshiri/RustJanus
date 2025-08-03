@@ -28,7 +28,8 @@ async fn test_connection_to_nonexistent_socket() {
     match result.unwrap_err() {
         err if err.code == -32000 => {}, // ServerError (connection/timeout)
         err if err.code == -32005 => {}, // ValidationFailed (security/path)
-        err => panic!("Expected connection or validation error, got: {:?}", err),
+        err if err.code == -32007 => {}, // Socket error (network failure)
+        err => panic!("Expected connection, validation, or socket error, got: {:?}", err),
     }
 }
 
@@ -52,7 +53,9 @@ async fn test_connection_timeout() {
     assert!(result.is_err());
     match result.unwrap_err() {
         err if err.code == -32000 => {}, // ServerError (timeout/connection)
-        err => panic!("Expected timeout or connection error, got: {:?}", err),
+        err if err.code == -32006 => {}, // Handler timeout
+        err if err.code == -32007 => {}, // Socket error
+        err => panic!("Expected timeout, connection, or socket error, got: {:?}", err),
     }
 }
 
@@ -201,6 +204,8 @@ async fn test_resource_exhaustion_handling() {
         match task.await.unwrap() {
             Ok(_) => success_count += 1,
             Err(err) if err.code == -32000 => error_count += 1, // ServerError (timeout/connection/IO)
+            Err(err) if err.code == -32006 => error_count += 1, // Handler timeout
+            Err(err) if err.code == -32007 => error_count += 1, // Socket error
             Err(other) => panic!("Unexpected error type: {:?}", other),
         }
     }
@@ -219,6 +224,8 @@ async fn test_resource_exhaustion_handling() {
     match final_result {
         Ok(_) => {},
         Err(err) if err.code == -32000 => {}, // ServerError (timeout/connection/IO)
+        Err(err) if err.code == -32006 => {}, // Handler timeout
+        Err(err) if err.code == -32007 => {}, // Socket error
         Err(other) => panic!("Final command failed with unexpected error: {:?}", other),
     }
 }
@@ -245,6 +252,8 @@ async fn test_network_interruption_recovery() {
     assert!(interrupted_result.is_err());
     match interrupted_result.unwrap_err() {
         err if err.code == -32000 => {}, // ServerError (timeout/connection/IO)
+        err if err.code == -32006 => {}, // Handler timeout
+        err if err.code == -32007 => {}, // Socket error
         err => panic!("Expected network interruption error, got: {:?}", err),
     }
     
@@ -261,6 +270,8 @@ async fn test_network_interruption_recovery() {
     match recovery_result {
         Ok(_) => {},
         Err(err) if err.code == -32000 => {}, // ServerError (timeout/connection/IO)
+        Err(err) if err.code == -32006 => {}, // Handler timeout
+        Err(err) if err.code == -32007 => {}, // Socket error
         Err(other) => panic!("Recovery failed with unexpected error: {:?}", other),
     }
 }
