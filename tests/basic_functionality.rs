@@ -381,7 +381,7 @@ async fn test_message_envelope_functionality() {
 async fn test_send_command_no_response() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
-    let socket_path = create_valid_socket_path();
+    let socket_path = format!("/tmp/rust_janus_test_isolated_no_response_{}.sock", std::process::id());
     
     let mut client = JanusClient::new(
         socket_path,
@@ -438,7 +438,7 @@ async fn test_send_command_no_response() {
 async fn test_dynamic_message_size_detection() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
-    let socket_path = create_valid_socket_path();
+    let socket_path = format!("/tmp/rust_janus_test_isolated_msg_size_{}.sock", std::process::id());
     
     let mut client = JanusClient::new(
         socket_path,
@@ -521,7 +521,7 @@ async fn test_dynamic_message_size_detection() {
 async fn test_socket_cleanup_management() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
-    let socket_path = create_valid_socket_path();
+    let socket_path = format!("/tmp/rust_janus_test_isolated_cleanup_{}.sock", std::process::id());
     
     let mut client = JanusClient::new(
         socket_path.clone(),
@@ -605,7 +605,7 @@ async fn test_socket_cleanup_management() {
 async fn test_connection_testing() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
-    let socket_path = create_valid_socket_path();
+    let socket_path = format!("/tmp/rust_janus_test_isolated_connection_{}.sock", std::process::id());
     
     let mut client = JanusClient::new(
         socket_path,
