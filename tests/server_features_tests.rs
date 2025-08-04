@@ -14,7 +14,16 @@ use rust_janus::error::jsonrpc_error::JSONRPCError;
 
 // Helper function to create test server
 async fn create_test_server() -> (JanusServer, String) {
-    let socket_path = format!("/tmp/janus-server-test-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+    // Generate unique socket path with thread ID to avoid conflicts in parallel tests
+    let socket_path = format!("/tmp/janus-server-test-{}-{}-{:?}", 
+        std::process::id(), 
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        std::thread::current().id()
+    );
+    
+    // Clean up any existing socket file manually before creating server
+    let _ = std::fs::remove_file(&socket_path);
+    
     let server_config = ServerConfig {
         socket_path: socket_path.clone(),
         max_connections: 100,
@@ -167,7 +176,17 @@ async fn test_event_driven_architecture() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Start server
-    server.start_listening().await.expect("Server should start");
+    match server.start_listening().await {
+        Ok(_) => println!("Server started successfully on {}", socket_path),
+        Err(e) => {
+            println!("Server failed to start: {}", e);
+            // Clean up socket file and retry once
+            let _ = std::fs::remove_file(&socket_path);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            server.start_listening().await.expect("Server should start on retry");
+        }
+    }
+    
     sleep(Duration::from_millis(200)).await;
     
     // Test that server processes events by sending a command
@@ -186,7 +205,10 @@ async fn test_event_driven_architecture() {
     
     let response = send_command_and_wait(&socket_path, command, 2000).await;
     
+    // Ensure server stops and cleans up
     server.stop();
+    sleep(Duration::from_millis(100)).await;
+    let _ = std::fs::remove_file(&socket_path);
     
     match response {
         Ok(resp) => {

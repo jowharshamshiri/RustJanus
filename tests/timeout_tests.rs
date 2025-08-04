@@ -44,6 +44,10 @@ async fn test_command_with_timeout() {
             // ValidationFailed covers security validation errors
             println!("Security validation error: {}", err);
         },
+        err if err.code == -32007 => {
+            // SocketError - valid when no server is running
+            println!("Socket error (no server): {}", err);
+        },
         err => panic!("Expected timeout, connection, or validation error, got: {:?}", err),
     }
     
@@ -326,11 +330,11 @@ async fn test_command_handler_timeout_error() {
     data.insert("command_id".to_string(), serde_json::Value::String("echo-123".to_string()));
     data.insert("timeout_seconds".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(5.0).unwrap()));
     
-    let handler_timeout_error = JSONRPCError {
-        code: JSONRPCErrorCode::HandlerTimeout as i32,
-        message: "Handler timeout".to_string(),
-        data: Some(JSONRPCErrorData::with_details("Handler timeout")),
-    };
+    let handler_timeout_error = JSONRPCError::with_context(
+        JSONRPCErrorCode::HandlerTimeout,
+        Some("Handler echo-123 timed out after 5 seconds".to_string()),
+        data,
+    );
     
     // Serialize and verify structure
     let json = serde_json::to_string(&handler_timeout_error).unwrap();

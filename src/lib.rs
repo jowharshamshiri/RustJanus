@@ -16,26 +16,22 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use rust_janus::{JanusClient, Manifest, JanusClientConfig};
+//! use rust_janus::{JanusClient, JanusClientConfig};
 //! use std::collections::HashMap;
 //! use serde_json::json;
 //! use std::time::Duration;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Load Manifest
-//!     let manifest = Manifest::from_file("manifest.json").await?;
-//!     
 //!     // Create client configuration
 //!     let config = JanusClientConfig::default();
 //!     
-//!     // Initialize client
-//!     let client = JanusClient::new(
+//!     // Initialize client (Dynamic Specification Architecture)
+//!     let mut client = JanusClient::new(
 //!         "/tmp/my_socket.sock".to_string(),
 //!         "my-channel".to_string(),
-//!         Some(manifest),
 //!         config
-//!     )?;
+//!     ).await?;
 //!     
 //!     // Send command
 //!     let mut args = HashMap::new();

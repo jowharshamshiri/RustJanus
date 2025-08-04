@@ -199,7 +199,7 @@ impl JanusResponse {
         
         let jsonrpc_error = JSONRPCError::with_context(
             JSONRPCErrorCode::HandlerTimeout,
-            Some(format!("Handler timed out after {} seconds", timeout_seconds)),
+            Some(format!("Handler {} timed out after {} seconds", commandId, timeout_seconds)),
             context,
         );
         

@@ -11,11 +11,11 @@ pub type TimeoutHandler = Box<dyn Fn(String, Duration) + Send + Sync>;
 pub type ErrorTimeoutHandler = Box<dyn Fn(String, Duration, Box<dyn std::error::Error + Send + Sync>) + Send + Sync>;
 
 /// Timeout entry for internal tracking
-#[derive(Debug)]
 struct TimeoutEntry {
     task: tokio::task::JoinHandle<()>,
     timeout_duration: Duration,
     created_at: chrono::DateTime<chrono::Utc>,
+    on_timeout: Option<Arc<TimeoutHandler>>,
 }
 
 /// Bilateral timeout manager for handling both caller and handler timeouts
@@ -54,12 +54,14 @@ impl TimeoutManager {
         let command_id_clone = command_id.clone();
         let active_timeouts = self.active_timeouts.clone();
         let stats = self.stats.clone();
+        let handler_arc = on_timeout.map(Arc::new);
+        let handler_for_task = handler_arc.clone();
         
         let timeout_task = tokio::spawn(async move {
             tokio::time::sleep(timeout).await;
             
             // Execute timeout callback if provided
-            if let Some(handler) = on_timeout {
+            if let Some(handler) = handler_for_task {
                 handler(command_id_clone.clone(), timeout);
             }
             
@@ -86,6 +88,7 @@ impl TimeoutManager {
             task: timeout_task,
             timeout_duration: timeout,
             created_at: chrono::Utc::now(),
+            on_timeout: handler_arc,
         });
         
         Ok(())
@@ -118,22 +121,29 @@ impl TimeoutManager {
             // Cancel the existing timeout
             timeout_entry.task.abort();
             
-            // Calculate new timeout duration
-            let new_timeout = timeout_entry.timeout_duration + extension;
-            timeout_entry.timeout_duration = new_timeout;
+            // Calculate new total timeout duration for statistics
+            let new_total_timeout = timeout_entry.timeout_duration + extension;
+            timeout_entry.timeout_duration = new_total_timeout;
             
-            // Create new timeout task with extended duration
+            // Create new timeout task with extension duration (from current time)
             let command_id_clone = command_id.to_string();
             let active_timeouts = self.active_timeouts.clone();
             let stats = self.stats.clone();
+            let total_timeout_for_stats = new_total_timeout;
+            let handler_for_extended_task = timeout_entry.on_timeout.clone();
             
             let timeout_task = tokio::spawn(async move {
-                tokio::time::sleep(new_timeout).await;
+                tokio::time::sleep(extension).await;
+                
+                // Execute timeout callback if provided
+                if let Some(handler) = handler_for_extended_task {
+                    handler(command_id_clone.clone(), total_timeout_for_stats);
+                }
                 
                 // Update statistics when timeout fires
                 {
                     let mut stats_lock = stats.lock().await;
-                    stats_lock.record_timeout(command_id_clone.clone(), new_timeout);
+                    stats_lock.record_timeout(command_id_clone.clone(), total_timeout_for_stats);
                 }
                 
                 // Remove from active timeouts
@@ -186,14 +196,9 @@ impl TimeoutManager {
         let active_timeouts = self.active_timeouts.clone();
         let stats = self.stats.clone();
         
-        // Use Arc to share the callback between tasks if needed
-        let shared_callback = if let Some(callback) = on_timeout {
-            Some(std::sync::Arc::new(callback))
-        } else {
-            None
-        };
-        
-        let shared_callback_clone = shared_callback.clone();
+        // Convert callback to Arc for sharing
+        let handler_arc = on_timeout.map(Arc::new);
+        let shared_callback_clone = handler_arc.clone();
         
         let timeout_task = tokio::spawn(async move {
             tokio::time::sleep(timeout).await;
@@ -236,11 +241,13 @@ impl TimeoutManager {
             task: timeout_task,
             timeout_duration: timeout,
             created_at: chrono::Utc::now(),
+            on_timeout: handler_arc.clone(),
         });
         timeouts.insert(response_id, TimeoutEntry {
             task: cleanup_task,
             timeout_duration: timeout,
             created_at: chrono::Utc::now(),
+            on_timeout: handler_arc,
         });
         
         Ok(())
