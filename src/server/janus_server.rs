@@ -154,9 +154,13 @@ impl JanusServer {
             let mut buffer = vec![0u8; 64 * 1024];
             
             match socket.recv_from(&mut buffer) {
-                Ok((size, _)) => {
+                Ok((size, sender_addr)) => {
                     let data = &buffer[..size];
-                    Self::process_datagram(data, &handlers, &async_handlers).await;
+                    let sender_path = sender_addr.as_pathname()
+                        .and_then(|p| p.to_str())
+                        .unwrap_or("<unknown>")
+                        .to_string();
+                    Self::process_datagram(data, &handlers, &async_handlers, sender_path).await;
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     // Non-blocking socket would block, continue polling
@@ -180,10 +184,14 @@ impl JanusServer {
         data: &[u8],
         handlers: &Arc<Mutex<HashMap<String, JanusCommandHandler>>>,
         async_handlers: &Arc<Mutex<HashMap<String, JanusAsyncCommandHandler>>>,
+        sender_address: String,
     ) {
         match serde_json::from_slice::<JanusCommand>(data) {
             Ok(cmd) => {
-                println!("Received SOCK_DGRAM command: {} (ID: {})", cmd.command, cmd.id);
+                println!("Received SOCK_DGRAM command: {} (ID: {}) from socket: {}", cmd.command, cmd.id, sender_address);
+                
+                // TODO: Implement client activity tracking using sender_address
+                // This would require adding ServerState similar to Go/Swift implementations
 
                 // Process command and send response if reply_to is specified
                 if let Some(ref reply_to) = cmd.reply_to {
