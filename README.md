@@ -24,28 +24,88 @@ Add this to your `Cargo.toml`:
 RustJanus = "0.1"
 ```
 
+### API Specification (Manifest)
+
+Before creating servers or clients, you need a Manifest file defining your API:
+
+**my-api-spec.json:**
+```json
+{
+  "name": "My Application API",
+  "version": "1.0.0",
+  "description": "Example API for demonstration",
+  "channels": {
+    "default": {
+      "commands": {
+        "get_user": {
+          "description": "Retrieve user information",
+          "arguments": {
+            "user_id": {
+              "type": "string",
+              "required": true,
+              "description": "User identifier"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "name": {"type": "string"},
+              "email": {"type": "string"}
+            }
+          }
+        },
+        "update_profile": {
+          "description": "Update user profile",
+          "arguments": {
+            "user_id": {"type": "string", "required": true},
+            "name": {"type": "string", "required": false},
+            "email": {"type": "string", "required": false}
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "success": {"type": "boolean"},
+              "updated_fields": {"type": "array"}
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Note**: Built-in commands (`ping`, `echo`, `get_info`, `validate`, `slow_process`, `spec`) are always available and cannot be overridden in Manifests.
+
 ### Simple Client Example
 
 ```rust
-use rust_janus::protocol::JanusClient;
-use rust_janus::config::JanusClientConfig;
+use rust_janus::{JanusClient, JSONRPCError, JSONRPCErrorCode};
 use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create client with automatic Manifest fetching
-    let mut client = JanusClient::new(
-        "/tmp/my_socket.sock".to_string(),
-        "my_channel".to_string(),
-        JanusClientConfig::default(),
-    ).await?;
+    // Create client - specification is fetched automatically from server
+    let client = JanusClient::new("/tmp/my-server.sock", "default").await?;
     
-    // Send command - ID management is automatic
-    let mut args = HashMap::new();
-    args.insert("message".to_string(), serde_json::json!("Hello World"));
+    // Built-in commands (always available) 
+    let response = client.send_command("ping", None).await?;
+    if response.success {
+        println!("Server ping: {:?}", response.result);
+    }
     
-    let response = client.send_command("echo", Some(args), None).await?;
-    println!("Response: {:?}", response);
+    // Custom command defined in Manifest (arguments validated automatically)
+    let mut user_args = HashMap::new();
+    user_args.insert("user_id".to_string(), serde_json::json!("user123"));
+    
+    let response = client.send_command("get_user", Some(user_args)).await?;
+    if response.success {
+        println!("User data: {:?}", response.result);
+    } else {
+        println!("Error: {:?}", response.error);
+    }
+    
     Ok(())
 }
 ```
@@ -99,54 +159,107 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Server with Command Handlers
+### Server Usage
 
 ```rust
-use rust_janus::server::JanusServer;
-use rust_janus::protocol::message_types::JanusCommand;
+use RustJanus::{JanusServer, JSONRPCError, JSONRPCErrorCode};
+use serde_json::json;
 use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = JanusServer::new(
-        "/tmp/my_socket.sock".to_string(),
-        ServerConfig::default(),
-    ).await?;
+    // Load API specification from Manifest file
+    let mut server = JanusServer::from_manifest_file("my-api-spec.json").await?;
     
-    // Register command handlers - returns direct values
-    server.register_handler("echo", |cmd: JanusCommand| async move {
-        let message = cmd.args
-            .as_ref()
-            .and_then(|args| args.get("message"))
+    // Register handlers for commands defined in the Manifest
+    server.register_handler("get_user", |cmd| {
+        // Extract user_id argument (validated by Manifest)
+        let user_id = cmd.args.as_ref()
+            .and_then(|args| args.get("user_id"))
             .and_then(|v| v.as_str())
-            .unwrap_or("No message provided");
+            .ok_or_else(|| JSONRPCError::new(
+                JSONRPCErrorCode::InvalidParams, 
+                "Missing user_id"
+            ))?;
         
-        // Return direct value - no dictionary wrapping needed
-        Ok(serde_json::json!({
-            "echo": message,
-            "timestamp": cmd.timestamp,
+        // Simulate user lookup
+        Ok(json!({
+            "id": user_id,
+            "name": "John Doe",
+            "email": "john@example.com"
         }))
-    });
+    }).await;
     
-    // Register async handler
-    server.register_handler("process_data", |cmd: JanusCommand| async move {
-        let data = cmd.args
-            .as_ref()
-            .and_then(|args| args.get("data"))
+    server.register_handler("update_profile", |cmd| {
+        let args = cmd.args.as_ref().ok_or_else(|| 
+            JSONRPCError::new(JSONRPCErrorCode::InvalidParams, "No arguments")
+        )?;
+        
+        let user_id = args.get("user_id")
             .and_then(|v| v.as_str())
-            .unwrap_or("");
+            .ok_or_else(|| JSONRPCError::new(
+                JSONRPCErrorCode::InvalidParams, 
+                "Missing user_id"
+            ))?;
         
-        // Simulate async processing
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        let mut updated_fields = Vec::new();
+        if args.contains_key("name") { updated_fields.push("name"); }
+        if args.contains_key("email") { updated_fields.push("email"); }
         
-        Ok(serde_json::json!({
-            "result": format!("Processed: {}", data),
-            "processed_at": chrono::Utc::now().timestamp(),
+        Ok(json!({
+            "success": true,
+            "updated_fields": updated_fields
         }))
-    });
+    }).await;
     
-    println!("Server listening on /tmp/my_socket.sock...");
-    server.start_listening().await?;
+    // Start listening (blocks until stopped)
+    server.start_listening("/tmp/my-server.sock").await?;
+    
+    Ok(())
+}
+```
+
+### Client Usage
+
+```rust
+use RustJanus::JanusClient;
+use std::collections::HashMap;
+use std::time::Duration;
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create client - specification is fetched automatically from server
+    let client = JanusClient::new("/tmp/my-server.sock", "default").await?;
+    
+    // Built-in commands (always available)
+    let response = client.send_command("ping", None).await?;
+    if response.success {
+        println!("Server ping: {:?}", response.result);
+    }
+    
+    // Custom command defined in Manifest (arguments validated automatically)
+    let mut user_args = HashMap::new();
+    user_args.insert("user_id".to_string(), json!("user123"));
+    
+    let response = client.send_command("get_user", Some(user_args)).await?;
+    if response.success {
+        println!("User data: {:?}", response.result);
+    } else {
+        println!("Error: {:?}", response.error);
+    }
+    
+    // Fire-and-forget command (no response expected)
+    let mut log_args = HashMap::new();
+    log_args.insert("level".to_string(), json!("info"));
+    log_args.insert("message".to_string(), json!("User profile updated"));
+    
+    client.send_command_no_response("log_event", Some(log_args)).await?;
+    
+    // Get server API specification
+    let spec_response = client.send_command("spec", None).await?;
+    println!("Server API spec: {:?}", spec_response.result);
+    
     Ok(())
 }
 ```
@@ -155,11 +268,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 // Send command without waiting for response
-let mut args = HashMap::new();
-args.insert("event".to_string(), serde_json::json!("user_login"));
-args.insert("user_id".to_string(), serde_json::json!("12345"));
+let mut log_args = HashMap::new();
+log_args.insert("level".to_string(), json!("info"));
+log_args.insert("message".to_string(), json!("User profile updated"));
 
-match client.send_command_no_response("log_event", Some(args)).await {
+match client.send_command_no_response("log_event", Some(log_args)).await {
     Ok(_) => println!("Event logged successfully"),
     Err(err) => println!("Failed to log event: {:?}", err),
 }
