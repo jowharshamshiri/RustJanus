@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::SystemTime;
 // Note: chrono types removed as they are not used in current SOCK_DGRAM implementation
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
 
@@ -245,6 +247,70 @@ pub struct SocketMessage {
     
     /// Encoded payload
     pub payload: Vec<u8>,
+}
+
+/// RequestHandle provides a user-friendly interface to track and manage requests
+/// Hides internal UUID complexity from users
+#[derive(Debug, Clone)]
+pub struct RequestHandle {
+    internal_id: String,
+    command: String,
+    channel: String,
+    timestamp: SystemTime,
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl RequestHandle {
+    /// Create a new request handle from internal UUID
+    pub fn new(internal_id: String, command: String, channel: String) -> Self {
+        Self {
+            internal_id,
+            command,
+            channel,
+            timestamp: SystemTime::now(),
+            cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+    
+    /// Get the command name for this request
+    pub fn get_command(&self) -> &str {
+        &self.command
+    }
+    
+    /// Get the channel ID for this request
+    pub fn get_channel(&self) -> &str {
+        &self.channel
+    }
+    
+    /// Get when this request was created
+    pub fn get_timestamp(&self) -> SystemTime {
+        self.timestamp
+    }
+    
+    /// Check if this request has been cancelled
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    
+    /// Get the internal UUID (for internal use only)
+    pub fn get_internal_id(&self) -> &str {
+        &self.internal_id
+    }
+    
+    /// Mark this handle as cancelled (internal use only)
+    pub fn mark_cancelled(&self) {
+        self.cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// RequestStatus represents the status of a tracked request
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum RequestStatus {
+    Pending,
+    Completed,
+    Failed,
+    Cancelled,
+    Timeout,
 }
 
 impl SocketMessage {

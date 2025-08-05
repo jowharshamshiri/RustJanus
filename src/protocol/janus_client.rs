@@ -2,7 +2,7 @@ use crate::core::{CoreJanusClient, SecurityValidator};
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
 use crate::config::JanusClientConfig;
 use crate::specification::Manifest;
-use crate::protocol::message_types::{JanusCommand, JanusResponse};
+use crate::protocol::message_types::{JanusCommand, JanusResponse, RequestHandle, RequestStatus};
 use crate::protocol::response_tracker::{ResponseTracker, TrackerConfig, CommandStatistics};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -51,6 +51,8 @@ pub struct JanusClient {
     core_client: CoreJanusClient,
     response_tracker: ResponseTracker,
     connection_state: std::sync::Mutex<ConnectionState>,
+    // Request lifecycle management (automatic ID system)
+    request_registry: std::sync::Mutex<HashMap<String, RequestHandle>>,
     // Note: SecurityValidator is used via static methods, no instance needed
 }
 
@@ -86,6 +88,7 @@ impl JanusClient {
             core_client,
             response_tracker,
             connection_state: std::sync::Mutex::new(ConnectionState::new()),
+            request_registry: std::sync::Mutex::new(HashMap::new()),
         })
     }
     
@@ -544,6 +547,115 @@ impl JanusClient {
         self.response_tracker.get_pending_command_ids()
     }
 
+    // Automatic ID Management Methods (F0193-F0216)
+
+    /// Send command with handle - returns RequestHandle for tracking
+    /// Hides UUID complexity from users while providing request lifecycle management
+    pub async fn send_command_with_handle(
+        &self,
+        command: &str,
+        args: Option<HashMap<String, serde_json::Value>>,
+        timeout: Option<Duration>,
+    ) -> Result<(RequestHandle, tokio::sync::oneshot::Receiver<Result<JanusResponse, JSONRPCError>>), JSONRPCError> {
+        // Generate internal UUID (hidden from user)
+        let command_id = Uuid::new_v4().to_string();
+        
+        // Create request handle for user
+        let handle = RequestHandle::new(command_id.clone(), command.to_string(), self.channel_id.clone());
+        
+        // Register the request handle
+        {
+            let mut registry = self.request_registry.lock().unwrap();
+            registry.insert(command_id.clone(), handle.clone());
+        }
+        
+        // Create one-shot channel for response
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        
+        // Execute command asynchronously
+        let mut client_clone = self.clone_for_async();
+        let command_clone = command.to_string();
+        let handle_clone = handle.clone();
+        
+        tokio::spawn(async move {
+            let result = client_clone.send_command(&command_clone, args, timeout).await;
+            
+            // Clean up request handle
+            {
+                let mut registry = client_clone.request_registry.lock().unwrap();
+                registry.remove(handle_clone.get_internal_id());
+            }
+            
+            let _ = sender.send(result);
+        });
+        
+        Ok((handle, receiver))
+    }
+
+    /// Get request status by handle
+    pub fn get_request_status(&self, handle: &RequestHandle) -> RequestStatus {
+        if handle.is_cancelled() {
+            return RequestStatus::Cancelled;
+        }
+        
+        let registry = self.request_registry.lock().unwrap();
+        if registry.contains_key(handle.get_internal_id()) {
+            RequestStatus::Pending
+        } else {
+            RequestStatus::Completed
+        }
+    }
+
+    /// Cancel request using handle
+    pub fn cancel_request(&self, handle: &RequestHandle) -> Result<(), JSONRPCError> {
+        if handle.is_cancelled() {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request already cancelled".to_string())));
+        }
+        
+        let mut registry = self.request_registry.lock().unwrap();
+        if !registry.contains_key(handle.get_internal_id()) {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request not found or already completed".to_string())));
+        }
+        
+        handle.mark_cancelled();
+        registry.remove(handle.get_internal_id());
+        
+        Ok(())
+    }
+
+    /// Get all pending request handles
+    pub fn get_pending_requests(&self) -> Vec<RequestHandle> {
+        let registry = self.request_registry.lock().unwrap();
+        registry.values().cloned().collect()
+    }
+
+    /// Cancel all pending requests
+    pub fn cancel_all_requests(&self) -> usize {
+        let mut registry = self.request_registry.lock().unwrap();
+        let count = registry.len();
+        
+        for handle in registry.values() {
+            handle.mark_cancelled();
+        }
+        
+        registry.clear();
+        count
+    }
+
+    /// Clone client for async operations (internal helper)
+    fn clone_for_async(&self) -> Self {
+        Self {
+            socket_path: self.socket_path.clone(),
+            channel_id: self.channel_id.clone(),
+            manifest: self.manifest.clone(),
+            config: self.config.clone(),
+            core_client: self.core_client.clone(),
+            response_tracker: self.response_tracker.clone(),
+            connection_state: std::sync::Mutex::new(ConnectionState::new()),
+            request_registry: std::sync::Mutex::new(self.request_registry.lock().unwrap().clone()),
+        }
+    }
+
     /// Check if a command is currently pending
     pub fn is_command_pending(&self, command_id: &str) -> bool {
         self.response_tracker.is_tracking(command_id)
@@ -672,6 +784,7 @@ impl Clone for JanusClient {
             core_client: self.core_client.clone(),
             response_tracker,
             connection_state: std::sync::Mutex::new(ConnectionState::new()),
+            request_registry: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }
