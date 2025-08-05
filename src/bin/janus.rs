@@ -542,7 +542,69 @@ fn get_builtin_command_handler(
                         Err(e) => Err(format!("Failed to serialize Manifest: {}", e))
                     }
                 } else {
-                    Err("No Manifest loaded on server".to_string())
+                    // Return a proper default Manifest with test channels (matching library implementation)
+                    let default_spec = serde_json::json!({
+                        "version": "1.0.0",
+                        "channels": {
+                            "test": {
+                                "description": "Test channel for cross-platform communication",
+                                "commands": {
+                                    "test_echo": {
+                                        "description": "Echo test command",
+                                        "args": {
+                                            "message": {
+                                                "type": "string",
+                                                "required": false,
+                                                "description": "Message to echo back"
+                                            }
+                                        },
+                                        "response": {
+                                            "type": "object",
+                                            "properties": {
+                                                "echo": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "description": "Default channel for basic communication",
+                                "commands": {
+                                    "test_echo": {
+                                        "description": "Echo test command for default channel",
+                                        "args": {
+                                            "message": {
+                                                "type": "string",
+                                                "required": false,
+                                                "description": "Message to echo back"
+                                            }
+                                        },
+                                        "response": {
+                                            "type": "object",
+                                            "properties": {
+                                                "echo": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Convert serde_json::Value to HashMap<String, serde_json::Value>
+                    if let serde_json::Value::Object(spec_map) = default_spec {
+                        let mut result = std::collections::HashMap::new();
+                        for (key, value) in spec_map {
+                            result.insert(key, value);
+                        }
+                        Ok(result)
+                    } else {
+                        Err("Invalid specification format".into())
+                    }
                 }
             }))
         }
