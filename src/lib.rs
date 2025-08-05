@@ -72,7 +72,7 @@ pub use protocol::{
 };
 
 // High-level API exports (simple one-line usage)
-pub use server::{JanusServer, JanusCommandHandler};
+pub use server::{JanusServer, JanusCommandHandler, ServerConfig};
 
 // Specification exports (API definition layer)
 pub use specification::{
@@ -102,6 +102,7 @@ pub use chrono::{DateTime, Utc};
 pub mod prelude {
     pub use crate::{
         JanusClient, CoreJanusClient, Manifest, JanusClientConfig,
+        JanusServer, ServerConfig, JanusCommandHandler,
         // Connection-based classes removed
         JanusCommand, JanusResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,

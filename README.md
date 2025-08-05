@@ -162,14 +162,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Server Usage
 
 ```rust
-use RustJanus::{JanusServer, JSONRPCError, JSONRPCErrorCode};
+use RustJanus::{JanusServer, ServerConfig, JSONRPCError, JSONRPCErrorCode};
 use serde_json::json;
 use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load API specification from Manifest file
-    let mut server = JanusServer::from_manifest_file("my-api-spec.json").await?;
+    // Create server with configuration
+    let config = ServerConfig {
+        socket_path: "/tmp/my-server.sock".to_string(),
+        cleanup_on_start: true,
+        cleanup_on_shutdown: true,
+        ..Default::default()
+    };
+    
+    let mut server = JanusServer::new(config);
     
     // Register handlers for commands defined in the Manifest
     server.register_handler("get_user", |cmd| {
@@ -213,7 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }).await;
     
     // Start listening (blocks until stopped)
-    server.start_listening("/tmp/my-server.sock").await?;
+    server.start_listening().await?;
     
     Ok(())
 }

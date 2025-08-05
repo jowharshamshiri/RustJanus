@@ -4,4 +4,4 @@
 
 pub mod janus_server;
 
-pub use janus_server::{JanusServer, JanusCommandHandler};
+pub use janus_server::{JanusServer, JanusCommandHandler, ServerConfig};
