@@ -215,12 +215,25 @@ impl JanusServer {
                         .to_string();
                     println!("DEBUG: Received datagram of {} bytes from {} at timestamp {:.3}", size, sender_path, receive_time);
                     
-                    // Process immediately in the recv loop for maximum speed
-                    if let Some((response, reply_to)) = Self::process_datagram_sync(data) {
-                        let start_time = std::time::Instant::now();
-                        println!("DEBUG: Generated immediate response: success={}, has_result={}", response.success, response.result.is_some());
-                        Self::send_response_sync(response, &reply_to);
-                        println!("DEBUG: Response processing took: {:?}", start_time.elapsed());
+                    // Process with custom handlers support
+                    match serde_json::from_slice::<JanusRequest>(data) {
+                        Ok(cmd) => {
+                            println!("DEBUG: Received SOCK_DGRAM request: {} (ID: {})", cmd.request, cmd.id);
+                            println!("DEBUG: Request reply_to field: {:?}", cmd.reply_to);
+                            
+                            if let Some(reply_to) = cmd.reply_to.clone() {
+                                println!("DEBUG: Processing request and sending response to: {}", reply_to);
+                                
+                                let start_time = std::time::Instant::now();
+                                let response = Self::process_request(&cmd, &_handlers, &_async_handlers).await;
+                                println!("DEBUG: Generated response: success={}, has_result={}", response.success, response.result.is_some());
+                                Self::send_response_sync(response, &reply_to);
+                                println!("DEBUG: Response processing took: {:?}", start_time.elapsed());
+                            }
+                        },
+                        Err(e) => {
+                            println!("DEBUG: Failed to parse datagram: {}", e);
+                        }
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -482,38 +495,16 @@ impl JanusServer {
                     )
                 }
                 "manifest" => {
-                    // Return a proper Manifest without channels (concept removed from protocol)
+                    println!("DEBUG: Processing manifest request");
+                    // Return a minimal manifest (matching sync handler)
                     let manifest = serde_json::json!({
                         "version": "1.0.0",
                         "name": "Rust Janus Server API",
-                        "description": "Rust implementation of Janus SOCK_DGRAM server",
-                        "requests": {
-                            "test_echo": {
-                                "description": "Echo test request",
-                                "args": {
-                                    "message": {
-                                        "type": "string",
-                                        "required": false,
-                                        "description": "Message to echo back"
-                                    }
-                                },
-                                "response": {
-                                    "type": "object",
-                                    "properties": {
-                                        "echo": {
-                                            "type": "string"
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        "models": {}
+                        "description": "Rust implementation of Janus SOCK_DGRAM server"
                     });
-                    
-                    JanusResponse::success(
-                        cmd.id.clone(),
-                        Some(manifest)
-                    )
+                    let response = JanusResponse::success(cmd.id.clone(), Some(manifest));
+                    println!("DEBUG: Created manifest response: success={}, has_result={}", response.success, response.result.is_some());
+                    response
                 }
                 "test_echo" => {
                     // Handle test_echo request for high-level API tests
