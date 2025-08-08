@@ -7,12 +7,12 @@ use tokio::time::{timeout, Duration};
 mod test_utils;
 use test_utils::*;
 
-/// Built-in Command Tests
-/// Tests for all built-in commands: ping, echo, get_info, validate, slow_process, spec
+/// Built-in Request Tests
+/// Tests for all built-in requests: ping, echo, get_info, validate, slow_process, manifest
 /// Tests actual server responses, not fake simulations
 
 #[tokio::test]
-async fn test_ping_command_with_server() {
+async fn test_ping_request_with_server() {
     let socket_path = "/tmp/test.sock";
     let _ = std::fs::remove_file(socket_path);
     
@@ -31,25 +31,24 @@ async fn test_ping_command_with_server() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test ping command
+    // Test ping request
     let args = HashMap::new();
-    let result = client.send_command("ping", Some(args), Some(Duration::from_secs(5))).await;
+    let result = client.send_request("ping", Some(args), Some(Duration::from_secs(5))).await;
     
     // Stop server
     server.stop();
     let _ = std::fs::remove_file(socket_path);
     
     // Verify ping response
-    assert!(result.is_ok(), "Ping command should succeed, got: {:?}", result);
+    assert!(result.is_ok(), "Ping request should succeed, got: {:?}", result);
     let response = result.unwrap();
     assert!(response.success, "Ping should return success");
     assert!(response.result.is_some(), "Ping should have result");
@@ -63,7 +62,7 @@ async fn test_ping_command_with_server() {
 }
 
 #[tokio::test]
-async fn test_echo_command_with_server() {
+async fn test_echo_request_with_server() {
     let socket_path = "/tmp/rust-janus-echo_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
@@ -82,26 +81,25 @@ async fn test_echo_command_with_server() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test echo command with message
+    // Test echo request with message
     let mut args = HashMap::new();
     args.insert("message".to_string(), json!("Hello, Rust World!"));
-    let result = client.send_command("echo", Some(args), Some(Duration::from_secs(5))).await;
+    let result = client.send_request("echo", Some(args), Some(Duration::from_secs(5))).await;
     
     // Stop server
     server.stop();
     let _ = std::fs::remove_file(socket_path);
     
     // Verify echo response
-    assert!(result.is_ok(), "Echo command should succeed, got: {:?}", result);
+    assert!(result.is_ok(), "Echo request should succeed, got: {:?}", result);
     let response = result.unwrap();
     assert!(response.success, "Echo should return success");
     assert!(response.result.is_some(), "Echo should have result");
@@ -114,7 +112,7 @@ async fn test_echo_command_with_server() {
 }
 
 #[tokio::test]
-async fn test_get_info_command_with_server() {
+async fn test_get_info_request_with_server() {
     let socket_path = "/tmp/rust_janus_builtin_get_info_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
@@ -133,25 +131,24 @@ async fn test_get_info_command_with_server() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test get_info command
+    // Test get_info request
     let args = HashMap::new();
-    let result = client.send_command("get_info", Some(args), Some(Duration::from_secs(5))).await;
+    let result = client.send_request("get_info", Some(args), Some(Duration::from_secs(5))).await;
     
     // Stop server
     server.stop();
     let _ = std::fs::remove_file(socket_path);
     
     // Verify get_info response
-    assert!(result.is_ok(), "Get_info command should succeed, got: {:?}", result);
+    assert!(result.is_ok(), "Get_info request should succeed, got: {:?}", result);
     let response = result.unwrap();
     assert!(response.success, "Get_info should return success");
     assert!(response.result.is_some(), "Get_info should have result");
@@ -167,7 +164,7 @@ async fn test_get_info_command_with_server() {
 }
 
 #[tokio::test]
-async fn test_validate_command_valid_json() {
+async fn test_validate_request_valid_json() {
     let socket_path = "/tmp/rust_janus_builtin_validate_valid_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
@@ -186,26 +183,25 @@ async fn test_validate_command_valid_json() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test validate command with valid JSON
+    // Test validate request with valid JSON
     let mut args = HashMap::new();
     args.insert("message".to_string(), json!("{\"key\": \"value\", \"number\": 42}"));
-    let result = client.send_command("validate", Some(args), Some(Duration::from_secs(5))).await;
+    let result = client.send_request("validate", Some(args), Some(Duration::from_secs(5))).await;
     
     // Stop server
     server.stop();
     let _ = std::fs::remove_file(socket_path);
     
     // Verify validate response
-    assert!(result.is_ok(), "Validate command should succeed, got: {:?}", result);
+    assert!(result.is_ok(), "Validate request should succeed, got: {:?}", result);
     let response = result.unwrap();
     assert!(response.success, "Validate should return success");
     assert!(response.result.is_some(), "Validate should have result");
@@ -219,7 +215,7 @@ async fn test_validate_command_valid_json() {
 }
 
 #[tokio::test]
-async fn test_validate_command_invalid_json() {
+async fn test_validate_request_invalid_json() {
     let socket_path = "/tmp/rust_janus_builtin_validate_invalid_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
@@ -238,26 +234,25 @@ async fn test_validate_command_invalid_json() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test validate command with invalid JSON
+    // Test validate request with invalid JSON
     let mut args = HashMap::new();
     args.insert("message".to_string(), json!("{invalid json"));
-    let result = client.send_command("validate", Some(args), Some(Duration::from_secs(5))).await;
+    let result = client.send_request("validate", Some(args), Some(Duration::from_secs(5))).await;
     
     // Stop server
     server.stop();
     let _ = std::fs::remove_file(socket_path);
     
     // Verify validate response
-    assert!(result.is_ok(), "Validate command should succeed, got: {:?}", result);
+    assert!(result.is_ok(), "Validate request should succeed, got: {:?}", result);
     let response = result.unwrap();
     assert!(response.success, "Validate should return success");
     assert!(response.result.is_some(), "Validate should have result");
@@ -272,7 +267,7 @@ async fn test_validate_command_invalid_json() {
 }
 
 #[tokio::test]
-async fn test_slow_process_command() {
+async fn test_slow_process_request() {
     let socket_path = "/tmp/rust_janus_builtin_slow_process_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
@@ -291,19 +286,18 @@ async fn test_slow_process_command() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test slow_process command with longer timeout
+    // Test slow_process request with longer timeout
     let args = HashMap::new();
     let start_time = std::time::Instant::now();
-    let result = client.send_command("slow_process", Some(args), Some(Duration::from_secs(10))).await;
+    let result = client.send_request("slow_process", Some(args), Some(Duration::from_secs(10))).await;
     let elapsed = start_time.elapsed();
     
     // Stop server
@@ -311,7 +305,7 @@ async fn test_slow_process_command() {
     let _ = std::fs::remove_file(socket_path);
     
     // Verify slow_process response
-    assert!(result.is_ok(), "Slow_process command should succeed, got: {:?}", result);
+    assert!(result.is_ok(), "Slow_process request should succeed, got: {:?}", result);
     let response = result.unwrap();
     assert!(response.success, "Slow_process should return success");
     assert!(response.result.is_some(), "Slow_process should have result");
@@ -329,8 +323,8 @@ async fn test_slow_process_command() {
 }
 
 #[tokio::test]
-async fn test_spec_command() {
-    let socket_path = "/tmp/rust_janus_builtin_spec_test.sock";
+async fn test_manifest_request() {
+    let socket_path = "/tmp/rust_janus_builtin_manifest_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
@@ -348,40 +342,39 @@ async fn test_spec_command() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test spec command
+    // Test manifest request
     let args = HashMap::new();
-    let result = client.send_command("spec", Some(args), Some(Duration::from_secs(5))).await;
+    let result = client.send_request("manifest", Some(args), Some(Duration::from_secs(5))).await;
     
     // Stop server
     server.stop();
     let _ = std::fs::remove_file(socket_path);
     
-    // Verify spec response
-    assert!(result.is_ok(), "Spec command should succeed, got: {:?}", result);
+    // Verify manifest response
+    assert!(result.is_ok(), "Manifest request should succeed, got: {:?}", result);
     let response = result.unwrap();
-    assert!(response.success, "Spec should return success");
-    assert!(response.result.is_some(), "Spec should have result");
+    assert!(response.success, "Manifest should return success");
+    assert!(response.result.is_some(), "Manifest should have result");
     
     let result_obj = response.result.unwrap();
-    assert!(result_obj.is_object(), "Spec result should be object");
+    assert!(result_obj.is_object(), "Manifest result should be object");
     let obj = result_obj.as_object().unwrap();
-    assert!(obj.contains_key("version"), "Spec should contain 'version' field");
-    assert!(obj.contains_key("channels"), "Spec should contain 'channels' field");
-    assert!(obj.contains_key("models"), "Spec should contain 'models' field");
+    assert!(obj.contains_key("version"), "Manifest should contain 'version' field");
+    assert!(obj.contains_key("channels"), "Manifest should contain 'channels' field");
+    assert!(obj.contains_key("models"), "Manifest should contain 'models' field");
 }
 
 #[tokio::test]
-async fn test_all_builtin_commands_recognized() {
-    let socket_path = "/tmp/rust_janus_builtin_all_commands_test.sock";
+async fn test_all_builtin_requests_recognized() {
+    let socket_path = "/tmp/rust_janus_builtin_all_requests_test.sock";
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
@@ -399,31 +392,30 @@ async fn test_all_builtin_commands_recognized() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
     
-    // Create client with validation disabled for built-in command testing
+    // Create client with validation disabled for built-in request testing
     let mut config = create_test_config();
     config.enable_validation = false;
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Test that all built-in commands are recognized (don't return "method not found")
-    let builtin_commands = vec!["ping", "echo", "get_info", "validate", "slow_process", "spec"];
+    // Test that all built-in requests are recognized (don't return "method not found")
+    let builtin_requests = vec!["ping", "echo", "get_info", "validate", "slow_process", "manifest"];
     
-    for command in builtin_commands {
+    for request in builtin_requests {
         let args = HashMap::new();
-        let result = client.send_command(command, Some(args), Some(Duration::from_secs(15))).await;
+        let result = client.send_request(request, Some(args), Some(Duration::from_secs(15))).await;
         
-        // All built-in commands should succeed or at least not return "method not found"
+        // All built-in requests should succeed or at least not return "method not found"
         match result {
             Ok(response) => {
                 if !response.success {
                     if let Some(error) = &response.error {
                         let error_msg = error.message.to_lowercase();
                         assert!(
-                            !error_msg.contains("method not found") && !error_msg.contains("unknown command"),
-                            "Command '{}' should be recognized as built-in, got error: {}", command, error.message
+                            !error_msg.contains("method not found") && !error_msg.contains("unknown request"),
+                            "Request '{}' should be recognized as built-in, got error: {}", request, error.message
                         );
                     }
                 }
@@ -431,8 +423,8 @@ async fn test_all_builtin_commands_recognized() {
             Err(e) => {
                 let error_msg = e.to_string().to_lowercase();
                 assert!(
-                    !error_msg.contains("method not found") && !error_msg.contains("unknown command"),
-                    "Command '{}' should be recognized as built-in, got error: {}", command, e
+                    !error_msg.contains("method not found") && !error_msg.contains("unknown request"),
+                    "Request '{}' should be recognized as built-in, got error: {}", request, e
                 );
             }
         }

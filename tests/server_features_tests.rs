@@ -9,7 +9,7 @@ use serde_json;
 use std::fs;
 
 use rust_janus::server::janus_server::{JanusServer, ServerConfig};
-use rust_janus::protocol::message_types::{JanusCommand, JanusResponse};
+use rust_janus::protocol::message_types::{JanusRequest, JanusResponse};
 use rust_janus::error::jsonrpc_error::JSONRPCError;
 
 // Helper function to create test server
@@ -36,21 +36,21 @@ async fn create_test_server() -> (JanusServer, String) {
     (server, socket_path)
 }
 
-// Helper function to send command and get response
-async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout_ms: u64) -> Result<JanusResponse, String> {
+// Helper function to send request and get response
+async fn send_request_and_wait(socket_path: &str, request: JanusRequest, timeout_ms: u64) -> Result<JanusResponse, String> {
     let client_socket = UnixDatagram::unbound().map_err(|e| e.to_string())?;
     
     // Create response socket
-    let response_path = format!("/tmp/janus-client-response-{}-{}", std::process::id(), command.id);
+    let response_path = format!("/tmp/janus-client-response-{}-{}", std::process::id(), request.id);
     let _ = fs::remove_file(&response_path); // Clean up any existing file
     let response_socket = UnixDatagram::bind(&response_path).map_err(|e| e.to_string())?;
     response_socket.set_nonblocking(true).map_err(|e| e.to_string())?;
     
-    // Update command with response path
-    let mut cmd_with_response = command;
+    // Update request with response path
+    let mut cmd_with_response = request;
     cmd_with_response.reply_to = Some(response_path.clone());
     
-    // Send command
+    // Send request
     let cmd_data = serde_json::to_vec(&cmd_with_response).map_err(|e| e.to_string())?;
     client_socket.send_to(&cmd_data, socket_path).map_err(|e| e.to_string())?;
     
@@ -79,11 +79,11 @@ async fn send_command_and_wait(socket_path: &str, command: JanusCommand, timeout
 }
 
 #[tokio::test]
-async fn test_command_handler_registry() {
+async fn test_request_handler_registry() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Register test handler
-    server.register_handler("test_command", |cmd| {
+    server.register_handler("test_request", |cmd| {
         Ok(serde_json::json!({"message": "test response"}))
     }).await;
     
@@ -93,11 +93,11 @@ async fn test_command_handler_registry() {
     // Give server time to start
     sleep(Duration::from_millis(100)).await;
     
-    // Send test command
-    let command = JanusCommand {
+    // Send test request
+    let request = JanusRequest {
         id: "test-001".to_string(),
         channelId: "test".to_string(),
-        command: "test_command".to_string(),
+        request: "test_request".to_string(),
         reply_to: None, // Will be set by helper
         args: None,
         timeout: None,
@@ -107,19 +107,19 @@ async fn test_command_handler_registry() {
             .as_secs_f64(),
     };
     
-    let response = send_command_and_wait(&socket_path, command, 2000).await;
+    let response = send_request_and_wait(&socket_path, request, 2000).await;
     
     server.stop();
     
     match response {
         Ok(resp) => {
             assert!(resp.success, "Expected successful response");
-            assert_eq!(resp.commandId, "test-001");
+            assert_eq!(resp.requestId, "test-001");
         }
         Err(e) => panic!("Failed to get response: {}", e),
     }
     
-    println!("✅ Command handler registry validated");
+    println!("✅ Request handler registry validated");
 }
 
 #[tokio::test]
@@ -137,10 +137,10 @@ async fn test_multi_client_connection_management() {
     for i in 0..client_count {
         let socket_path = socket_path.clone();
         let handle = tokio::spawn(async move {
-            let command = JanusCommand {
+            let request = JanusRequest {
                 id: format!("client-{}", i),
                 channelId: format!("test-client-{}", i),
-                command: "ping".to_string(),
+                request: "ping".to_string(),
                 reply_to: None,
                 args: None,
                 timeout: None,
@@ -150,7 +150,7 @@ async fn test_multi_client_connection_management() {
                     .as_secs_f64(),
             };
             
-            send_command_and_wait(&socket_path, command, 3000).await
+            send_request_and_wait(&socket_path, request, 3000).await
         });
         handles.push(handle);
     }
@@ -189,11 +189,11 @@ async fn test_event_driven_architecture() {
     
     sleep(Duration::from_millis(200)).await;
     
-    // Test that server processes events by sending a command
-    let command = JanusCommand {
+    // Test that server processes events by sending a request
+    let request = JanusRequest {
         id: "event-test".to_string(),
         channelId: "test".to_string(),
-        command: "ping".to_string(),
+        request: "ping".to_string(),
         reply_to: None,
         args: None,
         timeout: None,
@@ -203,7 +203,7 @@ async fn test_event_driven_architecture() {
             .as_secs_f64(),
     };
     
-    let response = send_command_and_wait(&socket_path, command, 2000).await;
+    let response = send_request_and_wait(&socket_path, request, 2000).await;
     
     // Ensure server stops and cleans up
     server.stop();
@@ -213,7 +213,7 @@ async fn test_event_driven_architecture() {
     match response {
         Ok(resp) => {
             assert!(resp.success, "Event-driven processing should work");
-            assert_eq!(resp.commandId, "event-test");
+            assert_eq!(resp.requestId, "event-test");
         }
         Err(e) => panic!("Event processing failed: {}", e),
     }
@@ -250,13 +250,13 @@ async fn test_graceful_shutdown() {
 async fn test_connection_processing_loop() {
     let (mut server, socket_path) = create_test_server().await;
     
-    // Track processed commands
-    let processed_commands = Arc::new(Mutex::new(Vec::new()));
-    let processed_commands_clone = Arc::clone(&processed_commands);
+    // Track processed requests
+    let processed_requests = Arc::new(Mutex::new(Vec::new()));
+    let processed_requests_clone = Arc::clone(&processed_requests);
     
-    // Register handler that tracks commands 
+    // Register handler that tracks requests 
     server.register_async_handler("track_test", move |cmd| {
-        let processed = Arc::clone(&processed_commands_clone);
+        let processed = Arc::clone(&processed_requests_clone);
         async move {
             let mut list = processed.lock().await;
             list.push(cmd.id.clone());
@@ -268,18 +268,18 @@ async fn test_connection_processing_loop() {
     server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
-    // Send multiple commands to test processing loop
-    let command_ids = vec!["cmd1", "cmd2", "cmd3"];
+    // Send multiple requests to test processing loop
+    let request_ids = vec!["cmd1", "cmd2", "cmd3"];
     let mut handles = Vec::new();
     
-    for cmd_id in &command_ids {
+    for cmd_id in &request_ids {
         let socket_path = socket_path.clone();
         let cmd_id = cmd_id.to_string();
         let handle = tokio::spawn(async move {
-            let command = JanusCommand {
+            let request = JanusRequest {
                 id: cmd_id,
                 channelId: "test".to_string(),
-                command: "track_test".to_string(),
+                request: "track_test".to_string(),
                 reply_to: None,
                 args: None,
                 timeout: None,
@@ -289,25 +289,25 @@ async fn test_connection_processing_loop() {
                     .as_secs_f64(),
             };
             
-            send_command_and_wait(&socket_path, command, 2000).await
+            send_request_and_wait(&socket_path, request, 2000).await
         });
         handles.push(handle);
     }
     
-    // Wait for all commands to complete
+    // Wait for all requests to complete
     for handle in handles {
         let _ = handle.await;
     }
     
     server.stop();
     
-    // Verify all commands were processed
-    let processed = processed_commands.lock().await;
-    assert_eq!(processed.len(), command_ids.len(), "All commands should be processed");
+    // Verify all requests were processed
+    let processed = processed_requests.lock().await;
+    assert_eq!(processed.len(), request_ids.len(), "All requests should be processed");
     
-    for expected_id in &command_ids {
+    for expected_id in &request_ids {
         assert!(processed.contains(&expected_id.to_string()), 
-               "Command {} should be processed", expected_id);
+               "Request {} should be processed", expected_id);
     }
     
     println!("✅ Connection processing loop validated");
@@ -321,11 +321,11 @@ async fn test_error_response_generation() {
     server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
-    // Send command that doesn't have a handler (should generate error)
-    let command = JanusCommand {
+    // Send request that doesn't have a handler (should generate error)
+    let request = JanusRequest {
         id: "error-test".to_string(),
         channelId: "test".to_string(),
-        command: "nonexistent_command".to_string(),
+        request: "nonexistent_request".to_string(),
         reply_to: None,
         args: None,
         timeout: None,
@@ -335,7 +335,7 @@ async fn test_error_response_generation() {
             .as_secs_f64(),
     };
     
-    let response = send_command_and_wait(&socket_path, command, 2000).await;
+    let response = send_request_and_wait(&socket_path, request, 2000).await;
     
     server.stop();
     
@@ -343,7 +343,7 @@ async fn test_error_response_generation() {
         Ok(resp) => {
             assert!(!resp.success, "Expected error response to have success=false");
             assert!(resp.error.is_some(), "Expected error response to have error field");
-            assert_eq!(resp.commandId, "error-test");
+            assert_eq!(resp.requestId, "error-test");
         }
         Err(e) => panic!("Failed to get error response: {}", e),
     }
@@ -359,12 +359,12 @@ async fn test_client_activity_tracking() {
     server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
-    // Send multiple commands from same "client" (same channel)
+    // Send multiple requests from same "client" (same channel)
     for i in 0..3 {
-        let command = JanusCommand {
+        let request = JanusRequest {
             id: format!("activity-test-{}", i),
             channelId: "test-client".to_string(), // Same channel = same client
-            command: "ping".to_string(),
+            request: "ping".to_string(),
             reply_to: None,
             args: None,
             timeout: None,
@@ -374,26 +374,26 @@ async fn test_client_activity_tracking() {
                 .as_secs_f64(),
         };
         
-        let _response = send_command_and_wait(&socket_path, command, 2000).await
-            .expect("Command should succeed");
+        let _response = send_request_and_wait(&socket_path, request, 2000).await
+            .expect("Request should succeed");
         
         sleep(Duration::from_millis(50)).await;
     }
     
     server.stop();
     
-    println!("✅ Client activity tracking validated through command processing");
+    println!("✅ Client activity tracking validated through request processing");
 }
 
 #[tokio::test]
-async fn test_command_execution_with_timeout() {
+async fn test_request_execution_with_timeout() {
     let (mut server, socket_path) = create_test_server().await;
     
     // Register slow handler that should timeout
-    server.register_async_handler("slow_command", |_cmd| {
+    server.register_async_handler("slow_request", |_cmd| {
         async move {
             sleep(Duration::from_millis(500)).await; // Short delay for testing
-            Ok(serde_json::json!({"message": "slow command completed"}))
+            Ok(serde_json::json!({"message": "slow request completed"}))
         }
     }).await;
     
@@ -401,11 +401,11 @@ async fn test_command_execution_with_timeout() {
     server.start_listening().await.expect("Server should start");
     sleep(Duration::from_millis(100)).await;
     
-    // Send slow command with short timeout
-    let command = JanusCommand {
+    // Send slow request with short timeout
+    let request = JanusRequest {
         id: "timeout-test".to_string(),
         channelId: "test".to_string(),
-        command: "slow_command".to_string(),
+        request: "slow_request".to_string(),
         reply_to: None,
         args: None,
         timeout: Some(1.0), // 1 second timeout
@@ -416,28 +416,28 @@ async fn test_command_execution_with_timeout() {
     };
     
     let start_time = Instant::now();
-    let response = send_command_and_wait(&socket_path, command, 3000).await;
+    let response = send_request_and_wait(&socket_path, request, 3000).await;
     let duration = start_time.elapsed();
     
     server.stop();
     
     // Verify response came back in reasonable time
-    assert!(duration < Duration::from_secs(2), "Command should complete within reasonable time");
+    assert!(duration < Duration::from_secs(2), "Request should complete within reasonable time");
     
     match response {
         Ok(resp) => {
             // Should get successful response
-            assert!(resp.success, "Slow command should complete successfully");
-            assert_eq!(resp.commandId, "timeout-test");
+            assert!(resp.success, "Slow request should complete successfully");
+            assert_eq!(resp.requestId, "timeout-test");
             println!("Response received: success={}", resp.success);
         }
         Err(_) => {
             // Timeout in our test helper also acceptable
-            println!("Command timed out as expected");
+            println!("Request timed out as expected");
         }
     }
     
-    println!("✅ Command execution with timeout validated");
+    println!("✅ Request execution with timeout validated");
 }
 
 #[tokio::test]

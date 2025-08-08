@@ -7,11 +7,8 @@ pub struct Manifest {
     /// API version
     pub version: String,
     
-    /// Channel definitions
-    pub channels: HashMap<String, ChannelSpec>,
-    
     /// Model definitions (optional)
-    pub models: Option<HashMap<String, ModelSpec>>,
+    pub models: Option<HashMap<String, ModelManifest>>,
 }
 
 impl Manifest {
@@ -19,130 +16,68 @@ impl Manifest {
     pub fn new(version: String) -> Self {
         Self {
             version,
-            channels: HashMap::new(),
             models: None,
         }
     }
     
     /// Load Manifest from file (async wrapper)
     pub async fn from_file(path: &str) -> Result<Self, crate::error::JSONRPCError> {
-        crate::specification::ManifestParser::from_file(path).await
+        crate::manifest::ManifestParser::from_file(path).await
     }
     
-    /// Add a channel to the specification
-    pub fn add_channel(&mut self, name: String, channel: ChannelSpec) {
-        self.channels.insert(name, channel);
-    }
-    
-    /// Add a model to the specification
-    pub fn add_model(&mut self, name: String, model: ModelSpec) {
+    /// Add a model to the manifest
+    pub fn add_model(&mut self, name: String, model: ModelManifest) {
         if self.models.is_none() {
             self.models = Some(HashMap::new());
         }
         self.models.as_mut().unwrap().insert(name, model);
     }
     
-    /// Get channel by name
-    pub fn get_channel(&self, name: &str) -> Option<&ChannelSpec> {
-        self.channels.get(name)
-    }
-    
-    /// Get command specification
-    pub fn get_command_spec(&self, channel_id: &str, command_name: &str) -> Option<&CommandSpec> {
-        self.channels.get(channel_id)?
-            .commands.get(command_name)
-    }
-    
     /// Get model by name
-    pub fn get_model(&self, name: &str) -> Option<&ModelSpec> {
+    pub fn get_model(&self, name: &str) -> Option<&ModelManifest> {
         self.models.as_ref()?.get(name)
     }
     
-    /// List all channel names
-    pub fn channel_names(&self) -> Vec<&String> {
-        self.channels.keys().collect()
+    /// Check if request exists (channels removed from protocol)
+    pub fn has_request(&self, request_name: &str) -> bool {
+        // Since channels are removed, this always returns false for now
+        // The server will handle request validation
+        false
     }
     
-    /// List all commands in a channel
-    pub fn channel_commands(&self, channel_id: &str) -> Option<Vec<&String>> {
-        Some(self.channels.get(channel_id)?.commands.keys().collect())
-    }
-    
-    /// Check if command exists in channel
-    pub fn has_command(&self, channel_id: &str, command_name: &str) -> bool {
-        self.get_command_spec(channel_id, command_name).is_some()
-    }
-    
-    /// Check if channel exists
-    pub fn has_channel(&self, channel_id: &str) -> bool {
-        self.channels.contains_key(channel_id)
+    /// Get request manifest (channels removed from protocol)
+    pub fn get_request_manifest(&self, request_name: &str) -> Option<&RequestManifest> {
+        // Since channels are removed, this always returns None
+        // The server will handle request validation
+        None
     }
 }
 
-/// Channel specification
+
+/// Request manifest
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ChannelSpec {
-    /// Channel name
+pub struct RequestManifest {
+    /// Request name
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     
-    /// Channel description
-    pub description: String,
-    
-    /// Command definitions
-    pub commands: HashMap<String, CommandSpec>,
-}
-
-impl ChannelSpec {
-    /// Create a new channel specification
-    pub fn new(description: String) -> Self {
-        Self {
-            name: None,
-            description,
-            commands: HashMap::new(),
-        }
-    }
-    
-    /// Add a command to the channel
-    pub fn add_command(&mut self, name: String, command: CommandSpec) {
-        self.commands.insert(name, command);
-    }
-    
-    /// Get command by name
-    pub fn get_command(&self, name: &str) -> Option<&CommandSpec> {
-        self.commands.get(name)
-    }
-    
-    /// List all command names
-    pub fn command_names(&self) -> Vec<&String> {
-        self.commands.keys().collect()
-    }
-}
-
-/// Command specification
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CommandSpec {
-    /// Command name
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    
-    /// Command description
+    /// Request description
     pub description: String,
     
     /// Argument definitions
     #[serde(default)]
-    pub args: HashMap<String, ArgumentSpec>,
+    pub args: HashMap<String, ArgumentManifest>,
     
-    /// Response specification
-    pub response: ResponseSpec,
+    /// Response manifest
+    pub response: ResponseManifest,
     
     /// Error code definitions (optional)
-    pub error_codes: Option<HashMap<String, ErrorCodeSpec>>,
+    pub error_codes: Option<HashMap<String, ErrorCodeManifest>>,
 }
 
-impl CommandSpec {
-    /// Create a new command specification
-    pub fn new(description: String, response: ResponseSpec) -> Self {
+impl RequestManifest {
+    /// Create a new request manifest
+    pub fn new(description: String, response: ResponseManifest) -> Self {
         Self {
             name: None,
             description,
@@ -152,28 +87,28 @@ impl CommandSpec {
         }
     }
     
-    /// Add an argument to the command
-    pub fn add_argument(&mut self, name: String, arg_spec: ArgumentSpec) {
-        self.args.insert(name, arg_spec);
+    /// Add an argument to the request
+    pub fn add_argument(&mut self, name: String, arg_manifest: ArgumentManifest) {
+        self.args.insert(name, arg_manifest);
     }
     
     /// Add an error code definition
-    pub fn add_error_code(&mut self, name: String, error_spec: ErrorCodeSpec) {
+    pub fn add_error_code(&mut self, name: String, error_manifest: ErrorCodeManifest) {
         if self.error_codes.is_none() {
             self.error_codes = Some(HashMap::new());
         }
-        self.error_codes.as_mut().unwrap().insert(name, error_spec);
+        self.error_codes.as_mut().unwrap().insert(name, error_manifest);
     }
     
-    /// Get argument specification
-    pub fn get_argument(&self, name: &str) -> Option<&ArgumentSpec> {
+    /// Get argument manifest
+    pub fn get_argument(&self, name: &str) -> Option<&ArgumentManifest> {
         self.args.get(name)
     }
     
     /// Get required arguments
     pub fn required_arguments(&self) -> Vec<&String> {
         self.args.iter()
-            .filter(|(_, spec)| spec.required.unwrap_or(false))
+            .filter(|(_, manifest)| manifest.required.unwrap_or(false))
             .map(|(name, _)| name)
             .collect()
     }
@@ -181,15 +116,15 @@ impl CommandSpec {
     /// Get optional arguments
     pub fn optional_arguments(&self) -> Vec<&String> {
         self.args.iter()
-            .filter(|(_, spec)| !spec.required.unwrap_or(false))
+            .filter(|(_, manifest)| !manifest.required.unwrap_or(false))
             .map(|(name, _)| name)
             .collect()
     }
 }
 
-/// Argument specification
+/// Argument manifest
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ArgumentSpec {
+pub struct ArgumentManifest {
     /// Argument type (string, integer, number, boolean, array, object)
     pub r#type: String,
     
@@ -203,15 +138,15 @@ pub struct ArgumentSpec {
     pub default_value: Option<serde_json::Value>,
     
     /// Validation constraints (optional)
-    pub validation: Option<ValidationSpec>,
+    pub validation: Option<ValidationManifest>,
     
     /// Model reference for complex types (optional)
     #[serde(rename = "modelRef")]
     pub model_ref: Option<String>,
 }
 
-impl ArgumentSpec {
-    /// Create a new argument specification
+impl ArgumentManifest {
+    /// Create a new argument manifest
     pub fn new(arg_type: String) -> Self {
         Self {
             r#type: arg_type,
@@ -248,7 +183,7 @@ impl ArgumentSpec {
     }
     
     /// Add validation constraints
-    pub fn with_validation(mut self, validation: ValidationSpec) -> Self {
+    pub fn with_validation(mut self, validation: ValidationManifest) -> Self {
         self.validation = Some(validation);
         self
     }
@@ -264,9 +199,9 @@ impl ArgumentSpec {
     }
 }
 
-/// Validation constraint specification
+/// Validation constraint manifest
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ValidationSpec {
+pub struct ValidationManifest {
     /// Minimum length for strings/arrays (optional)
     pub min_length: Option<usize>,
     
@@ -286,8 +221,8 @@ pub struct ValidationSpec {
     pub r#enum: Option<Vec<serde_json::Value>>,
 }
 
-impl ValidationSpec {
-    /// Create a new validation specification
+impl ValidationManifest {
+    /// Create a new validation manifest
     pub fn new() -> Self {
         Self {
             min_length: None,
@@ -326,28 +261,28 @@ impl ValidationSpec {
     }
 }
 
-impl Default for ValidationSpec {
+impl Default for ValidationManifest {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Response specification
+/// Response manifest
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ResponseSpec {
+pub struct ResponseManifest {
     /// Response type
     pub r#type: String,
     
     /// Response properties for object types (optional)
-    pub properties: Option<HashMap<String, ArgumentSpec>>,
+    pub properties: Option<HashMap<String, ArgumentManifest>>,
     
     /// Model reference for complex types (optional)
     #[serde(rename = "modelRef")]
     pub model_ref: Option<String>,
 }
 
-impl ResponseSpec {
-    /// Create a new response specification
+impl ResponseManifest {
+    /// Create a new response manifest
     pub fn new(response_type: String) -> Self {
         Self {
             r#type: response_type,
@@ -357,13 +292,13 @@ impl ResponseSpec {
     }
     
     /// Add properties for object response
-    pub fn with_properties(mut self, properties: HashMap<String, ArgumentSpec>) -> Self {
+    pub fn with_properties(mut self, properties: HashMap<String, ArgumentManifest>) -> Self {
         self.properties = Some(properties);
         self
     }
     
     /// Add a single property
-    pub fn add_property(&mut self, name: String, property: ArgumentSpec) {
+    pub fn add_property(&mut self, name: String, property: ArgumentManifest) {
         if self.properties.is_none() {
             self.properties = Some(HashMap::new());
         }
@@ -371,9 +306,9 @@ impl ResponseSpec {
     }
 }
 
-/// Error code specification
+/// Error code manifest
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ErrorCodeSpec {
+pub struct ErrorCodeManifest {
     /// HTTP-style error code
     pub code: u16,
     
@@ -384,8 +319,8 @@ pub struct ErrorCodeSpec {
     pub description: Option<String>,
 }
 
-impl ErrorCodeSpec {
-    /// Create a new error code specification
+impl ErrorCodeManifest {
+    /// Create a new error code manifest
     pub fn new(code: u16, message: String) -> Self {
         Self {
             code,
@@ -401,21 +336,21 @@ impl ErrorCodeSpec {
     }
 }
 
-/// Model specification for complex data types
+/// Model manifest for complex data types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ModelSpec {
+pub struct ModelManifest {
     /// Model type (typically "object")
     pub r#type: String,
     
     /// Property definitions
-    pub properties: HashMap<String, ArgumentSpec>,
+    pub properties: HashMap<String, ArgumentManifest>,
     
     /// Required property names (optional)
     pub required: Option<Vec<String>>,
 }
 
-impl ModelSpec {
-    /// Create a new model specification
+impl ModelManifest {
+    /// Create a new model manifest
     pub fn new() -> Self {
         Self {
             r#type: "object".to_string(),
@@ -425,7 +360,7 @@ impl ModelSpec {
     }
     
     /// Add a property to the model
-    pub fn add_property(&mut self, name: String, property: ArgumentSpec) {
+    pub fn add_property(&mut self, name: String, property: ArgumentManifest) {
         self.properties.insert(name, property);
     }
     
@@ -458,7 +393,7 @@ impl ModelSpec {
     }
 }
 
-impl Default for ModelSpec {
+impl Default for ModelManifest {
     fn default() -> Self {
         Self::new()
     }
@@ -470,49 +405,33 @@ mod tests {
     
     #[test]
     fn test_manifest_creation() {
-        let mut manifest = Manifest::new("1.0.0".to_string());
-        
-        let channel = ChannelSpec::new("Test channel".to_string());
-        manifest.add_channel("test".to_string(), channel);
+        let manifest = Manifest::new("1.0.0".to_string());
         
         assert_eq!(manifest.version, "1.0.0");
-        assert_eq!(manifest.channels.len(), 1);
-        assert!(manifest.get_channel("test").is_some());
+        assert!(manifest.models.is_none());
     }
     
-    #[test]
-    fn test_channel_specification() {
-        let mut channel = ChannelSpec::new("Test channel".to_string());
-        
-        let response = ResponseSpec::new("object".to_string());
-        let command = CommandSpec::new("Test command".to_string(), response);
-        channel.add_command("test-cmd".to_string(), command);
-        
-        assert_eq!(channel.description, "Test channel");
-        assert_eq!(channel.commands.len(), 1);
-        assert!(channel.get_command("test-cmd").is_some());
-    }
     
     #[test]
-    fn test_argument_specification() {
-        let arg_spec = ArgumentSpec::new("string".to_string())
+    fn test_argument_manifest() {
+        let arg_manifest = ArgumentManifest::new("string".to_string())
             .required()
             .with_description("Test argument".to_string())
             .with_validation(
-                ValidationSpec::new()
+                ValidationManifest::new()
                     .with_length_range(Some(1), Some(100))
                     .with_pattern("^[a-zA-Z]+$".to_string())
             );
         
-        assert_eq!(arg_spec.r#type, "string");
-        assert!(arg_spec.is_required());
-        assert_eq!(arg_spec.description, Some("Test argument".to_string()));
-        assert!(arg_spec.validation.is_some());
+        assert_eq!(arg_manifest.r#type, "string");
+        assert!(arg_manifest.is_required());
+        assert_eq!(arg_manifest.description, Some("Test argument".to_string()));
+        assert!(arg_manifest.validation.is_some());
     }
     
     #[test]
-    fn test_validation_specification() {
-        let validation = ValidationSpec::new()
+    fn test_validation_manifest() {
+        let validation = ValidationManifest::new()
             .with_length_range(Some(5), Some(50))
             .with_numeric_range(Some(0.0), Some(100.0))
             .with_pattern("^test.*".to_string())
@@ -530,30 +449,30 @@ mod tests {
     }
     
     #[test]
-    fn test_command_specification() {
-        let response = ResponseSpec::new("object".to_string());
-        let mut command = CommandSpec::new("Test command".to_string(), response);
+    fn test_request_manifest() {
+        let response = ResponseManifest::new("object".to_string());
+        let mut request = RequestManifest::new("Test request".to_string(), response);
         
-        let arg = ArgumentSpec::new("string".to_string()).required();
-        command.add_argument("test_arg".to_string(), arg);
+        let arg = ArgumentManifest::new("string".to_string()).required();
+        request.add_argument("test_arg".to_string(), arg);
         
-        let error_code = ErrorCodeSpec::new(400, "Bad Request".to_string());
-        command.add_error_code("bad_request".to_string(), error_code);
+        let error_code = ErrorCodeManifest::new(400, "Bad Request".to_string());
+        request.add_error_code("bad_request".to_string(), error_code);
         
-        assert_eq!(command.description, "Test command");
-        assert_eq!(command.args.len(), 1);
-        assert_eq!(command.required_arguments().len(), 1);
-        assert!(command.error_codes.is_some());
+        assert_eq!(request.description, "Test request");
+        assert_eq!(request.args.len(), 1);
+        assert_eq!(request.required_arguments().len(), 1);
+        assert!(request.error_codes.is_some());
     }
     
     #[test]
-    fn test_model_specification() {
-        let mut model = ModelSpec::new()
+    fn test_model_manifest() {
+        let mut model = ModelManifest::new()
             .with_required(vec!["name".to_string(), "email".to_string()]);
         
-        let name_prop = ArgumentSpec::new("string".to_string()).required();
-        let email_prop = ArgumentSpec::new("string".to_string()).required();
-        let age_prop = ArgumentSpec::new("integer".to_string()).optional();
+        let name_prop = ArgumentManifest::new("string".to_string()).required();
+        let email_prop = ArgumentManifest::new("string".to_string()).required();
+        let age_prop = ArgumentManifest::new("integer".to_string()).optional();
         
         model.add_property("name".to_string(), name_prop);
         model.add_property("email".to_string(), email_prop);
@@ -566,23 +485,4 @@ mod tests {
         assert_eq!(model.required_properties().len(), 2);
     }
     
-    #[test]
-    fn test_manifest_command_lookup() {
-        let mut manifest = Manifest::new("1.0.0".to_string());
-        
-        let mut channel = ChannelSpec::new("Test channel".to_string());
-        let response = ResponseSpec::new("string".to_string());
-        let command = CommandSpec::new("Test command".to_string(), response);
-        channel.add_command("test-cmd".to_string(), command);
-        
-        manifest.add_channel("test-channel".to_string(), channel);
-        
-        assert!(manifest.has_command("test-channel", "test-cmd"));
-        assert!(!manifest.has_command("test-channel", "nonexistent"));
-        assert!(!manifest.has_command("nonexistent", "test-cmd"));
-        
-        let cmd_spec = manifest.get_command_spec("test-channel", "test-cmd");
-        assert!(cmd_spec.is_some());
-        assert_eq!(cmd_spec.unwrap().description, "Test command");
-    }
 }

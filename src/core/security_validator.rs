@@ -95,28 +95,28 @@ impl SecurityValidator {
         Ok(())
     }
     
-    /// Validate command name (exact Swift implementation)
-    pub fn validate_command_name(command_name: &str, config: &JanusClientConfig) -> Result<(), JSONRPCError> {
-        if command_name.is_empty() {
+    /// Validate request name (exact Swift implementation)
+    pub fn validate_request_name(request_name: &str, config: &JanusClientConfig) -> Result<(), JSONRPCError> {
+        if request_name.is_empty() {
             return Err(JSONRPCError::new(
                 JSONRPCErrorCode::MethodNotFound,
-                Some("Command name cannot be empty".to_string())
+                Some("Request name cannot be empty".to_string())
             ));
         }
         
-        if command_name.len() > config.max_command_name_length {
+        if request_name.len() > config.max_request_name_length {
             return Err(JSONRPCError::new(
                 JSONRPCErrorCode::MethodNotFound,
-                Some(format!("Command name too long (max {} characters)", config.max_command_name_length))
+                Some(format!("Request name too long (max {} characters)", config.max_request_name_length))
             ));
         }
         
         // Character set validation (alphanumeric, hyphens, underscores only)
         let valid_chars_regex = Regex::new(r"^[a-zA-Z0-9_\-]+$")?;
-        if !valid_chars_regex.is_match(command_name) {
+        if !valid_chars_regex.is_match(request_name) {
             return Err(JSONRPCError::new(
                 JSONRPCErrorCode::MethodNotFound,
-                Some("Command name can only contain alphanumeric characters, hyphens, and underscores".to_string())
+                Some("Request name can only contain alphanumeric characters, hyphens, and underscores".to_string())
             ));
         }
         
@@ -246,16 +246,16 @@ impl SecurityValidator {
         Ok(())
     }
 
-    /// Validate dangerous command patterns (matches Swift implementation)
-    pub fn validate_dangerous_command(&self, command_name: &str) -> Result<(), JSONRPCError> {
+    /// Validate dangerous request patterns (matches Swift implementation)
+    pub fn validate_dangerous_request(&self, request_name: &str) -> Result<(), JSONRPCError> {
         let dangerous_patterns = ["eval", "exec", "system", "shell", "rm", "delete", "drop"];
-        let lower_command = command_name.to_lowercase();
+        let lower_request = request_name.to_lowercase();
         
         for pattern in &dangerous_patterns {
-            if lower_command.contains(pattern) {
+            if lower_request.contains(pattern) {
                 return Err(JSONRPCError::new(
                     JSONRPCErrorCode::SecurityViolation,
-                    Some(format!("Command name contains dangerous pattern: {}", pattern))
+                    Some(format!("Request name contains dangerous pattern: {}", pattern))
                 ));
             }
         }

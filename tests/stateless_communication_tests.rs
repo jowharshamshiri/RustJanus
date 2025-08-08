@@ -6,12 +6,12 @@ use test_utils::*;
 /// Tests stateless patterns, isolation, and validation
 
 #[tokio::test]
-async fn test_stateless_command_validation() {
+async fn test_stateless_request_validation() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
-    // Command validation should work without connection
+    // Request validation should work without connection
     let mut client = JanusClient::new(
         socket_path,
         "test".to_string(),
@@ -19,7 +19,7 @@ async fn test_stateless_command_validation() {
     ).await.unwrap();
     
     // Validation happens before connection attempt
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(100)),
@@ -46,15 +46,15 @@ async fn test_request_independence() {
     // Each request should be independent - no state carried between requests
     let requests = vec!["ping", "echo", "get_info"];
     
-    for command in requests {
-        let result = client.send_command(
-            command,
+    for request in requests {
+        let result = client.send_request(
+            request,
             None,
             Some(std::time::Duration::from_millis(100)),
         ).await;
         
         // All should fail identically (no server running)
-        assert!(result.is_err(), "Command {} should fail without server", command);
+        assert!(result.is_err(), "Request {} should fail without server", request);
     }
 }
 
@@ -76,8 +76,8 @@ async fn test_no_connection_state_preservation() {
     ).await.unwrap();
     
     // Clients should not interfere with each other
-    let result1 = client1.send_command("ping", None, Some(std::time::Duration::from_millis(50))).await;
-    let result2 = client2.send_command("echo", None, Some(std::time::Duration::from_millis(50))).await;
+    let result1 = client1.send_request("ping", None, Some(std::time::Duration::from_millis(50))).await;
+    let result2 = client2.send_request("echo", None, Some(std::time::Duration::from_millis(50))).await;
     
     // Both should fail independently
     assert!(result1.is_err());
@@ -104,9 +104,9 @@ async fn test_socket_isolation() {
         config,
     ).await.unwrap();
     
-    // Commands to different paths should be completely isolated
-    let result1 = client1.send_command("ping", None, Some(std::time::Duration::from_millis(50))).await;
-    let result2 = client2.send_command("ping", None, Some(std::time::Duration::from_millis(50))).await;
+    // Requests to different paths should be completely isolated
+    let result1 = client1.send_request("ping", None, Some(std::time::Duration::from_millis(50))).await;
+    let result2 = client2.send_request("ping", None, Some(std::time::Duration::from_millis(50))).await;
     
     // Both should fail but be independent
     assert!(result1.is_err());
@@ -114,7 +114,7 @@ async fn test_socket_isolation() {
 }
 
 #[tokio::test]
-async fn test_command_id_uniqueness() {
+async fn test_request_id_uniqueness() {
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
     
@@ -124,22 +124,22 @@ async fn test_command_id_uniqueness() {
         config,
     ).await.unwrap();
     
-    // Multiple commands should generate unique IDs
-    let mut command_ids = std::collections::HashSet::new();
+    // Multiple requests should generate unique IDs
+    let mut request_ids = std::collections::HashSet::new();
     
     for _ in 0..5 {
-        // Create commands but don't send them to avoid connection errors
-        let command = JanusCommand::new(
+        // Create requests but don't send them to avoid connection errors
+        let request = JanusRequest::new(
             "test".to_string(),
             "ping".to_string(),
             None,
             None,
         );
         
-        assert!(command_ids.insert(command.id.clone()), "Command ID should be unique");
+        assert!(request_ids.insert(request.id.clone()), "Request ID should be unique");
     }
     
-    assert_eq!(command_ids.len(), 5);
+    assert_eq!(request_ids.len(), 5);
 }
 
 #[tokio::test]
@@ -161,7 +161,7 @@ async fn test_concurrent_stateless_requests() {
                 config_clone,
             ).await.unwrap();
             
-            client.send_command(
+            client.send_request(
                 "ping",
                 None,
                 Some(std::time::Duration::from_millis(100)),
@@ -191,7 +191,7 @@ async fn test_response_socket_cleanup() {
     
     // Make multiple requests that will fail
     for _ in 0..3 {
-        let _result = client.send_command(
+        let _result = client.send_request(
             "ping",
             None,
             Some(std::time::Duration::from_millis(50)),
@@ -221,9 +221,9 @@ async fn test_channel_isolation() {
         config,
     ).await.unwrap();
     
-    // Commands on different channels should be independent
-    let result1 = client1.send_command("ping", None, Some(std::time::Duration::from_millis(50))).await;
-    let result2 = client2.send_command("ping", None, Some(std::time::Duration::from_millis(50))).await;
+    // Requests on different channels should be independent
+    let result1 = client1.send_request("ping", None, Some(std::time::Duration::from_millis(50))).await;
+    let result2 = client2.send_request("ping", None, Some(std::time::Duration::from_millis(50))).await;
     
     // Both should fail but independently
     assert!(result1.is_err());

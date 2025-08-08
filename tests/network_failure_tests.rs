@@ -18,7 +18,7 @@ async fn test_connection_to_nonexistent_socket() {
         config,
     ).await.unwrap();
     
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(100)),
@@ -44,7 +44,7 @@ async fn test_connection_timeout() {
         config,
     ).await.unwrap();
     
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(50)), // Very short timeout
@@ -72,7 +72,7 @@ async fn test_repeated_connection_failures() {
     
     // Test multiple consecutive failures
     for i in 0..3 {
-        let result = client.send_command(
+        let result = client.send_request(
             "ping",
             None,
             Some(std::time::Duration::from_millis(100)),
@@ -100,7 +100,7 @@ async fn test_malformed_socket_path() {
         ).await;
         
         if let Ok(mut client) = result {
-            let send_result = client.send_command(
+            let send_result = client.send_request(
                 "ping",
                 None,
                 Some(std::time::Duration::from_millis(100))
@@ -141,7 +141,7 @@ async fn test_permission_denied_socket_path() {
     
     // Should either fail at creation or at first send attempt
     if let Ok(mut client) = result {
-        let send_result = client.send_command(
+        let send_result = client.send_request(
             "ping",
             None,
             Some(std::time::Duration::from_millis(100))
@@ -187,7 +187,7 @@ async fn test_resource_exhaustion_handling() {
             let mut args = std::collections::HashMap::new();
             args.insert("message".to_string(), serde_json::json!(format!("test_{}", i)));
             
-            client_clone.send_command(
+            client_clone.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(10)),
@@ -214,19 +214,19 @@ async fn test_resource_exhaustion_handling() {
     assert!(success_count + error_count == 50);
     
     // Verify client can still function after resource exhaustion
-    let final_result = client.send_command(
+    let final_result = client.send_request(
         "ping",
         None,
         Some(std::time::Duration::from_secs(1)),
     ).await;
     
-    // Final command should work or fail gracefully
+    // Final request should work or fail gracefully
     match final_result {
         Ok(_) => {},
         Err(err) if err.code == -32000 => {}, // ServerError (timeout/connection/IO)
         Err(err) if err.code == -32006 => {}, // Handler timeout
         Err(err) if err.code == -32007 => {}, // Socket error
-        Err(other) => panic!("Final command failed with unexpected error: {:?}", other),
+        Err(other) => panic!("Final request failed with unexpected error: {:?}", other),
     }
 }
 
@@ -242,7 +242,7 @@ async fn test_network_interruption_recovery() {
     ).await.unwrap();
     
     // Test network interruption with very short timeout
-    let interrupted_result = client.send_command(
+    let interrupted_result = client.send_request(
         "slow_process",
         None,
         Some(std::time::Duration::from_millis(10)),
@@ -260,7 +260,7 @@ async fn test_network_interruption_recovery() {
     // Verify recovery after interruption
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     
-    let recovery_result = client.send_command(
+    let recovery_result = client.send_request(
         "ping",
         None,
         Some(std::time::Duration::from_secs(1)),

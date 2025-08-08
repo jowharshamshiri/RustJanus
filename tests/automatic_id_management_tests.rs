@@ -11,13 +11,13 @@ use rust_janus::error::{JSONRPCError, JSONRPCErrorCode};
 async fn test_request_handle_creation() {
     // Test F0194: Request ID Assignment and F0196: RequestHandle Structure
     let internal_id = "test-uuid-12345";
-    let command = "test_command";
+    let request = "test_request";
     let channel = "test_channel";
     
-    let handle = RequestHandle::new(internal_id.to_string(), command.to_string(), channel.to_string());
+    let handle = RequestHandle::new(internal_id.to_string(), request.to_string());
     
     // Verify handle properties
-    assert_eq!(handle.get_command(), command);
+    assert_eq!(handle.get_request(), request);
     assert_eq!(handle.get_channel(), channel);
     assert_eq!(handle.get_internal_id(), internal_id);
     assert!(!handle.is_cancelled());
@@ -32,7 +32,7 @@ async fn test_request_handle_creation() {
 #[tokio::test]
 async fn test_request_handle_cancellation() {
     // Test F0204: Request Cancellation and F0212: Request Cleanup
-    let handle = RequestHandle::new("test-id".to_string(), "test_command".to_string(), "test_channel".to_string());
+    let handle = RequestHandle::new("test-id".to_string(), "test_request".to_string());
     
     assert!(!handle.is_cancelled());
     
@@ -51,12 +51,11 @@ async fn test_request_status_tracking() {
     
     let client = JanusClient::new(
         "/tmp/test_socket".to_string(),
-        "test_channel".to_string(),
         config
     ).await.unwrap();
     
     // Create a handle
-    let handle = RequestHandle::new("test-id".to_string(), "test_command".to_string(), "test_channel".to_string());
+    let handle = RequestHandle::new("test-id".to_string(), "test_request".to_string());
     
     // Test initial status (should be completed since not in registry)
     let status = client.get_request_status(&handle);
@@ -78,7 +77,6 @@ async fn test_pending_request_management() {
     
     let client = JanusClient::new(
         "/tmp/test_socket".to_string(),
-        "test_channel".to_string(),
         config
     ).await.unwrap();
     
@@ -101,15 +99,14 @@ async fn test_request_lifecycle_management() {
     
     let client = JanusClient::new(
         "/tmp/test_socket".to_string(),
-        "test_channel".to_string(),
         config
     ).await.unwrap();
     
     // Create multiple handles to test bulk operations
     let handles = vec![
-        RequestHandle::new("id1".to_string(), "cmd1".to_string(), "test_channel".to_string()),
-        RequestHandle::new("id2".to_string(), "cmd2".to_string(), "test_channel".to_string()),
-        RequestHandle::new("id3".to_string(), "cmd3".to_string(), "test_channel".to_string()),
+        RequestHandle::new("id1".to_string(), "cmd1".to_string()),
+        RequestHandle::new("id2".to_string(), "cmd2".to_string()),
+        RequestHandle::new("id3".to_string(), "cmd3".to_string()),
     ];
     
     // Test that handles start as completed (not in registry)
@@ -130,10 +127,10 @@ async fn test_request_lifecycle_management() {
 #[tokio::test]
 async fn test_id_visibility_control() {
     // Test F0195: ID Visibility Control - UUIDs should be hidden from normal API
-    let handle = RequestHandle::new("internal-uuid-12345".to_string(), "test_command".to_string(), "test_channel".to_string());
+    let handle = RequestHandle::new("internal-uuid-12345".to_string(), "test_request".to_string());
     
-    // User should only see command and channel, not internal UUID through normal API
-    assert_eq!(handle.get_command(), "test_command");
+    // User should only see request and channel, not internal UUID through normal API
+    assert_eq!(handle.get_request(), "test_request");
     assert_eq!(handle.get_channel(), "test_channel");
     
     // Internal ID should only be accessible for internal operations
@@ -169,7 +166,6 @@ async fn test_concurrent_request_handling() {
     
     let client = JanusClient::new(
         "/tmp/test_socket".to_string(),
-        "test_channel".to_string(),
         config
     ).await.unwrap();
     
@@ -177,8 +173,7 @@ async fn test_concurrent_request_handling() {
     let handles: Vec<RequestHandle> = (0..10).map(|i| {
         RequestHandle::new(
             format!("concurrent-id-{}", i),
-            format!("cmd{}", i),
-            "test_channel".to_string()
+            format!("cmd{}", i)
         )
     }).collect();
     
@@ -203,8 +198,7 @@ async fn test_uuid_generation_uniqueness() {
     for _ in 0..1000 {
         let handle = RequestHandle::new(
             Uuid::new_v4().to_string(),
-            "test_command".to_string(),
-            "test_channel".to_string()
+            "test_request".to_string()
         );
         
         let id = handle.get_internal_id();

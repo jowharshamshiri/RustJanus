@@ -4,7 +4,7 @@ mod test_utils;
 use test_utils::*;
 
 /// Janus Datagram Client Tests - SOCK_DGRAM parity  
-/// Tests high-level datagram client functionality, command execution
+/// Tests high-level datagram client functionality, request execution
 
 #[tokio::test]
 async fn test_janus_client_initialization() {
@@ -24,7 +24,7 @@ async fn test_janus_client_initialization() {
 }
 
 #[tokio::test]
-async fn test_janus_client_send_command() {
+async fn test_janus_client_send_request() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
@@ -36,7 +36,7 @@ async fn test_janus_client_send_command() {
     ).await;
     
     assert!(client.is_ok());
-    // Note: Actual send_command tests require a server, covered in integration tests
+    // Note: Actual send_request tests require a server, covered in integration tests
 }
 
 /// Test JSON-RPC 2.0 compliant error handling

@@ -7,7 +7,7 @@ use rust_janus::protocol::timeout_manager::{TimeoutManager, TimeoutHandler};
 async fn test_timeout_extension() {
     let manager = TimeoutManager::new();
     
-    let command_id = "test-extend-command".to_string();
+    let request_id = "test-extend-request".to_string();
     let timeout_fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let timeout_fired_clone = timeout_fired.clone();
     
@@ -16,13 +16,13 @@ async fn test_timeout_extension() {
     });
     
     // Register a timeout for 100ms
-    manager.start_timeout(command_id.clone(), Duration::from_millis(100), Some(callback))
+    manager.start_timeout(request_id.clone(), Duration::from_millis(100), Some(callback))
         .await
         .expect("Failed to start timeout");
     
     // Wait 50ms, then extend by 200ms (much longer extension to avoid race condition)
     sleep(Duration::from_millis(50)).await;
-    let extended = manager.extend_timeout(&command_id, Duration::from_millis(200)).await;
+    let extended = manager.extend_timeout(&request_id, Duration::from_millis(200)).await;
     
     assert!(extended, "Expected timeout extension to succeed");
     
@@ -48,7 +48,7 @@ async fn test_timeout_extension() {
 async fn test_error_handled_registration() {
     let manager = TimeoutManager::new();
     
-    let command_id = "test-error-handled".to_string();
+    let request_id = "test-error-handled".to_string();
     let timeout_fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let timeout_fired_clone = timeout_fired.clone();
     
@@ -58,7 +58,7 @@ async fn test_error_handled_registration() {
     
     // Register timeout with error callback
     manager.start_timeout_with_error_handler(
-        command_id.clone(), 
+        request_id.clone(), 
         Duration::from_millis(50), 
         Some(callback), 
         None
@@ -89,9 +89,9 @@ async fn test_bilateral_timeout_management() {
     });
     
     // Register bilateral timeout
-    let base_command_id = "test-bilateral";
+    let base_request_id = "test-bilateral";
     
-    manager.start_bilateral_timeout(base_command_id, Duration::from_millis(100), Some(bilateral_callback))
+    manager.start_bilateral_timeout(base_request_id, Duration::from_millis(100), Some(bilateral_callback))
         .await
         .expect("Failed to start bilateral timeout");
     
@@ -100,7 +100,7 @@ async fn test_bilateral_timeout_management() {
               "Expected 2 active timeouts for bilateral");
     
     // Cancel bilateral timeout
-    let cancelled_count = manager.cancel_bilateral_timeout(base_command_id).await;
+    let cancelled_count = manager.cancel_bilateral_timeout(base_request_id).await;
     
     assert_eq!(cancelled_count, 2, "Expected to cancel 2 timeouts");
     assert_eq!(manager.active_timeout_count().await, 0, 
@@ -126,9 +126,9 @@ async fn test_bilateral_timeout_expiration() {
     });
     
     // Register bilateral timeout with short duration
-    let base_command_id = "test-bilateral-expire";
+    let base_request_id = "test-bilateral-expire";
     
-    manager.start_bilateral_timeout(base_command_id, Duration::from_millis(50), Some(bilateral_callback))
+    manager.start_bilateral_timeout(base_request_id, Duration::from_millis(50), Some(bilateral_callback))
         .await
         .expect("Failed to start bilateral timeout");
     
@@ -200,8 +200,8 @@ async fn test_timeout_manager_concurrency() {
         let manager_clone = manager.clone();
         let handle = tokio::spawn(async move {
             for timeout_id in 0..timeouts_per_task {
-                let command_id = format!("concurrent-{}-{}", task_id, timeout_id);
-                manager_clone.start_timeout(command_id, Duration::from_millis(100), None)
+                let request_id = format!("concurrent-{}-{}", task_id, timeout_id);
+                manager_clone.start_timeout(request_id, Duration::from_millis(100), None)
                     .await
                     .expect("Failed to start concurrent timeout");
             }
@@ -232,8 +232,8 @@ async fn test_timeout_manager_concurrency() {
         let manager_clone = manager.clone();
         let handle = tokio::spawn(async move {
             for timeout_id in 0..(timeouts_per_task / 2) {
-                let command_id = format!("concurrent-{}-{}", task_id, timeout_id);
-                manager_clone.cancel_timeout(&command_id).await;
+                let request_id = format!("concurrent-{}-{}", task_id, timeout_id);
+                manager_clone.cancel_timeout(&request_id).await;
             }
         });
         cancel_handles.push(handle);

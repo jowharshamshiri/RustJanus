@@ -49,9 +49,9 @@ async fn test_connection_state_tracking() {
     assert_eq!(initial_state.responses_received, 0);
     assert_eq!(initial_state.is_connected, false);
     
-    // Try to send a command (will fail but should update connection state)
+    // Try to send a request (will fail but should update connection state)
     let args = HashMap::new();
-    let result = client.send_command_no_response("echo", Some(args)).await;
+    let result = client.send_request_no_response("echo", Some(args)).await;
     
     // Should fail with connection error since no server running
     assert!(result.is_err());

@@ -1,5 +1,5 @@
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
-use crate::specification::Manifest;
+use crate::manifest::Manifest;
 use log::{debug, error, info, warn};
 use tokio::fs;
 
@@ -44,7 +44,7 @@ impl ManifestParser {
             Ok(manifest) => {
                 info!("Successfully parsed Manifest from JSON{}", context);
                 debug!("Parsed Manifest version: {}", manifest.version);
-                debug!("Number of channels: {}", manifest.channels.len());
+                debug!("Channels removed from protocol");
                 Ok(manifest)
             }
             Err(e) => {
@@ -130,7 +130,7 @@ impl ManifestParser {
             Ok(manifest) => {
                 info!("Successfully parsed Manifest from YAML{}", context);
                 debug!("Parsed Manifest version: {}", manifest.version);
-                debug!("Number of channels: {}", manifest.channels.len());
+                debug!("Channels removed from protocol");
                 Ok(manifest)
             }
             Err(e) => {
@@ -231,9 +231,8 @@ impl ManifestParser {
             Ok(manifest) => {
                 info!("Successfully loaded Manifest from {}", path);
                 debug!(
-                    "Loaded spec version: {} with {} channels",
-                    manifest.version,
-                    manifest.channels.len()
+                    "Loaded manifest version: {}",
+                    manifest.version
                 );
             }
             Err(e) => {
@@ -326,37 +325,15 @@ impl ManifestParser {
         }
         debug!("✓ Version format is valid: {}", manifest.version);
 
-        // Validate channels
-        if manifest.channels.is_empty() {
-            error!(
-                "Manifest validation failed{}: no channels defined",
-                context
-            );
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
-                "Manifest must define at least one channel{}",
-                context
-            ))));
-        }
-        debug!("Validating {} channels", manifest.channels.len());
-
-        for (channel_name, channel_spec) in &manifest.channels {
-            debug!("Validating channel: {}", channel_name);
-            if let Err(e) = Self::validate_channel(channel_name, channel_spec, file_path) {
-                error!(
-                    "Channel validation failed for '{}'{}: {}",
-                    channel_name, context, e
-                );
-                return Err(e);
-            }
-            debug!("✓ Channel '{}' is valid", channel_name);
-        }
+        // Channels have been removed from the protocol
+        debug!("Channels removed from protocol - skipping channel validation");
 
         // Validate models if present
         if let Some(models) = &manifest.models {
             debug!("Validating {} models", models.len());
-            for (model_name, model_spec) in models {
+            for (model_name, model_manifest) in models {
                 debug!("Validating model: {}", model_name);
-                if let Err(e) = Self::validate_model(model_name, model_spec, manifest, file_path) {
+                if let Err(e) = Self::validate_model(model_name, model_manifest, manifest, file_path) {
                     error!(
                         "Model validation failed for '{}'{}: {}",
                         model_name, context, e
@@ -377,7 +354,7 @@ impl ManifestParser {
             "Validated{}: version {}, {} channels, {} models",
             context,
             manifest.version,
-            manifest.channels.len(),
+            0, // channels removed
             manifest.models.as_ref().map_or(0, |m| m.len())
         );
 
@@ -388,10 +365,10 @@ impl ManifestParser {
     pub async fn load_and_validate(path: &str) -> Result<Manifest, JSONRPCError> {
         info!("Loading and validating Manifest from: {}", path);
 
-        // Load the specification
+        // Load the manifest
         let manifest = Self::from_file(path).await?;
 
-        // Validate the loaded specification
+        // Validate the loaded manifest
         Self::validate_with_context(&manifest, Some(path))?;
 
         info!(
@@ -422,7 +399,7 @@ impl ManifestParser {
         // Parse the JSON with context
         let manifest = Self::from_json_with_context(json_str, file_path)?;
 
-        // Validate the parsed specification with context
+        // Validate the parsed manifest with context
         Self::validate_with_context(&manifest, file_path)?;
 
         info!(
@@ -455,7 +432,7 @@ impl ManifestParser {
         // Parse the YAML with context
         let manifest = Self::from_yaml_with_context(yaml_str, file_path)?;
 
-        // Validate the parsed specification with context
+        // Validate the parsed manifest with context
         Self::validate_with_context(&manifest, file_path)?;
 
         info!(
@@ -476,30 +453,16 @@ impl ManifestParser {
             summary.push(format!("• Invalid version format: {}", manifest.version));
         }
 
-        // Check channels
-        if manifest.channels.is_empty() {
-            summary.push("• No channels defined".to_string());
-        } else {
-            for (channel_name, channel_spec) in &manifest.channels {
-                if channel_name.is_empty() {
-                    summary.push("• Empty channel name found".to_string());
-                }
-                if channel_spec.description.is_empty() {
-                    summary.push(format!("• Channel '{}' missing description", channel_name));
-                }
-                if channel_spec.commands.is_empty() {
-                    summary.push(format!("• Channel '{}' has no commands", channel_name));
-                }
-            }
-        }
+        // Channels have been removed from the protocol
+        summary.push("• Channels removed from protocol".to_string());
 
         // Check models if present
         if let Some(models) = &manifest.models {
-            for (model_name, model_spec) in models {
+            for (model_name, model_manifest) in models {
                 if model_name.is_empty() {
                     summary.push("• Empty model name found".to_string());
                 }
-                if model_spec.properties.is_empty() {
+                if model_manifest.properties.is_empty() {
                     summary.push(format!("• Model '{}' has no properties", model_name));
                 }
             }
@@ -522,19 +485,19 @@ impl ManifestParser {
         parts.iter().all(|part| part.parse::<u32>().is_ok())
     }
 
-    /// Validate channel specification
+    /* // Channel validation removed - channels no longer in protocol
     fn validate_channel(
         channel_name: &str,
-        channel_spec: &crate::specification::ChannelSpec,
+        channel_manifest: &crate::manifest::ChannelManifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         debug!(
-            "Validating channel '{}' with {} commands{}",
+            "Validating channel '{}' with {} requests{}",
             channel_name,
-            channel_spec.commands.len(),
+            channel_manifest.requests.len(),
             context
         );
 
@@ -563,7 +526,7 @@ impl ManifestParser {
         }
 
         // Description validation
-        if channel_spec.description.is_empty() {
+        if channel_manifest.description.is_empty() {
             error!(
                 "Channel validation failed{}: '{}' must have a description",
                 context, channel_name
@@ -574,103 +537,103 @@ impl ManifestParser {
             ))));
         }
 
-        // Commands validation
-        if channel_spec.commands.is_empty() {
+        // Requests validation
+        if channel_manifest.requests.is_empty() {
             error!(
-                "Channel validation failed{}: '{}' must define at least one command",
+                "Channel validation failed{}: '{}' must define at least one request",
                 context, channel_name
             );
             return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
-                "Channel '{}' must define at least one command{}",
+                "Channel '{}' must define at least one request{}",
                 channel_name, context
             ))));
         }
 
         debug!(
-            "Validating {} commands in channel '{}'",
-            channel_spec.commands.len(),
+            "Validating {} requests in channel '{}'",
+            channel_manifest.requests.len(),
             channel_name
         );
-        for (command_name, command_spec) in &channel_spec.commands {
+        for (request_name, request_manifest) in &channel_manifest.requests {
             debug!(
-                "Validating command '{}' in channel '{}'",
-                command_name, channel_name
+                "Validating request '{}' in channel '{}'",
+                request_name, channel_name
             );
             if let Err(e) =
-                Self::validate_command_spec(channel_name, command_name, command_spec, file_path)
+                Self::validate_request_manifest(channel_name, request_name, request_manifest, file_path)
             {
                 error!(
-                    "Command validation failed for '{}' in channel '{}'{}: {}",
-                    command_name, channel_name, context, e
+                    "Request validation failed for '{}' in channel '{}'{}: {}",
+                    request_name, channel_name, context, e
                 );
                 return Err(e);
             }
         }
 
         Ok(())
-    }
+    } */
 
-    /// Validate command specification
-    fn validate_command_spec(
+    /// Validate request manifest
+    fn validate_request_manifest(
         channel_name: &str,
-        command_name: &str,
-        command_spec: &crate::specification::CommandSpec,
+        request_name: &str,
+        request_manifest: &crate::manifest::RequestManifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
-        // Command name validation
-        if command_name.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Command name cannot be empty{}", context))));
+        // Request name validation
+        if request_name.is_empty() {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Request name cannot be empty{}", context))));
         }
 
-        // Command name format validation
-        if !command_name
+        // Request name format validation
+        if !request_name
             .chars()
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
         {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Invalid command name format: {}{}", command_name, context))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Invalid request name format: {}{}", request_name, context))));
         }
 
-        // Validate against reserved command names - built-in commands cannot be redefined
-        let reserved_commands = ["ping", "echo", "get_info", "validate", "slow_process", "spec"];
-        if reserved_commands.contains(&command_name) {
+        // Validate against reserved request names - built-in requests cannot be redefined
+        let reserved_requests = ["ping", "echo", "get_info", "validate", "slow_process", "manifest"];
+        if reserved_requests.contains(&request_name) {
             error!(
-                "Command validation failed{}: '{}' is a reserved built-in command",
-                context, command_name
+                "Request validation failed{}: '{}' is a reserved built-in request",
+                context, request_name
             );
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Command '{}' is reserved and cannot be defined in Manifest{}. Reserved commands: {}", command_name, context, reserved_commands.join(", ")))));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Request '{}' is reserved and cannot be defined in Manifest{}. Reserved requests: {}", request_name, context, reserved_requests.join(", ")))));
         }
-        debug!("✓ Command '{}' is not reserved", command_name);
+        debug!("✓ Request '{}' is not reserved", request_name);
 
         // Description validation
-        if command_spec.description.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Command '{}' in channel '{}' must have a description{}", command_name, channel_name, context))));
+        if request_manifest.description.is_empty() {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some(format!("Request '{}' in channel '{}' must have a description{}", request_name, channel_name, context))));
         }
 
         // Validate arguments
-        for (arg_name, arg_spec) in &command_spec.args {
-            Self::validate_argument_spec(arg_name, arg_spec, file_path)?;
+        for (arg_name, arg_manifest) in &request_manifest.args {
+            Self::validate_argument_manifest(arg_name, arg_manifest, file_path)?;
         }
 
-        // Validate response spec
-        Self::validate_response_spec(&command_spec.response, file_path)?;
+        // Validate response manifest
+        Self::validate_response_manifest(&request_manifest.response, file_path)?;
 
         // Validate error codes if present
-        if let Some(error_codes) = &command_spec.error_codes {
-            for (error_name, error_spec) in error_codes {
-                Self::validate_error_code_spec(error_name, error_spec, file_path)?;
+        if let Some(error_codes) = &request_manifest.error_codes {
+            for (error_name, error_manifest) in error_codes {
+                Self::validate_error_code_manifest(error_name, error_manifest, file_path)?;
             }
         }
 
         Ok(())
     }
 
-    /// Validate argument specification
-    fn validate_argument_spec(
+    /// Validate argument manifest
+    fn validate_argument_manifest(
         arg_name: &str,
-        arg_spec: &crate::specification::ArgumentSpec,
+        arg_manifest: &crate::manifest::ArgumentManifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
         let context = file_path
@@ -683,34 +646,34 @@ impl ManifestParser {
 
         // Type validation
         let valid_types = ["string", "integer", "number", "boolean", "array", "object"];
-        if !valid_types.contains(&arg_spec.r#type.as_str()) {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Invalid argument type: {}{}", arg_spec.r#type, context))));
+        if !valid_types.contains(&arg_manifest.r#type.as_str()) {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Invalid argument type: {}{}", arg_manifest.r#type, context))));
         }
 
         // Validation constraint validation
-        if let Some(validation) = &arg_spec.validation {
-            Self::validate_validation_spec(arg_name, validation, file_path)?;
+        if let Some(validation) = &arg_manifest.validation {
+            Self::validate_validation_manifest(arg_name, validation, file_path)?;
         }
 
         // Default value type validation
-        if let Some(default_value) = &arg_spec.default_value {
-            Self::validate_value_type(arg_name, default_value, &arg_spec.r#type, file_path)?;
+        if let Some(default_value) = &arg_manifest.default_value {
+            Self::validate_value_type(arg_name, default_value, &arg_manifest.r#type, file_path)?;
         }
 
         Ok(())
     }
 
     /// Validate validation constraints
-    fn validate_validation_spec(
-        arg_name: &str,
-        validation_spec: &crate::specification::ValidationSpec,
+    fn validate_validation_manifest(
+        _arg_name: &str,
+        validation_manifest: &crate::manifest::ValidationManifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
         let context = file_path
             .map(|p| format!(" (file: {})", p))
             .unwrap_or_default();
         // Range validation
-        if let (Some(min), Some(max)) = (validation_spec.minimum, validation_spec.maximum) {
+        if let (Some(min), Some(max)) = (validation_manifest.minimum, validation_manifest.maximum) {
             if min > max {
                 return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Minimum value cannot be greater than maximum value{}", context))));
             }
@@ -718,7 +681,7 @@ impl ManifestParser {
 
         // Length validation
         if let (Some(min_len), Some(max_len)) =
-            (validation_spec.min_length, validation_spec.max_length)
+            (validation_manifest.min_length, validation_manifest.max_length)
         {
             if min_len > max_len {
                 return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Minimum length cannot be greater than maximum length{}", context))));
@@ -726,14 +689,14 @@ impl ManifestParser {
         }
 
         // Pattern validation
-        if let Some(pattern) = &validation_spec.pattern {
+        if let Some(pattern) = &validation_manifest.pattern {
             regex::Regex::new(pattern).map_err(|e| {
                 JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Invalid regex pattern: {}{}", e, context)))
             })?;
         }
 
         // Enum validation
-        if let Some(enum_values) = &validation_spec.r#enum {
+        if let Some(enum_values) = &validation_manifest.r#enum {
             if enum_values.is_empty() {
                 return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Enum values cannot be empty{}", context))));
             }
@@ -742,9 +705,9 @@ impl ManifestParser {
         Ok(())
     }
 
-    /// Validate response specification
-    fn validate_response_spec(
-        response_spec: &crate::specification::ResponseSpec,
+    /// Validate response manifest
+    fn validate_response_manifest(
+        response_manifest: &crate::manifest::ResponseManifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
         let context = file_path
@@ -752,18 +715,18 @@ impl ManifestParser {
             .unwrap_or_default();
         // Response type validation
         let valid_types = ["string", "integer", "number", "boolean", "array", "object"];
-        if !valid_types.contains(&response_spec.r#type.as_str()) {
+        if !valid_types.contains(&response_manifest.r#type.as_str()) {
             return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Invalid response type: {}{}",
-                response_spec.r#type, context
+                response_manifest.r#type, context
             ))));
         }
 
         // Validate properties if object type
-        if response_spec.r#type == "object" {
-            if let Some(properties) = &response_spec.properties {
-                for (prop_name, prop_spec) in properties {
-                    Self::validate_argument_spec(prop_name, prop_spec, file_path)?;
+        if response_manifest.r#type == "object" {
+            if let Some(properties) = &response_manifest.properties {
+                for (prop_name, prop_manifest) in properties {
+                    Self::validate_argument_manifest(prop_name, prop_manifest, file_path)?;
                 }
             }
         }
@@ -771,10 +734,10 @@ impl ManifestParser {
         Ok(())
     }
 
-    /// Validate error code specification
-    fn validate_error_code_spec(
+    /// Validate error code manifest
+    fn validate_error_code_manifest(
         error_name: &str,
-        error_spec: &crate::specification::ErrorCodeSpec,
+        error_manifest: &crate::manifest::ErrorCodeManifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
         let context = file_path
@@ -787,7 +750,7 @@ impl ManifestParser {
             ))));
         }
 
-        if error_spec.message.is_empty() {
+        if error_manifest.message.is_empty() {
             return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Error code '{}' must have a message{}",
                 error_name, context
@@ -795,20 +758,20 @@ impl ManifestParser {
         }
 
         // Validate HTTP status code range
-        if !(100..=599).contains(&error_spec.code) {
+        if !(100..=599).contains(&error_manifest.code) {
             return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                 "Invalid HTTP status code: {}{}",
-                error_spec.code, context
+                error_manifest.code, context
             ))));
         }
 
         Ok(())
     }
 
-    /// Validate model specification
+    /// Validate model manifest
     fn validate_model(
         model_name: &str,
-        model_spec: &crate::specification::ModelSpec,
+        model_manifest: &crate::manifest::ModelManifest,
         _manifest: &Manifest,
         file_path: Option<&str>,
     ) -> Result<(), JSONRPCError> {
@@ -824,14 +787,14 @@ impl ManifestParser {
         }
 
         // Validate properties
-        for (prop_name, prop_spec) in &model_spec.properties {
-            Self::validate_argument_spec(prop_name, prop_spec, file_path)?;
+        for (prop_name, prop_manifest) in &model_manifest.properties {
+            Self::validate_argument_manifest(prop_name, prop_manifest, file_path)?;
         }
 
         // Validate required fields exist
-        if let Some(required_fields) = &model_spec.required {
+        if let Some(required_fields) = &model_manifest.required {
             for required_field in required_fields {
-                if !model_spec.properties.contains_key(required_field) {
+                if !model_manifest.properties.contains_key(required_field) {
                     return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
                         "Required field '{}' not found in model '{}'{}",
                         required_field, model_name, context
@@ -845,7 +808,7 @@ impl ManifestParser {
 
     /// Validate value matches declared type
     fn validate_value_type(
-        arg_name: &str,
+        _arg_name: &str,
         value: &serde_json::Value,
         expected_type: &str,
         file_path: Option<&str>,
@@ -879,54 +842,45 @@ impl ManifestParser {
         info!("Parsing {} Manifest files", file_paths.len());
         
         // Parse first file as base
-        let mut base_spec = Self::from_file(&file_paths[0]).await?;
-        info!("Base specification loaded from: {}", file_paths[0]);
+        let mut base_manifest = Self::from_file(&file_paths[0]).await?;
+        info!("Base manifest loaded from: {}", file_paths[0]);
         
         // Merge additional files
         for file_path in &file_paths[1..] {
-            info!("Merging specification from: {}", file_path);
-            let additional_spec = Self::from_file(file_path).await?;
-            Self::merge_specifications(&mut base_spec, &additional_spec)?;
+            info!("Merging manifest from: {}", file_path);
+            let additional_manifest = Self::from_file(file_path).await?;
+            Self::merge_manifests(&mut base_manifest, &additional_manifest)?;
         }
         
-        // Validate merged specification
-        Self::validate(&base_spec)?;
+        // Validate merged manifest
+        Self::validate(&base_manifest)?;
         
-        info!("Successfully merged {} specification files", file_paths.len());
-        Ok(base_spec)
+        info!("Successfully merged {} manifest files", file_paths.len());
+        Ok(base_manifest)
     }
 
     /// Merge two Manifests
-    pub fn merge_specifications(base: &mut Manifest, additional: &Manifest) -> Result<(), JSONRPCError> {
+    pub fn merge_manifests(base: &mut Manifest, additional: &Manifest) -> Result<(), JSONRPCError> {
         info!("Merging Manifests");
         
-        // Merge channels
-        for (channel_id, channel_spec) in &additional.channels {
-            if base.channels.contains_key(channel_id) {
-                return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidRequest, Some(format!(
-                    "Channel '{}' already exists in base specification", 
-                    channel_id
-                ))));
-            }
-            base.channels.insert(channel_id.clone(), channel_spec.clone());
-        }
+        // Channels have been removed from the protocol
         
         // Merge models if present
         if let Some(additional_models) = &additional.models {
             let base_models = base.models.get_or_insert_with(std::collections::HashMap::new);
             
-            for (model_name, model_spec) in additional_models {
+            for (model_name, model_manifest) in additional_models {
                 if base_models.contains_key(model_name) {
                     return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!(
-                        "Model '{}' already exists in base specification", 
+                        "Model '{}' already exists in base manifest", 
                         model_name
                     ))));
                 }
-                base_models.insert(model_name.clone(), model_spec.clone());
+                base_models.insert(model_name.clone(), model_manifest.clone());
             }
         }
         
-        info!("Specifications merged successfully");
+        info!("Manifests merged successfully");
         Ok(())
     }
 
@@ -962,7 +916,7 @@ impl ManifestParser {
     }
 
     /// Static method for validation
-    pub fn validate_specification(manifest: &Manifest) -> Result<(), JSONRPCError> {
+    pub fn validate_manifest(manifest: &Manifest) -> Result<(), JSONRPCError> {
         Self::validate(manifest)
     }
 
@@ -981,26 +935,26 @@ impl ManifestParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::specification::{
-        ArgumentSpec, ChannelSpec, CommandSpec, ResponseSpec, ValidationSpec,
+    use crate::manifest::{
+        ArgumentManifest, RequestManifest, ResponseManifest, ValidationManifest,
     };
 
     fn create_test_manifest() -> Manifest {
         let mut manifest = Manifest::new("1.0.0".to_string());
 
-        let mut channel = ChannelSpec::new("Test channel".to_string());
+        let mut channel = ChannelManifest::new("Test channel".to_string());
 
-        let mut command = CommandSpec::new(
-            "Test command".to_string(),
-            ResponseSpec::new("object".to_string()),
+        let mut request = RequestManifest::new(
+            "Test request".to_string(),
+            ResponseManifest::new("object".to_string()),
         );
 
-        let arg = ArgumentSpec::new("string".to_string())
+        let arg = ArgumentManifest::new("string".to_string())
             .required()
-            .with_validation(ValidationSpec::new().with_length_range(Some(1), Some(100)));
+            .with_validation(ValidationManifest::new().with_length_range(Some(1), Some(100)));
 
-        command.add_argument("test_arg".to_string(), arg);
-        channel.add_command("test_cmd".to_string(), command);
+        request.add_argument("test_arg".to_string(), arg);
+        channel.add_request("test_cmd".to_string(), request);
         manifest.add_channel("test_channel".to_string(), channel);
 
         manifest
@@ -1013,9 +967,9 @@ mod tests {
         let json_str = ManifestParser::to_json(&manifest).unwrap();
         assert!(!json_str.is_empty());
 
-        let parsed_spec = ManifestParser::from_json(&json_str).unwrap();
-        assert_eq!(parsed_spec.version, manifest.version);
-        assert_eq!(parsed_spec.channels.len(), manifest.channels.len());
+        let parsed_manifest = ManifestParser::from_json(&json_str).unwrap();
+        assert_eq!(parsed_manifest.version, manifest.version);
+        assert_eq!(parsed_manifest.channels.len(), manifest.channels.len());
     }
 
     #[cfg(feature = "yaml-support")]
@@ -1026,9 +980,9 @@ mod tests {
         let yaml_str = ManifestParser::to_yaml(&manifest).unwrap();
         assert!(!yaml_str.is_empty());
 
-        let parsed_spec = ManifestParser::from_yaml(&yaml_str).unwrap();
-        assert_eq!(parsed_spec.version, manifest.version);
-        assert_eq!(parsed_spec.channels.len(), manifest.channels.len());
+        let parsed_manifest = ManifestParser::from_yaml(&yaml_str).unwrap();
+        assert_eq!(parsed_manifest.version, manifest.version);
+        assert_eq!(parsed_manifest.channels.len(), manifest.channels.len());
     }
 
     #[test]
@@ -1102,45 +1056,45 @@ mod tests {
     }
 
     #[test]
-    fn test_specification_merging() {
-        let mut base_spec = create_test_manifest();
+    fn test_manifest_merging() {
+        let mut base_manifest = create_test_manifest();
         
-        // Create additional specification
-        let mut additional_spec = Manifest::new("1.0.0".to_string());
-        let mut additional_channel = ChannelSpec::new("Additional Channel".to_string());
-        let additional_command = CommandSpec::new(
-            "Additional Command".to_string(),
-            ResponseSpec::new("object".to_string()),
+        // Create additional manifest
+        let mut additional_manifest = Manifest::new("1.0.0".to_string());
+        let mut additional_channel = ChannelManifest::new("Additional Channel".to_string());
+        let additional_request = RequestManifest::new(
+            "Additional Request".to_string(),
+            ResponseManifest::new("object".to_string()),
         );
-        additional_channel.add_command("additional_cmd".to_string(), additional_command);
-        additional_spec.add_channel("additional_channel".to_string(), additional_channel);
+        additional_channel.add_request("additional_cmd".to_string(), additional_request);
+        additional_manifest.add_channel("additional_channel".to_string(), additional_channel);
         
-        // Merge specifications
-        let result = ManifestParser::merge_specifications(&mut base_spec, &additional_spec);
+        // Merge manifests
+        let result = ManifestParser::merge_manifests(&mut base_manifest, &additional_manifest);
         assert!(result.is_ok());
         
         // Verify merge results
-        assert_eq!(base_spec.channels.len(), 2);
-        assert!(base_spec.channels.contains_key("test_channel"));
-        assert!(base_spec.channels.contains_key("additional_channel"));
+        assert_eq!(base_manifest.channels.len(), 2);
+        assert!(base_manifest.channels.contains_key("test_channel"));
+        assert!(base_manifest.channels.contains_key("additional_channel"));
     }
 
     #[test]
-    fn test_specification_merging_conflict() {
-        let mut base_spec = create_test_manifest();
+    fn test_manifest_merging_conflict() {
+        let mut base_manifest = create_test_manifest();
         
-        // Create conflicting specification (same channel name)
-        let mut conflicting_spec = Manifest::new("1.0.0".to_string());
-        let mut conflicting_channel = ChannelSpec::new("Conflicting Channel".to_string());
-        let conflicting_command = CommandSpec::new(
-            "Conflicting Command".to_string(), 
-            ResponseSpec::new("object".to_string()),
+        // Create conflicting manifest (same channel name)
+        let mut conflicting_manifest = Manifest::new("1.0.0".to_string());
+        let mut conflicting_channel = ChannelManifest::new("Conflicting Channel".to_string());
+        let conflicting_request = RequestManifest::new(
+            "Conflicting Request".to_string(), 
+            ResponseManifest::new("object".to_string()),
         );
-        conflicting_channel.add_command("conflicting_cmd".to_string(), conflicting_command);
-        conflicting_spec.add_channel("test_channel".to_string(), conflicting_channel); // Same name as base
+        conflicting_channel.add_request("conflicting_cmd".to_string(), conflicting_request);
+        conflicting_manifest.add_channel("test_channel".to_string(), conflicting_channel); // Same name as base
         
         // Merge should fail due to conflict
-        let result = ManifestParser::merge_specifications(&mut base_spec, &conflicting_spec);
+        let result = ManifestParser::merge_manifests(&mut base_manifest, &conflicting_manifest);
         assert!(result.is_err());
     }
 
@@ -1153,11 +1107,11 @@ mod tests {
         assert!(!json_str.is_empty());
         
         // Test static JSON parsing
-        let parsed_spec = ManifestParser::parse_json(&json_str).unwrap();
-        assert_eq!(parsed_spec.version, manifest.version);
+        let parsed_manifest = ManifestParser::parse_json(&json_str).unwrap();
+        assert_eq!(parsed_manifest.version, manifest.version);
         
         // Test static validation
-        let result = ManifestParser::validate_specification(&parsed_spec);
+        let result = ManifestParser::validate_manifest(&parsed_manifest);
         assert!(result.is_ok());
     }
 
@@ -1171,7 +1125,7 @@ mod tests {
         assert!(!yaml_str.is_empty());
         
         // Test static YAML parsing
-        let parsed_spec = ManifestParser::parse_yaml(&yaml_str).unwrap();
-        assert_eq!(parsed_spec.version, manifest.version);
+        let parsed_manifest = ManifestParser::parse_yaml(&yaml_str).unwrap();
+        assert_eq!(parsed_manifest.version, manifest.version);
     }
 }

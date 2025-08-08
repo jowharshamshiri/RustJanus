@@ -41,77 +41,66 @@ pub async fn setup_test_server() -> (rust_janus::server::janus_server::JanusServ
 }
 
 /// Create a basic test manifest for server tests
-pub fn create_test_manifest() -> rust_janus::specification::model_registry::Manifest {
-    use rust_janus::specification::model_registry::{Manifest, ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec};
+pub fn create_test_manifest() -> rust_janus::manifest::model_registry::Manifest {
+    use rust_janus::manifest::model_registry::{Manifest, ModelManifest, ArgumentManifest};
     use std::collections::HashMap;
     
-    let mut channels = HashMap::new();
-    
-    // Create test channel with basic commands
-    let mut commands = HashMap::new();
-    
-    let mut test_command = CommandSpec::new(
-        "Test command for server tests".to_string(),
-        ResponseSpec::new("object".to_string())
-    );
-    
-    let message_arg = ArgumentSpec::new("string".to_string())
-        .with_description("Test message".to_string());
-    test_command.add_argument("message".to_string(), message_arg);
-    
-    commands.insert("test_command".to_string(), test_command);
-    
-    let mut test_channel = ChannelSpec::new("Test channel".to_string());
-    test_channel.commands = commands;
-    
-    channels.insert("test".to_string(), test_channel);
-    
+    // Create manifest with the new structure (channels removed)
     let mut manifest = Manifest::new("1.0.0".to_string());
-    manifest.channels = channels;
+    
+    // Create a test model for data structures
+    let mut test_model = ModelManifest::new();
+    
+    let message_prop = ArgumentManifest::new("string".to_string())
+        .with_description("Test message property".to_string());
+    test_model.add_property("message".to_string(), message_prop);
+    
+    manifest.add_model("TestModel".to_string(), test_model);
+    
     manifest
 }
 
 /// Fetch Manifest from a running test server
-/// This replaces hardcoded specifications with dynamic fetching for better test accuracy
-pub async fn fetch_test_manifest(server_socket_path: &str) -> rust_janus::specification::model_registry::Manifest {
+/// This replaces hardcoded manifests with dynamic fetching for better test accuracy
+pub async fn fetch_test_manifest(server_socket_path: &str) -> rust_janus::manifest::model_registry::Manifest {
     use rust_janus::core::CoreJanusClient;
     use rust_janus::config::JanusClientConfig;
     
-    // Create minimal client configuration for spec fetching
+    // Create minimal client configuration for manifest fetching
     let config = JanusClientConfig {
         max_concurrent_connections: 1,
         max_message_size: 1_000_000,
         connection_timeout: std::time::Duration::from_secs(5),
-        max_pending_commands: 10,
-        max_command_handlers: 10,
+        max_pending_requests: 10,
+        max_request_handlers: 10,
         enable_resource_monitoring: false,
         max_channel_name_length: 128,
-        max_command_name_length: 128,
+        max_request_name_length: 128,
         max_args_data_size: 500_000,
         enable_validation: true,
     };
     
-    // Create core client for spec fetching
+    // Create core client for manifest fetching
     let core_client = CoreJanusClient::new(server_socket_path.to_string(), config)
-        .expect("Failed to create core client for spec fetching");
+        .expect("Failed to create core client for manifest fetching");
     
     // Generate response socket path
     let response_socket_path = core_client.generate_response_socket_path();
     
-    // Create spec command
-    let spec_command = serde_json::json!({
-        "command": "spec",
+    // Create manifest request
+    let manifest_request = serde_json::json!({
+        "request": "manifest",
         "reply_to": response_socket_path
     });
     
-    let command_data = serde_json::to_vec(&spec_command)
-        .expect("Failed to serialize spec command");
+    let request_data = serde_json::to_vec(&manifest_request)
+        .expect("Failed to serialize manifest request");
     
-    // Send spec command to server
+    // Send manifest request to server
     let response_data = core_client
-        .send_datagram(&command_data, &response_socket_path)
+        .send_datagram(&request_data, &response_socket_path)
         .await
-        .expect("Failed to fetch specification from server");
+        .expect("Failed to fetch manifest from server");
     
     // Parse response JSON
     let response: serde_json::Value = serde_json::from_slice(&response_data)
@@ -119,28 +108,28 @@ pub async fn fetch_test_manifest(server_socket_path: &str) -> rust_janus::specif
     
     // Check for error in response
     if let Some(error) = response.get("error") {
-        panic!("Server returned error when fetching spec: {}", error);
+        panic!("Server returned error when fetching manifest: {}", error);
     }
     
-    // Extract specification from response
-    let spec_data = response.get("result")
-        .expect("Missing 'result' field in spec response");
+    // Extract manifest from response
+    let manifest_data = response.get("result")
+        .expect("Missing 'result' field in manifest response");
     
     // Parse Manifest
-    ManifestParser::from_json(&serde_json::to_string(spec_data).unwrap())
+    ManifestParser::from_json(&serde_json::to_string(manifest_data).unwrap())
         .expect("Failed to parse Manifest from server response")
 }
 
 /// Load test Manifest from test-manifest.json file
 pub fn load_test_manifest() -> Manifest {
-    let spec_path = "test-manifest.json";
-    let spec_data = std::fs::read_to_string(spec_path)
+    let manifest_path = "test-manifest.json";
+    let manifest_data = std::fs::read_to_string(manifest_path)
         .expect("Failed to read test-manifest.json");
     
-    let _spec_json: serde_json::Value = serde_json::from_str(&spec_data)
+    let _manifest_json: serde_json::Value = serde_json::from_str(&manifest_data)
         .expect("Failed to parse test-manifest.json");
     
-    ManifestParser::from_json(&spec_data)
+    ManifestParser::from_json(&manifest_data)
         .expect("Failed to parse Manifest from test-manifest.json")
 }
 
@@ -151,11 +140,11 @@ pub fn create_test_config() -> JanusClientConfig {
         max_concurrent_connections: 10,
         max_message_size: 1_000_000,  // 1MB
         connection_timeout: std::time::Duration::from_secs(5),
-        max_pending_commands: 100,
-        max_command_handlers: 50,
+        max_pending_requests: 100,
+        max_request_handlers: 50,
         enable_resource_monitoring: true,
         max_channel_name_length: 128,
-        max_command_name_length: 128,
+        max_request_name_length: 128,
         max_args_data_size: 500_000,  // 500KB
         enable_validation: true,
     }
@@ -195,9 +184,9 @@ pub fn get_malicious_socket_paths() -> Vec<String> {
 pub fn get_malicious_channel_ids() -> Vec<String> {
     vec![
         "'; DROP TABLE users; --".to_string(),  // SQL injection
-        "$(rm -rf /)".to_string(),              // Command injection
-        "`cat /etc/passwd`".to_string(),        // Command injection
-        "channel && rm -rf /".to_string(),      // Command chaining
+        "$(rm -rf /)".to_string(),              // Request injection
+        "`cat /etc/passwd`".to_string(),        // Request injection
+        "channel && rm -rf /".to_string(),      // Request chaining
         "channel | cat /etc/shadow".to_string(), // Pipe injection
         "<script>alert('xss')</script>".to_string(), // XSS
         "../../../etc/passwd".to_string(),       // Path traversal
@@ -244,7 +233,7 @@ pub fn get_invalid_utf8_sequences() -> Vec<Vec<u8>> {
     ]
 }
 
-/// Create command arguments for testing
+/// Create request arguments for testing
 pub fn create_test_args() -> HashMap<String, serde_json::Value> {
     let mut args = HashMap::new();
     args.insert("message".to_string(), serde_json::Value::String("test_value".to_string()));

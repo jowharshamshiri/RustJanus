@@ -63,7 +63,7 @@ async fn test_janus_server_register_handler() {
     
     // Register a custom handler
     server.register_handler("test_cmd", |cmd| {
-        Ok(json!({"echo": cmd.command, "id": cmd.id}))
+        Ok(json!({"echo": cmd.request, "id": cmd.id}))
     }).await;
     
     // Server should still not be running until start_listening is called
@@ -105,17 +105,16 @@ async fn test_janus_client_server_communication() {
     let config = JanusClientConfig::default();
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test_channel".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Send command
+    // Send request
     let mut args = std::collections::HashMap::new();
     args.insert("message".to_string(), serde_json::Value::String("Hello Server!".to_string()));
     
     let result = timeout(
         Duration::from_secs(5),
-        client.send_command("test_echo", Some(args), None)
+        client.send_request("test_echo", Some(args), None)
     ).await;
     
     // Verify response
@@ -178,14 +177,13 @@ async fn test_datagram_default_ping_handler() {
     let config = JanusClientConfig::default();
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test_channel".to_string(),
         config,
     ).await.expect("Failed to create client");
     
     // Test default ping handler
     let result = timeout(
         Duration::from_secs(5),
-        client.send_command("ping", None, None)
+        client.send_request("ping", None, None)
     ).await;
     
     match result {
@@ -214,8 +212,8 @@ async fn test_datagram_default_ping_handler() {
 }
 
 #[tokio::test]
-async fn test_datagram_unknown_command() {
-    let socket_path = "/tmp/test_unknown_command.sock";
+async fn test_datagram_unknown_request() {
+    let socket_path = "/tmp/test_unknown_request.sock";
     let _ = std::fs::remove_file(socket_path);
     
     // Start server
@@ -237,14 +235,13 @@ async fn test_datagram_unknown_command() {
     let config = JanusClientConfig::default();
     let mut client = JanusClient::new(
         socket_path.to_string(),
-        "test_channel".to_string(),
         config,
     ).await.expect("Failed to create client");
     
-    // Send unknown command
+    // Send unknown request
     let result = timeout(
         Duration::from_secs(5),
-        client.send_command("unknown_command", None, None)
+        client.send_request("unknown_request", None, None)
     ).await;
     
     match result {
@@ -252,14 +249,14 @@ async fn test_datagram_unknown_command() {
             assert!(!response.success);
             assert!(response.error.is_some());
             if let Some(error) = response.error {
-                // Check that it's a MethodNotFound error (JSON-RPC 2.0 for unknown commands)
+                // Check that it's a MethodNotFound error (JSON-RPC 2.0 for unknown requests)
                 assert_eq!(error.code as i32, rust_janus::error::JSONRPCErrorCode::MethodNotFound as i32);
                 assert!(error.message.contains("not registered") || error.message.contains("Method not found"));
             }
         }
         Ok(Err(err)) if err.code == -32005 => {
-            // ValidationFailed errors are expected for unknown commands
-            println!("Test passed: Unknown command correctly rejected by validation: {}", err);
+            // ValidationFailed errors are expected for unknown requests
+            println!("Test passed: Unknown request correctly rejected by validation: {}", err);
             return;
         }
         Ok(Err(err)) if err.code == -32005 => {

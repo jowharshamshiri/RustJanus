@@ -1,19 +1,19 @@
-use rust_janus::protocol::{MessageFraming, MessageFramingMessage, JanusCommand, JanusResponse};
+use rust_janus::protocol::{MessageFraming, MessageFramingMessage, JanusRequest, JanusResponse};
 use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_message_framing_encode_message() {
     let framing = MessageFraming::new();
     
-    // Test command encoding
-    let command = JanusCommand::new(
+    // Test request encoding
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let message = MessageFramingMessage::Command(command);
+    let message = MessageFramingMessage::Request(request);
     let encoded = framing.encode_message(message).unwrap();
     
     assert!(encoded.len() > 4); // At least length prefix + content
@@ -39,18 +39,18 @@ async fn test_message_framing_encode_message() {
 async fn test_message_framing_encode_large_message() {
     let framing = MessageFraming::new();
     
-    // Create a command with very large args
+    // Create a request with very large args
     let mut large_args = HashMap::new();
     large_args.insert("data".to_string(), serde_json::Value::String("x".repeat(20 * 1024 * 1024))); // 20MB
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "large".to_string(),
         Some(large_args),
         None,
     );
     
-    let message = MessageFramingMessage::Command(command);
+    let message = MessageFramingMessage::Request(request);
     let result = framing.encode_message(message);
     
     assert!(result.is_err());
@@ -64,26 +64,26 @@ async fn test_message_framing_encode_large_message() {
 async fn test_message_framing_decode_message() {
     let framing = MessageFraming::new();
     
-    // Test command decoding
-    let original_command = JanusCommand::new(
+    // Test request decoding
+    let original_request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let message = MessageFramingMessage::Command(original_command.clone());
+    let message = MessageFramingMessage::Request(original_request.clone());
     let encoded = framing.encode_message(message).unwrap();
     
     let (decoded, remaining) = framing.decode_message(&encoded).unwrap();
     assert!(remaining.is_empty());
     
-    if let MessageFramingMessage::Command(decoded_command) = decoded {
-        assert_eq!(decoded_command.channelId, original_command.channelId);
-        assert_eq!(decoded_command.command, original_command.command);
-        assert_eq!(decoded_command.id, original_command.id);
+    if let MessageFramingMessage::Request(decoded_request) = decoded {
+        assert_eq!(decoded_request.channelId, original_request.channelId);
+        assert_eq!(decoded_request.request, original_request.request);
+        assert_eq!(decoded_request.id, original_request.id);
     } else {
-        panic!("Expected Command message");
+        panic!("Expected Request message");
     }
     
     // Test response decoding
@@ -100,7 +100,7 @@ async fn test_message_framing_decode_message() {
     assert!(remaining.is_empty());
     
     if let MessageFramingMessage::Response(decoded_response) = decoded {
-        assert_eq!(decoded_response.commandId, original_response.commandId);
+        assert_eq!(decoded_response.requestId, original_response.requestId);
         assert_eq!(decoded_response.success, original_response.success);
     } else {
         panic!("Expected Response message");
@@ -111,7 +111,7 @@ async fn test_message_framing_decode_message() {
 async fn test_message_framing_multiple_messages() {
     let framing = MessageFraming::new();
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -124,7 +124,7 @@ async fn test_message_framing_multiple_messages() {
         Some(serde_json::json!({"pong": true})),
     );
     
-    let encoded1 = framing.encode_message(MessageFramingMessage::Command(command)).unwrap();
+    let encoded1 = framing.encode_message(MessageFramingMessage::Request(request)).unwrap();
     let encoded2 = framing.encode_message(MessageFramingMessage::Response(response)).unwrap();
     
     let mut combined = Vec::new();
@@ -133,7 +133,7 @@ async fn test_message_framing_multiple_messages() {
     
     // Extract first message
     let (message1, remaining) = framing.decode_message(&combined).unwrap();
-    assert!(matches!(message1, MessageFramingMessage::Command(_)));
+    assert!(matches!(message1, MessageFramingMessage::Request(_)));
     
     // Extract second message
     let (message2, final_remaining) = framing.decode_message(&remaining).unwrap();
@@ -155,14 +155,14 @@ async fn test_message_framing_decode_errors() {
     }
     
     // Test incomplete message
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let encoded = framing.encode_message(MessageFramingMessage::Command(command)).unwrap();
+    let encoded = framing.encode_message(MessageFramingMessage::Request(request)).unwrap();
     let truncated = &encoded[..encoded.len()-10]; // Remove last 10 bytes
     
     let result = framing.decode_message(truncated);
@@ -187,7 +187,7 @@ async fn test_message_framing_extract_messages() {
     let framing = MessageFraming::new();
     
     // Test multiple complete messages
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -200,7 +200,7 @@ async fn test_message_framing_extract_messages() {
         Some(serde_json::json!({"pong": true})),
     );
     
-    let encoded1 = framing.encode_message(MessageFramingMessage::Command(command)).unwrap();
+    let encoded1 = framing.encode_message(MessageFramingMessage::Request(request)).unwrap();
     let encoded2 = framing.encode_message(MessageFramingMessage::Response(response)).unwrap();
     
     let mut combined = Vec::new();
@@ -211,7 +211,7 @@ async fn test_message_framing_extract_messages() {
     
     assert_eq!(messages.len(), 2);
     assert!(remaining.is_empty());
-    assert!(matches!(messages[0], MessageFramingMessage::Command(_)));
+    assert!(matches!(messages[0], MessageFramingMessage::Request(_)));
     assert!(matches!(messages[1], MessageFramingMessage::Response(_)));
 }
 
@@ -219,7 +219,7 @@ async fn test_message_framing_extract_messages() {
 async fn test_message_framing_partial_messages() {
     let framing = MessageFraming::new();
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
@@ -232,7 +232,7 @@ async fn test_message_framing_partial_messages() {
         Some(serde_json::json!({"pong": true})),
     );
     
-    let encoded1 = framing.encode_message(MessageFramingMessage::Command(command)).unwrap();
+    let encoded1 = framing.encode_message(MessageFramingMessage::Request(request)).unwrap();
     let encoded2 = framing.encode_message(MessageFramingMessage::Response(response)).unwrap();
     
     let mut combined = Vec::new();
@@ -246,7 +246,7 @@ async fn test_message_framing_partial_messages() {
     
     assert_eq!(messages.len(), 1);
     assert_eq!(remaining.len(), 10); // Partial second message
-    assert!(matches!(messages[0], MessageFramingMessage::Command(_)));
+    assert!(matches!(messages[0], MessageFramingMessage::Request(_)));
 }
 
 #[tokio::test]
@@ -275,14 +275,14 @@ async fn test_message_framing_partial_length_prefix() {
 async fn test_message_framing_calculate_framed_size() {
     let framing = MessageFraming::new();
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let message = MessageFramingMessage::Command(command.clone());
+    let message = MessageFramingMessage::Request(request.clone());
     let size = framing.calculate_framed_size(message.clone()).unwrap();
     let encoded = framing.encode_message(message).unwrap();
     
@@ -294,14 +294,14 @@ async fn test_message_framing_direct_message() {
     let framing = MessageFraming::new();
     
     // Test direct message encoding
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let message = MessageFramingMessage::Command(command.clone());
+    let message = MessageFramingMessage::Request(request.clone());
     let direct_encoded = framing.encode_direct_message(message.clone()).unwrap();
     
     assert!(direct_encoded.len() > 4);
@@ -314,12 +314,12 @@ async fn test_message_framing_direct_message() {
     let (decoded, remaining) = framing.decode_direct_message(&direct_encoded).unwrap();
     assert!(remaining.is_empty());
     
-    if let MessageFramingMessage::Command(decoded_command) = decoded {
-        assert_eq!(decoded_command.channelId, command.channelId);
-        assert_eq!(decoded_command.command, command.command);
-        assert_eq!(decoded_command.id, command.id);
+    if let MessageFramingMessage::Request(decoded_request) = decoded {
+        assert_eq!(decoded_request.channelId, request.channelId);
+        assert_eq!(decoded_request.request, request.request);
+        assert_eq!(decoded_request.id, request.id);
     } else {
-        panic!("Expected Command message");
+        panic!("Expected Request message");
     }
 }
 
@@ -327,25 +327,25 @@ async fn test_message_framing_direct_message() {
 async fn test_message_framing_direct_roundtrip() {
     let framing = MessageFraming::new();
     
-    // Test command roundtrip
-    let original_command = JanusCommand::new(
+    // Test request roundtrip
+    let original_request = JanusRequest::new(
         "test-service".to_string(),
         "ping".to_string(),
         None,
         None,
     );
     
-    let message = MessageFramingMessage::Command(original_command.clone());
+    let message = MessageFramingMessage::Request(original_request.clone());
     let encoded = framing.encode_direct_message(message).unwrap();
     let (decoded, _) = framing.decode_direct_message(&encoded).unwrap();
     
-    if let MessageFramingMessage::Command(decoded_command) = decoded {
+    if let MessageFramingMessage::Request(decoded_request) = decoded {
         // Compare JSON representations for deep equality
-        let original_json = serde_json::to_string(&original_command).unwrap();
-        let decoded_json = serde_json::to_string(&decoded_command).unwrap();
+        let original_json = serde_json::to_string(&original_request).unwrap();
+        let decoded_json = serde_json::to_string(&decoded_request).unwrap();
         assert_eq!(original_json, decoded_json);
     } else {
-        panic!("Expected Command message");
+        panic!("Expected Request message");
     }
     
     // Test response roundtrip

@@ -3,11 +3,11 @@ mod test_utils;
 use test_utils::*;
 
 /// Edge Cases Tests (10 tests) - SwiftJanus parity
-/// Tests null values, nested data, large values, special characters
+/// Tests null values, nested data, large values, manifestial characters
 
 #[tokio::test]
 async fn test_anyccodable_with_null_values() {
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -18,8 +18,8 @@ async fn test_anyccodable_with_null_values() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     let binding = parsed.args.unwrap();
     let null_value = binding.get("null_value").unwrap();
@@ -40,7 +40,7 @@ async fn test_deeply_nested_json_structures() {
         }
     });
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "process_nested".to_string(),
         Some({
@@ -51,8 +51,8 @@ async fn test_deeply_nested_json_structures() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     assert!(parsed.args.is_some());
     let args = parsed.args.unwrap();
@@ -64,7 +64,7 @@ async fn test_deeply_nested_json_structures() {
 async fn test_large_string_values() {
     let large_string = "x".repeat(10000); // 10KB string
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "process_large".to_string(),
         Some({
@@ -75,8 +75,8 @@ async fn test_large_string_values() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     let large_value = args.get("large_data").unwrap().as_str().unwrap();
@@ -85,7 +85,7 @@ async fn test_large_string_values() {
 }
 
 #[tokio::test]
-async fn test_special_unicode_characters() {
+async fn test_manifestial_unicode_characters() {
     let unicode_test_cases = vec![
         "🚀", // Emoji
         "你好", // Chinese
@@ -97,7 +97,7 @@ async fn test_special_unicode_characters() {
     ];
     
     for (i, test_case) in unicode_test_cases.iter().enumerate() {
-        let command = JanusCommand::new(
+        let request = JanusRequest::new(
             "test".to_string(),
             "unicode_test".to_string(),
             Some({
@@ -108,8 +108,8 @@ async fn test_special_unicode_characters() {
             None,
         );
         
-        let json_str = serde_json::to_string(&command).unwrap();
-        let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+        let json_str = serde_json::to_string(&request).unwrap();
+        let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
         
         let args = parsed.args.unwrap();
         let unicode_value = args.get(&format!("unicode_{}", i)).unwrap().as_str().unwrap();
@@ -128,7 +128,7 @@ async fn test_array_with_mixed_types() {
         [1, 2, 3]
     ]);
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "mixed_array".to_string(),
         Some({
@@ -139,8 +139,8 @@ async fn test_array_with_mixed_types() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     let mixed = args.get("mixed").unwrap().as_array().unwrap();
@@ -153,7 +153,7 @@ async fn test_array_with_mixed_types() {
 
 #[tokio::test]
 async fn test_empty_values_handling() {
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "empty_test".to_string(),
         Some({
@@ -166,8 +166,8 @@ async fn test_empty_values_handling() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     assert_eq!(args.get("empty_string").unwrap().as_str().unwrap(), "");
@@ -177,7 +177,7 @@ async fn test_empty_values_handling() {
 
 #[tokio::test]
 async fn test_numeric_edge_cases() {
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "numeric_test".to_string(),
         Some({
@@ -191,8 +191,8 @@ async fn test_numeric_edge_cases() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     let args = parsed.args.unwrap();
     assert_eq!(args.get("max_int").unwrap().as_i64().unwrap(), i64::MAX);
@@ -211,34 +211,34 @@ async fn test_malformed_json_recovery() {
     ];
     
     for malformed in malformed_json_cases {
-        let result: std::result::Result<JanusCommand, _> = serde_json::from_str(malformed);
+        let result: std::result::Result<JanusRequest, _> = serde_json::from_str(malformed);
         assert!(result.is_err(), "Should fail parsing malformed JSON: {}", malformed);
     }
 }
 
 #[tokio::test]
-async fn test_command_id_edge_cases() {
+async fn test_request_id_edge_cases() {
     let edge_case_ids = vec![
         "".to_string(),
         " ".to_string(),
-        "command-with-hyphens".to_string(),
-        "command_with_underscores".to_string(),
-        "CommandWithCamelCase".to_string(),
+        "request-with-hyphens".to_string(),
+        "request_with_underscores".to_string(),
+        "RequestWithCamelCase".to_string(),
         "123numeric_start".to_string(),
-        "very_long_command_name_that_exceeds_typical_lengths_and_tests_boundary_conditions".to_string(),
+        "very_long_request_name_that_exceeds_typical_lengths_and_tests_boundary_conditions".to_string(),
     ];
     
     for test_id in edge_case_ids {
-        let command = JanusCommand::new(
+        let request = JanusRequest::new(
             "test".to_string(),
             test_id.clone(),
             None,
             None,
         );
         
-        let json_str = serde_json::to_string(&command).unwrap();
-        let parsed: JanusCommand = serde_json::from_str(&json_str).unwrap();
+        let json_str = serde_json::to_string(&request).unwrap();
+        let parsed: JanusRequest = serde_json::from_str(&json_str).unwrap();
         
-        assert_eq!(parsed.command, test_id);
+        assert_eq!(parsed.request, test_id);
     }
 }

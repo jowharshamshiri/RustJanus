@@ -32,14 +32,14 @@ fn test_validation_error_logging() {
     let _ = env_logger::try_init();
     
     // Test missing version
-    let json_missing_version = r#"{"channels": {"test": {"description": "Test", "commands": {"ping": {"description": "Ping", "response": {"type": "object"}}}}}}"#;
+    let json_missing_version = r#"{"channels": {"test": {"description": "Test", "requests": {"ping": {"description": "Ping", "response": {"type": "object"}}}}}}"#;
     let result = ManifestParser::load_and_validate_json(json_missing_version);
     assert!(result.is_err());
     let error = result.unwrap_err();
     assert!(error.to_string().contains("missing field `version`"));
     
     // Test invalid version format
-    let json_invalid_version = r#"{"version": "invalid", "channels": {"test": {"description": "Test", "commands": {"ping": {"description": "Ping", "response": {"type": "object"}}}}}}"#;
+    let json_invalid_version = r#"{"version": "invalid", "channels": {"test": {"description": "Test", "requests": {"ping": {"description": "Ping", "response": {"type": "object"}}}}}}"#;
     let result = ManifestParser::load_and_validate_json(json_invalid_version);
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -66,9 +66,9 @@ fn test_validation_summary() {
     
     // Test valid Manifest
     manifest.version = "1.0.0".to_string();
-    let mut channel = ChannelSpec::new("Test channel".to_string());
-    let command = CommandSpec::new("Test command".to_string(), ResponseSpec::new("object".to_string()));
-    channel.add_command("test".to_string(), command);
+    let mut channel = ChannelManifest::new("Test channel".to_string());
+    let request = RequestManifest::new("Test request".to_string(), ResponseManifest::new("object".to_string()));
+    channel.add_request("test".to_string(), request);
     manifest.add_channel("test".to_string(), channel);
     
     let summary = ManifestParser::get_validation_summary(&manifest);
@@ -104,9 +104,9 @@ fn test_successful_parsing_logging() {
         "channels": {
             "test": {
                 "description": "Test channel",
-                "commands": {
-                    "test_command": {
-                        "description": "Test command",
+                "requests": {
+                    "test_request": {
+                        "description": "Test request",
                         "response": {
                             "type": "object"
                         }
@@ -141,7 +141,7 @@ version: 1.0.0
 channels:
   test:
     description: Test
-    commands
+    requests
       ping:
         description: Ping
 "#;

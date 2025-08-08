@@ -18,11 +18,11 @@ async fn test_manifest_creation() {
     
     let channel = manifest.get_channel("test").unwrap();
     assert_eq!(channel.description, "Test channel for cross-platform communication");
-    assert!(!channel.commands.is_empty());
+    assert!(!channel.requests.is_empty());
     
-    // Verify commands exist (only check non-built-in commands)
-    assert!(channel.get_command("test_command").is_some());
-    // Note: ping, echo, spec are built-in commands and should not be in Manifest
+    // Verify requests exist (only check non-built-in requests)
+    assert!(channel.get_request("test_request").is_some());
+    // Note: ping, echo, manifest are built-in requests and should not be in Manifest
 }
 
 #[tokio::test]
@@ -36,21 +36,21 @@ async fn test_manifest_json_serialization() {
     assert!(json_str.contains("\"test\""));
     
     // Deserialize from JSON
-    let parsed_spec = ManifestParser::from_json(&json_str).unwrap();
+    let parsed_manifest = ManifestParser::from_json(&json_str).unwrap();
     
     // Verify round-trip integrity
-    assert_eq!(parsed_spec.version, manifest.version);
-    assert_eq!(parsed_spec.channels.len(), manifest.channels.len());
+    assert_eq!(parsed_manifest.version, manifest.version);
+    assert_eq!(parsed_manifest.channels.len(), manifest.channels.len());
     
-    let parsed_channel = parsed_spec.get_channel("test").unwrap();
+    let parsed_channel = parsed_manifest.get_channel("test").unwrap();
     let original_channel = manifest.get_channel("test").unwrap();
     assert_eq!(parsed_channel.description, original_channel.description);
-    assert_eq!(parsed_channel.commands.len(), original_channel.commands.len());
+    assert_eq!(parsed_channel.requests.len(), original_channel.requests.len());
 }
 
 #[tokio::test]
-async fn test_socket_command_serialization() {
-    let command = JanusCommand::new(
+async fn test_socket_request_serialization() {
+    let request = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some(create_test_args()),
@@ -58,22 +58,22 @@ async fn test_socket_command_serialization() {
     );
     
     // Serialize to JSON
-    let json_str = serde_json::to_string(&command).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
     assert!(!json_str.is_empty());
-    assert!(json_str.contains(&command.id));
+    assert!(json_str.contains(&request.id));
     assert!(json_str.contains("test"));
     assert!(json_str.contains("echo"));
     assert!(json_str.contains("30"));
     
     // Deserialize from JSON
-    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let parsed_request: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
     // Verify round-trip integrity
-    assert_eq!(parsed_command.id, command.id);
-    assert_eq!(parsed_command.channelId, command.channelId);
-    assert_eq!(parsed_command.command, command.command);
-    assert_eq!(parsed_command.args, command.args);
-    assert_eq!(parsed_command.timeout, command.timeout);
+    assert_eq!(parsed_request.id, request.id);
+    assert_eq!(parsed_request.channelId, request.channelId);
+    assert_eq!(parsed_request.request, request.request);
+    assert_eq!(parsed_request.args, request.args);
+    assert_eq!(parsed_request.timeout, request.timeout);
 }
 
 #[tokio::test]
@@ -88,7 +88,7 @@ async fn test_socket_response_serialization() {
     let json_str = serde_json::to_string(&success_response).unwrap();
     let parsed_response: JanusResponse = serde_json::from_str(&json_str).unwrap();
     
-    assert_eq!(parsed_response.commandId, success_response.commandId);
+    assert_eq!(parsed_response.requestId, success_response.requestId);
     assert_eq!(parsed_response.success, true);
     assert!(parsed_response.error.is_none());
     assert!(parsed_response.result.is_some());
@@ -104,7 +104,7 @@ async fn test_socket_response_serialization() {
     let json_str = serde_json::to_string(&error_response).unwrap();
     let parsed_response: JanusResponse = serde_json::from_str(&json_str).unwrap();
     
-    assert_eq!(parsed_response.commandId, error_response.commandId);
+    assert_eq!(parsed_response.requestId, error_response.requestId);
     assert_eq!(parsed_response.success, false);
     assert!(parsed_response.error.is_some());
     assert!(parsed_response.result.is_none());
@@ -114,7 +114,7 @@ async fn test_socket_response_serialization() {
 async fn test_anyccodable_string_value() {
     let string_value = serde_json::Value::String("Hello World".to_string());
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -125,10 +125,10 @@ async fn test_anyccodable_string_value() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed_request: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
-    let args = parsed_command.args.unwrap();
+    let args = parsed_request.args.unwrap();
     let parsed_value = args.get("string_arg").unwrap();
     assert_eq!(&string_value, parsed_value);
     assert_eq!(parsed_value.as_str().unwrap(), "Hello World");
@@ -138,7 +138,7 @@ async fn test_anyccodable_string_value() {
 async fn test_anyccodable_integer_value() {
     let integer_value = serde_json::Value::Number(serde_json::Number::from(42));
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -149,10 +149,10 @@ async fn test_anyccodable_integer_value() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed_request: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
-    let binding = parsed_command.args.unwrap();
+    let binding = parsed_request.args.unwrap();
     let parsed_value = binding.get("integer_arg").unwrap();
     assert_eq!(&integer_value, parsed_value);
     assert_eq!(parsed_value.as_i64().unwrap(), 42);
@@ -162,7 +162,7 @@ async fn test_anyccodable_integer_value() {
 async fn test_anyccodable_boolean_value() {
     let boolean_value = serde_json::Value::Bool(true);
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -173,10 +173,10 @@ async fn test_anyccodable_boolean_value() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed_request: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
-    let binding = parsed_command.args.unwrap();
+    let binding = parsed_request.args.unwrap();
     let parsed_value = binding.get("boolean_arg").unwrap();
     assert_eq!(&boolean_value, parsed_value);
     assert_eq!(parsed_value.as_bool().unwrap(), true);
@@ -190,7 +190,7 @@ async fn test_anyccodable_array_value() {
         serde_json::Value::Bool(true),
     ]);
     
-    let command = JanusCommand::new(
+    let request = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some({
@@ -201,10 +201,10 @@ async fn test_anyccodable_array_value() {
         None,
     );
     
-    let json_str = serde_json::to_string(&command).unwrap();
-    let parsed_command: JanusCommand = serde_json::from_str(&json_str).unwrap();
+    let json_str = serde_json::to_string(&request).unwrap();
+    let parsed_request: JanusRequest = serde_json::from_str(&json_str).unwrap();
     
-    let binding = parsed_command.args.unwrap();
+    let binding = parsed_request.args.unwrap();
     let parsed_value = binding.get("array_arg").unwrap();
     assert_eq!(&array_value, parsed_value);
     
@@ -232,8 +232,8 @@ async fn test_janus_client_initialization() {
     
     let client = client.unwrap();
     assert_eq!(client.configuration().max_concurrent_connections, 10);
-    // With Dynamic Specification Architecture, specification is None initially
-    assert!(client.specification().is_none(), "Expected specification to be None initially");
+    // With Dynamic Manifest Architecture, manifest is None initially
+    assert!(client.manifest().is_none(), "Expected manifest to be None initially");
     
     // Invalid channel ID
     let invalid_client = JanusClient::new(
@@ -250,7 +250,7 @@ async fn test_janus_client_initialization() {
 }
 
 #[tokio::test] 
-async fn test_command_validation() {
+async fn test_request_validation() {
     let manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
@@ -268,7 +268,7 @@ async fn test_command_validation() {
     let mut server = JanusServer::new(server_config);
     
     // Register a simple echo handler for testing
-    server.register_handler("echo", move |cmd: JanusCommand| {
+    server.register_handler("echo", move |cmd: JanusRequest| {
         let message = cmd.args
             .as_ref()
             .and_then(|args| args.get("message"))
@@ -293,9 +293,9 @@ async fn test_command_validation() {
         config,
     ).await.unwrap();
     
-    // Valid command
+    // Valid request
     let valid_args = create_test_args();
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(valid_args),
         Some(std::time::Duration::from_millis(100)),
@@ -310,12 +310,12 @@ async fn test_command_validation() {
         Err(JSONRPCError { code: -32006, .. }) => {}, // Handler timeout
         Err(JSONRPCError { code: -32011, .. }) => {}, // Message framing error
         Err(JSONRPCError { code: -32007, .. }) => {}, // Socket transport error (expected with no server)
-        Err(err) => panic!("Unexpected error for valid command: {:?}", err),
+        Err(err) => panic!("Unexpected error for valid request: {:?}", err),
     }
     
-    // Invalid command name
-    let invalid_result = client.send_command(
-        "nonexistent-command",
+    // Invalid request name
+    let invalid_result = client.send_request(
+        "nonexistent-request",
         Some(create_test_args()),
         Some(std::time::Duration::from_millis(100)),
     );
@@ -330,7 +330,7 @@ async fn test_command_validation() {
         Err(JSONRPCError { code: -32006, .. }) => {}, // Handler timeout
         Err(JSONRPCError { code: -32007, .. }) => {}, // Socket transport error
         Err(JSONRPCError { code: -32011, .. }) => {},
-        Err(err) => panic!("Unexpected error for invalid command: {:?}", err),
+        Err(err) => panic!("Unexpected error for invalid request: {:?}", err),
     }
     
     // Clean up server
@@ -340,20 +340,20 @@ async fn test_command_validation() {
 #[tokio::test]
 async fn test_message_envelope_functionality() {
     // Test simple message creation
-    let text_message = SocketMessage::text_command("test", "echo", "Hello World");
+    let text_message = SocketMessage::text_request("test", "echo", "Hello World");
     assert!(text_message.is_ok());
     
     let message = text_message.unwrap();
-    assert_eq!(message.message_type, MessageType::Command);
+    assert_eq!(message.message_type, MessageType::Request);
     assert!(!message.payload.is_empty());
     
     // Decode and verify
-    let command = message.decode_command().unwrap();
-    assert_eq!(command.channelId, "test");
-    assert_eq!(command.command, "echo");
-    assert!(command.args.is_some());
+    let request = message.decode_request().unwrap();
+    assert_eq!(request.channelId, "test");
+    assert_eq!(request.request, "echo");
+    assert!(request.args.is_some());
     
-    let args_binding = command.args.unwrap();
+    let args_binding = request.args.unwrap();
     let text_arg = args_binding.get("text").unwrap().as_str().unwrap();
     assert_eq!(text_arg, "Hello World");
     
@@ -364,7 +364,7 @@ async fn test_message_envelope_functionality() {
     let response_message = success_message.unwrap();
     let response = response_message.decode_response().unwrap();
     assert!(response.success);
-    assert_eq!(response.commandId, "cmd-123");
+    assert_eq!(response.requestId, "cmd-123");
     assert_eq!(response.channelId, "test");
     
     // Test error response
@@ -374,12 +374,12 @@ async fn test_message_envelope_functionality() {
     let error_response_message = error_message.unwrap();
     let error_response = error_response_message.decode_response().unwrap();
     assert!(!error_response.success);
-    assert_eq!(error_response.commandId, "cmd-456");
+    assert_eq!(error_response.requestId, "cmd-456");
     assert!(error_response.error.is_some());
 }
 
 #[tokio::test]
-async fn test_send_command_no_response() {
+async fn test_send_request_no_response() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = format!("/tmp/rust_janus_test_isolated_no_response_{}.sock", std::process::id());
@@ -390,12 +390,12 @@ async fn test_send_command_no_response() {
         config,
     ).await.unwrap();
     
-    // Test fire-and-forget command (no response expected)
+    // Test fire-and-forget request (no response expected)
     let mut test_args = HashMap::new();
     test_args.insert("message".to_string(), serde_json::Value::String("fire-and-forget test message".to_string()));
     
     // Should not wait for response and return immediately
-    let result = client.send_command_no_response(
+    let result = client.send_request_no_response(
         "echo",
         Some(test_args.clone()),
     ).await;
@@ -418,19 +418,19 @@ async fn test_send_command_no_response() {
         }
     }
     
-    // Verify command validation still works for fire-and-forget
-    let result = client.send_command_no_response(
-        "unknown-command",
+    // Verify request validation still works for fire-and-forget
+    let result = client.send_request_no_response(
+        "unknown-request",
         Some(test_args),
     ).await;
     
     // Should fail with some error (validation or connection)
     assert!(result.is_err());
     
-    // Test passes if we get any error for unknown command
+    // Test passes if we get any error for unknown request
     match result.unwrap_err() {
         err => {
-            println!("Got expected error for unknown command: {:?}", err);
+            println!("Got expected error for unknown request: {:?}", err);
         }
     }
 }
@@ -452,7 +452,7 @@ async fn test_dynamic_message_size_detection() {
     normal_args.insert("message".to_string(), serde_json::Value::String("normal message within size limits".to_string()));
     
     // This should fail with connection error, not validation error
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(normal_args),
         Some(std::time::Duration::from_millis(1000)),
@@ -484,7 +484,7 @@ async fn test_dynamic_message_size_detection() {
     large_args.insert("message".to_string(), serde_json::Value::String(large_data));
     
     // This should fail with size validation error before attempting connection
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(large_args.clone()),
         Some(std::time::Duration::from_millis(1000)),
@@ -503,14 +503,14 @@ async fn test_dynamic_message_size_detection() {
     }
     
     // Test fire-and-forget with large message
-    let result = client.send_command_no_response(
+    let result = client.send_request_no_response(
         "echo",
         Some(large_args),
     ).await;
     
     assert!(result.is_err(), "Expected validation error for oversized fire-and-forget message");
     
-    // Message size detection should work for both response and no-response commands
+    // Message size detection should work for both response and no-response requests
     match result.unwrap_err() {
         err => {
             println!("Fire-and-forget large message correctly rejected: {:?}", err);
@@ -534,7 +534,7 @@ async fn test_socket_cleanup_management() {
     // This implicitly tests socket creation and cleanup
     let test_args = HashMap::new();
     
-    let result = client.send_command(
+    let result = client.send_request(
         "ping",
         Some(test_args),
         Some(std::time::Duration::from_millis(100)),
@@ -560,7 +560,7 @@ async fn test_socket_cleanup_management() {
         let mut args = HashMap::new();
         args.insert("test_data".to_string(), serde_json::Value::String(format!("cleanup_test_{}", i)));
         
-        let result = client.send_command(
+        let result = client.send_request(
             "echo",
             Some(args),
             Some(std::time::Duration::from_millis(50)),
@@ -583,7 +583,7 @@ async fn test_socket_cleanup_management() {
     
     // Test fire-and-forget cleanup
     let cleanup_args = HashMap::new();
-    let result = client.send_command_no_response(
+    let result = client.send_request_no_response(
         "ping",
         Some(cleanup_args),
     ).await;

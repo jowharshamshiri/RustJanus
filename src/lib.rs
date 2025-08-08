@@ -8,7 +8,7 @@
 //!
 //! - **Stateless Communication**: Ephemeral connections with UUID tracking
 //! - **Security Framework**: Path validation, resource limits, attack prevention
-//! - **Manifest**: JSON/YAML specification-driven development
+//! - **Manifest**: JSON/YAML manifest-driven development
 //! - **Bilateral Timeouts**: Caller and handler timeout management
 //! - **Connection Pooling**: Efficient connection reuse with limits
 //! - **Comprehensive Validation**: Input sanitization and type checking
@@ -26,20 +26,20 @@
 //!     // Create client configuration
 //!     let config = JanusClientConfig::default();
 //!     
-//!     // Initialize client (Dynamic Specification Architecture)
+//!     // Initialize client (Dynamic Manifest Architecture)
 //!     let mut client = JanusClient::new(
 //!         "/tmp/my_socket.sock".to_string(),
 //!         "my-channel".to_string(),
 //!         config
 //!     ).await?;
 //!     
-//!     // Send command
+//!     // Send request
 //!     let mut args = HashMap::new();
 //!     args.insert("action".to_string(), json!("process"));
 //!     args.insert("data".to_string(), json!("Hello, Server!"));
 //!     
-//!     let response = client.send_command(
-//!         "my-command",
+//!     let response = client.send_request(
+//!         "my-request",
 //!         Some(args),
 //!         Some(Duration::from_secs(30)),
 //!     ).await?;
@@ -56,7 +56,7 @@
 
 pub mod core;
 pub mod protocol;
-pub mod specification;
+pub mod manifest;
 pub mod config;
 pub mod error;
 pub mod utils;
@@ -67,17 +67,17 @@ pub use core::{CoreJanusClient, SecurityValidator};
 
 // Protocol exports (SOCK_DGRAM API communication layer)
 pub use protocol::{
-    JanusCommand, JanusResponse, SocketMessage, MessageType,
+    JanusRequest, JanusResponse, SocketMessage, MessageType,
     JanusClient, TimeoutManager
 };
 
 // High-level API exports (simple one-line usage)
-pub use server::{JanusServer, JanusCommandHandler, ServerConfig};
+pub use server::{JanusServer, JanusRequestHandler, ServerConfig};
 
-// Specification exports (API definition layer)
-pub use specification::{
-    Manifest, ChannelSpec, CommandSpec, ArgumentSpec,
-    ValidationSpec, ResponseSpec, ErrorCodeSpec, ModelSpec,
+// Manifest exports (API definition layer)
+pub use manifest::{
+    Manifest, RequestManifest, ArgumentManifest,
+    ValidationManifest, ResponseManifest, ErrorCodeManifest, ModelManifest,
     ManifestParser, ValidationEngine, ArgumentValidator
 };
 
@@ -102,12 +102,12 @@ pub use chrono::{DateTime, Utc};
 pub mod prelude {
     pub use crate::{
         JanusClient, CoreJanusClient, Manifest, JanusClientConfig,
-        JanusServer, ServerConfig, JanusCommandHandler,
+        JanusServer, ServerConfig, JanusRequestHandler,
         // Connection-based classes removed
-        JanusCommand, JanusResponse, SocketMessage, MessageType,
+        JanusRequest, JanusResponse, SocketMessage, MessageType,
         SecurityValidator, TimeoutManager,
         JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData, Result,
-        ChannelSpec, CommandSpec, ArgumentSpec, ResponseSpec,
+        RequestManifest, ArgumentManifest, ResponseManifest,
         Deserialize, Serialize, JsonValue, json,
         DateTime, Utc,
     };

@@ -14,6 +14,7 @@ pub type ErrorTimeoutHandler = Box<dyn Fn(String, Duration, Box<dyn std::error::
 struct TimeoutEntry {
     task: tokio::task::JoinHandle<()>,
     timeout_duration: Duration,
+    #[allow(dead_code)]
     created_at: chrono::DateTime<chrono::Utc>,
     on_timeout: Option<Arc<TimeoutHandler>>,
 }
@@ -33,25 +34,25 @@ impl TimeoutManager {
         }
     }
     
-    /// Start a timeout for a command with callback
+    /// Start a timeout for a request with callback
     pub async fn start_timeout(
         &self,
-        command_id: String,
+        request_id: String,
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
     ) -> Result<(), JSONRPCError> {
-        self.start_timeout_with_error_handler(command_id, timeout, on_timeout, None).await
+        self.start_timeout_with_error_handler(request_id, timeout, on_timeout, None).await
     }
     
     /// Start a timeout with error handling callback (matches TypeScript error-handled registration)
     pub async fn start_timeout_with_error_handler(
         &self,
-        command_id: String,
+        request_id: String,
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
         _on_error: Option<ErrorTimeoutHandler>,
     ) -> Result<(), JSONRPCError> {
-        let command_id_clone = command_id.clone();
+        let request_id_clone = request_id.clone();
         let active_timeouts = self.active_timeouts.clone();
         let stats = self.stats.clone();
         let handler_arc = on_timeout.map(Arc::new);
@@ -62,18 +63,18 @@ impl TimeoutManager {
             
             // Execute timeout callback if provided
             if let Some(handler) = handler_for_task {
-                handler(command_id_clone.clone(), timeout);
+                handler(request_id_clone.clone(), timeout);
             }
             
             // Update statistics
             {
                 let mut stats_lock = stats.lock().await;
-                stats_lock.record_timeout(command_id_clone.clone(), timeout);
+                stats_lock.record_timeout(request_id_clone.clone(), timeout);
             }
             
             // Remove from active timeouts
             let mut timeouts = active_timeouts.lock().await;
-            timeouts.remove(&command_id_clone);
+            timeouts.remove(&request_id_clone);
         });
         
         // Update statistics for registration
@@ -84,7 +85,7 @@ impl TimeoutManager {
         
         // Store the timeout entry
         let mut timeouts = self.active_timeouts.lock().await;
-        timeouts.insert(command_id, TimeoutEntry {
+        timeouts.insert(request_id, TimeoutEntry {
             task: timeout_task,
             timeout_duration: timeout,
             created_at: chrono::Utc::now(),
@@ -94,11 +95,11 @@ impl TimeoutManager {
         Ok(())
     }
     
-    /// Cancel a timeout for a specific command
-    pub async fn cancel_timeout(&self, command_id: &str) -> bool {
+    /// Cancel a timeout for a manifestific request
+    pub async fn cancel_timeout(&self, request_id: &str) -> bool {
         let mut timeouts = self.active_timeouts.lock().await;
         
-        if let Some(timeout_entry) = timeouts.remove(command_id) {
+        if let Some(timeout_entry) = timeouts.remove(request_id) {
             timeout_entry.task.abort();
             
             // Update statistics
@@ -114,10 +115,10 @@ impl TimeoutManager {
     }
     
     /// Extend an existing timeout (matches Swift/TypeScript timeout extension capability)
-    pub async fn extend_timeout(&self, command_id: &str, extension: Duration) -> bool {
+    pub async fn extend_timeout(&self, request_id: &str, extension: Duration) -> bool {
         let mut timeouts = self.active_timeouts.lock().await;
         
-        if let Some(mut timeout_entry) = timeouts.remove(command_id) {
+        if let Some(mut timeout_entry) = timeouts.remove(request_id) {
             // Cancel the existing timeout
             timeout_entry.task.abort();
             
@@ -126,7 +127,7 @@ impl TimeoutManager {
             timeout_entry.timeout_duration = new_total_timeout;
             
             // Create new timeout task with extension duration (from current time)
-            let command_id_clone = command_id.to_string();
+            let request_id_clone = request_id.to_string();
             let active_timeouts = self.active_timeouts.clone();
             let stats = self.stats.clone();
             let total_timeout_for_stats = new_total_timeout;
@@ -137,24 +138,24 @@ impl TimeoutManager {
                 
                 // Execute timeout callback if provided
                 if let Some(handler) = handler_for_extended_task {
-                    handler(command_id_clone.clone(), total_timeout_for_stats);
+                    handler(request_id_clone.clone(), total_timeout_for_stats);
                 }
                 
                 // Update statistics when timeout fires
                 {
                     let mut stats_lock = stats.lock().await;
-                    stats_lock.record_timeout(command_id_clone.clone(), total_timeout_for_stats);
+                    stats_lock.record_timeout(request_id_clone.clone(), total_timeout_for_stats);
                 }
                 
                 // Remove from active timeouts
                 let mut timeouts = active_timeouts.lock().await;
-                timeouts.remove(&command_id_clone);
+                timeouts.remove(&request_id_clone);
             });
             
             timeout_entry.task = timeout_task;
             
             // Re-insert the updated entry
-            timeouts.insert(command_id.to_string(), timeout_entry);
+            timeouts.insert(request_id.to_string(), timeout_entry);
             
             true
         } else {
@@ -162,10 +163,10 @@ impl TimeoutManager {
         }
     }
     
-    /// Check if a command has an active timeout
-    pub async fn has_timeout(&self, command_id: &str) -> bool {
+    /// Check if a request has an active timeout
+    pub async fn has_timeout(&self, request_id: &str) -> bool {
         let timeouts = self.active_timeouts.lock().await;
-        timeouts.contains_key(command_id)
+        timeouts.contains_key(request_id)
     }
     
     /// Get count of active timeouts
@@ -177,12 +178,12 @@ impl TimeoutManager {
     /// Register bilateral timeout for request/response pairs (matches Go/TypeScript implementation)
     pub async fn start_bilateral_timeout(
         &self,
-        base_command_id: &str,
+        base_request_id: &str,
         timeout: Duration,
         on_timeout: Option<TimeoutHandler>,
     ) -> Result<(), JSONRPCError> {
-        let request_id = format!("{}-request", base_command_id);
-        let response_id = format!("{}-response", base_command_id);
+        let request_id = format!("{}-request", base_request_id);
+        let response_id = format!("{}-response", base_request_id);
         
         // Update statistics for registration
         {
@@ -254,9 +255,9 @@ impl TimeoutManager {
     }
     
     /// Cancel bilateral timeout (matches TypeScript implementation pattern)
-    pub async fn cancel_bilateral_timeout(&self, base_command_id: &str) -> usize {
-        let request_id = format!("{}-request", base_command_id);
-        let response_id = format!("{}-response", base_command_id);
+    pub async fn cancel_bilateral_timeout(&self, base_request_id: &str) -> usize {
+        let request_id = format!("{}-request", base_request_id);
+        let response_id = format!("{}-response", base_request_id);
         
         let mut cancelled_count = 0;
         
@@ -294,10 +295,10 @@ impl TimeoutManager {
         stats.clone()
     }
     
-    /// Execute command with bilateral timeout management
+    /// Execute request with bilateral timeout management
     pub async fn execute_with_timeout<F, T>(
         &self,
-        command_id: String,
+        request_id: String,
         timeout: Duration,
         operation: F,
         on_timeout: Option<TimeoutHandler>,
@@ -307,24 +308,24 @@ impl TimeoutManager {
         T: Send,
     {
         // Start timeout tracking
-        self.start_timeout(command_id.clone(), timeout, on_timeout).await?;
+        self.start_timeout(request_id.clone(), timeout, on_timeout).await?;
         
         // Execute operation with timeout
         let result = tokio::time::timeout(timeout, operation).await;
         
         // Cancel timeout tracking regardless of result
-        self.cancel_timeout(&command_id).await;
+        self.cancel_timeout(&request_id).await;
         
         match result {
             Ok(operation_result) => operation_result,
-            Err(_) => Err(JSONRPCError::new(JSONRPCErrorCode::HandlerTimeout, Some(format!("Command {} timed out after {:?}", command_id, timeout)))),
+            Err(_) => Err(JSONRPCError::new(JSONRPCErrorCode::HandlerTimeout, Some(format!("Request {} timed out after {:?}", request_id, timeout)))),
         }
     }
     
     /// Create a timeout handler that logs timeouts
     pub fn create_logging_timeout_handler() -> TimeoutHandler {
-        Box::new(|command_id, timeout| {
-            log::warn!("Command {} timed out after {:?}", command_id, timeout);
+        Box::new(|request_id, timeout| {
+            log::warn!("Request {} timed out after {:?}", request_id, timeout);
         })
     }
     
@@ -332,11 +333,11 @@ impl TimeoutManager {
     pub fn create_stats_timeout_handler(
         stats: Arc<Mutex<TimeoutStats>>,
     ) -> TimeoutHandler {
-        Box::new(move |command_id, timeout| {
+        Box::new(move |request_id, timeout| {
             let stats_clone = stats.clone();
             tokio::spawn(async move {
                 let mut stats = stats_clone.lock().await;
-                stats.record_timeout(command_id, timeout);
+                stats.record_timeout(request_id, timeout);
             });
         })
     }
@@ -358,7 +359,7 @@ pub struct TimeoutStats {
     pub average_timeout_duration: Duration,
     pub longest_timeout: Duration,
     pub shortest_timeout: Duration,
-    pub last_timeout_command: Option<String>,
+    pub last_timeout_request: Option<String>,
     pub timeout_history: Vec<(String, Duration, chrono::DateTime<chrono::Utc>)>,
 }
 
@@ -373,16 +374,16 @@ impl TimeoutStats {
             average_timeout_duration: Duration::from_secs(0),
             longest_timeout: Duration::from_secs(0),
             shortest_timeout: Duration::from_secs(3600), // Initialize with large value
-            last_timeout_command: None,
+            last_timeout_request: None,
             timeout_history: Vec::new(),
         }
     }
     
     /// Record a timeout occurrence
-    pub fn record_timeout(&mut self, command_id: String, timeout_duration: Duration) {
+    pub fn record_timeout(&mut self, request_id: String, timeout_duration: Duration) {
         self.total_timeouts += 1;
         self.total_expired += 1;
-        self.last_timeout_command = Some(command_id.clone());
+        self.last_timeout_request = Some(request_id.clone());
         
         // Update duration statistics
         if timeout_duration > self.longest_timeout {
@@ -397,7 +398,7 @@ impl TimeoutStats {
         self.average_timeout_duration = total_duration / self.total_timeouts as u32;
         
         // Add to history (keep last 100 entries)
-        self.timeout_history.push((command_id, timeout_duration, chrono::Utc::now()));
+        self.timeout_history.push((request_id, timeout_duration, chrono::Utc::now()));
         if self.timeout_history.len() > 100 {
             self.timeout_history.remove(0);
         }
@@ -431,8 +432,8 @@ impl Default for TimeoutStats {
 /// Timeout configuration for different scenarios
 #[derive(Debug, Clone)]
 pub struct TimeoutConfig {
-    /// Default command timeout
-    pub default_command_timeout: Duration,
+    /// Default request timeout
+    pub default_request_timeout: Duration,
     
     /// Default handler timeout
     pub default_handler_timeout: Duration,
@@ -451,7 +452,7 @@ impl TimeoutConfig {
     /// Create standard timeout configuration
     pub fn standard() -> Self {
         Self {
-            default_command_timeout: Duration::from_secs(30),
+            default_request_timeout: Duration::from_secs(30),
             default_handler_timeout: Duration::from_secs(30),
             connection_timeout: Duration::from_secs(10),
             max_timeout: Duration::from_secs(300), // 5 minutes
@@ -462,7 +463,7 @@ impl TimeoutConfig {
     /// Create aggressive timeout configuration (for high-performance scenarios)
     pub fn aggressive() -> Self {
         Self {
-            default_command_timeout: Duration::from_secs(5),
+            default_request_timeout: Duration::from_secs(5),
             default_handler_timeout: Duration::from_secs(5),
             connection_timeout: Duration::from_secs(2),
             max_timeout: Duration::from_secs(60),
@@ -473,7 +474,7 @@ impl TimeoutConfig {
     /// Create relaxed timeout configuration (for development/testing)
     pub fn relaxed() -> Self {
         Self {
-            default_command_timeout: Duration::from_secs(120),
+            default_request_timeout: Duration::from_secs(120),
             default_handler_timeout: Duration::from_secs(120),
             connection_timeout: Duration::from_secs(30),
             max_timeout: Duration::from_secs(600), // 10 minutes
@@ -519,7 +520,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_execution() {
         let manager = TimeoutManager::new();
-        let command_id = "test-command".to_string();
+        let request_id = "test-request".to_string();
         let timeout = Duration::from_millis(50);
         
         let timeout_triggered = Arc::new(AtomicUsize::new(0));
@@ -529,19 +530,19 @@ mod tests {
             timeout_triggered_clone.fetch_add(1, Ordering::SeqCst);
         });
         
-        manager.start_timeout(command_id.clone(), timeout, Some(timeout_handler)).await.unwrap();
+        manager.start_timeout(request_id.clone(), timeout, Some(timeout_handler)).await.unwrap();
         
         // Wait for timeout to trigger
         tokio::time::sleep(Duration::from_millis(100)).await;
         
         assert_eq!(timeout_triggered.load(Ordering::SeqCst), 1);
-        assert!(!manager.has_timeout(&command_id).await);
+        assert!(!manager.has_timeout(&request_id).await);
     }
     
     #[tokio::test]
     async fn test_timeout_cancellation() {
         let manager = TimeoutManager::new();
-        let command_id = "test-command".to_string();
+        let request_id = "test-request".to_string();
         let timeout = Duration::from_millis(100);
         
         let timeout_triggered = Arc::new(AtomicUsize::new(0));
@@ -551,15 +552,15 @@ mod tests {
             timeout_triggered_clone.fetch_add(1, Ordering::SeqCst);
         });
         
-        manager.start_timeout(command_id.clone(), timeout, Some(timeout_handler)).await.unwrap();
-        assert!(manager.has_timeout(&command_id).await);
+        manager.start_timeout(request_id.clone(), timeout, Some(timeout_handler)).await.unwrap();
+        assert!(manager.has_timeout(&request_id).await);
         
         // Cancel timeout before it triggers
         tokio::time::sleep(Duration::from_millis(50)).await;
-        let cancelled = manager.cancel_timeout(&command_id).await;
+        let cancelled = manager.cancel_timeout(&request_id).await;
         
         assert!(cancelled);
-        assert!(!manager.has_timeout(&command_id).await);
+        assert!(!manager.has_timeout(&request_id).await);
         
         // Wait to ensure timeout doesn't trigger
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -569,7 +570,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute_with_timeout_success() {
         let manager = TimeoutManager::new();
-        let command_id = "test-command".to_string();
+        let request_id = "test-request".to_string();
         let timeout = Duration::from_millis(100);
         
         let operation = async {
@@ -578,7 +579,7 @@ mod tests {
         };
         
         let result = manager.execute_with_timeout(
-            command_id,
+            request_id,
             timeout,
             operation,
             None,
@@ -591,7 +592,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute_with_timeout_failure() {
         let manager = TimeoutManager::new();
-        let command_id = "test-command".to_string();
+        let request_id = "test-request".to_string();
         let timeout = Duration::from_millis(50);
         
         let operation = async {
@@ -600,7 +601,7 @@ mod tests {
         };
         
         let result = manager.execute_with_timeout(
-            command_id.clone(),
+            request_id.clone(),
             timeout,
             operation,
             None,
@@ -642,6 +643,6 @@ mod tests {
         
         assert_eq!(stats.total_timeouts, 2);
         assert_eq!(stats.average_timeout_duration, Duration::from_secs(45));
-        assert_eq!(stats.last_timeout_command, Some("cmd2".to_string()));
+        assert_eq!(stats.last_timeout_request, Some("cmd2".to_string()));
     }
 }

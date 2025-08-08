@@ -2,73 +2,75 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
-// Note: chrono types removed as they are not used in current SOCK_DGRAM implementation
+use chrono; // PRIME DIRECTIVE: Required for RFC 3339 timestamp format
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
 
-/// Socket command structure (exact cross-language parity with Go/Swift/TypeScript)
+/// Socket request structure (PRIME DIRECTIVE: exact cross-language parity with Go/Swift/TypeScript)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[allow(non_snake_case)]
-pub struct JanusCommand {
-    /// Unique identifier for command tracking
+pub struct JanusRequest {
+    /// Unique identifier for request tracking
     pub id: String,
     
-    /// Channel ID for routing
-    pub channelId: String,
+    /// Method name being invoked (PRIME DIRECTIVE)
+    pub method: String,
     
-    /// Command name
-    pub command: String,
+    /// Request name
+    pub request: String,
     
     /// Reply-to socket path for connectionless communication (SOCK_DGRAM)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<String>,
     
-    /// Command arguments (optional)
+    /// Request arguments (optional)
     pub args: Option<HashMap<String, serde_json::Value>>,
     
     /// Timeout in seconds (optional)
     pub timeout: Option<f64>,
     
-    /// Creation timestamp (Unix timestamp as f64)
-    pub timestamp: f64,
+    /// Creation timestamp (RFC 3339 format)
+    pub timestamp: String,
 }
 
-impl JanusCommand {
-    /// Create a new socket command with UUID
+impl JanusRequest {
+    /// Create a new socket request with UUID
     #[allow(non_snake_case)]
     pub fn new(
-        channelId: String,
-        command: String,
+        request: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<f64>,
     ) -> Self {
+        // PRIME DIRECTIVE: Use RFC 3339 timestamp format
+        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
-            channelId,
-            command,
+            method: request.clone(), // PRIME DIRECTIVE: method field matches request name
+            request,
             reply_to: None,
             args,
             timeout,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+            timestamp,
         }
     }
     
-    /// Create command with specific ID (for testing)
+    /// Create request with manifestific ID (for testing)
     #[allow(non_snake_case)]
     pub fn with_id(
         id: String,
-        channelId: String,
-        command: String,
+        request: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<f64>,
     ) -> Self {
+        // PRIME DIRECTIVE: Use RFC 3339 timestamp format
+        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         Self {
             id,
-            channelId,
-            command,
+            method: request.clone(), // PRIME DIRECTIVE: method field matches request name
+            request,
             reply_to: None,
             args,
             timeout,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+            timestamp,
         }
     }
     
@@ -83,23 +85,19 @@ impl JanusCommand {
         self.timeout.map(|t| std::time::Duration::from_secs_f64(t))
     }
     
-    /// Check if command has timeout
+    /// Check if request has timeout
     pub fn has_timeout(&self) -> bool {
         self.timeout.is_some()
     }
     
-    /// Validate command structure
+    /// Validate request structure
     pub fn validate(&self) -> Result<(), JSONRPCError> {
         if self.id.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Command ID cannot be empty".to_string())));
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request ID cannot be empty".to_string())));
         }
         
-        if self.channelId.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Channel ID cannot be empty".to_string())));
-        }
-        
-        if self.command.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Command name cannot be empty".to_string())));
+        if self.request.is_empty() {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request name cannot be empty".to_string())));
         }
         
         if let Some(timeout) = self.timeout {
@@ -112,110 +110,103 @@ impl JanusCommand {
     }
 }
 
-/// Socket response structure (exact SwiftJanus parity)
+/// Socket response structure (PRIME DIRECTIVE: exact format for 100% cross-platform compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[allow(non_snake_case)]
 pub struct JanusResponse {
-    /// Command ID for correlation
-    pub commandId: String,
+    /// Unwrapped response data
+    pub result: Option<serde_json::Value>,
     
-    /// Channel ID for verification
-    pub channelId: String,
+    /// Error information (JSON-RPC 2.0 compliant) - null if success
+    pub error: Option<JSONRPCError>,
     
     /// Success/failure flag
     pub success: bool,
     
-    /// Response data (optional)
-    pub result: Option<serde_json::Value>,
+    /// Request ID that this response correlates to
+    pub request_id: String,
     
-    /// Error information (optional) - JSON-RPC 2.0 compliant
-    pub error: Option<JSONRPCError>,
+    /// Unique identifier for this response
+    pub id: String,
     
-    /// Response timestamp (Unix timestamp as f64)
-    pub timestamp: f64,
+    /// Response timestamp (RFC 3339 format)
+    pub timestamp: String,
 }
 
 impl JanusResponse {
-    /// Create successful response
-    #[allow(non_snake_case)]
+    /// Create successful response (PRIME DIRECTIVE format)
     pub fn success(
-        commandId: String,
-        channelId: String,
+        request_id: String,
         result: Option<serde_json::Value>,
     ) -> Self {
+        // PRIME DIRECTIVE: Use RFC 3339 timestamp format
+        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         Self {
-            commandId,
-            channelId,
-            success: true,
             result,
             error: None,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+            success: true,
+            request_id,
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp,
         }
     }
     
-    /// Create error response with JSON-RPC 2.0 error
-    #[allow(non_snake_case)]
+    /// Create error response with JSON-RPC 2.0 error (PRIME DIRECTIVE format)
     pub fn error(
-        commandId: String,
-        channelId: String,
+        request_id: String,
         error: JSONRPCError,
     ) -> Self {
+        // PRIME DIRECTIVE: Use RFC 3339 timestamp format
+        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         Self {
-            commandId,
-            channelId,
-            success: false,
             result: None,
             error: Some(error),
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+            success: false,
+            request_id,
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp,
         }
     }
 
     
-    /// Create internal error response
-    #[allow(non_snake_case)]
+    /// Create internal error response (PRIME DIRECTIVE format)
     pub fn internal_error(
-        commandId: String,
-        channelId: String,
+        request_id: String,
         message: String,
     ) -> Self {
-        use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
-        
         let jsonrpc_error = JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(message));
-        Self::error(commandId, channelId, jsonrpc_error)
+        Self::error(request_id, jsonrpc_error)
     }
     
-    /// Create timeout error response
-    #[allow(non_snake_case)]
+    /// Create timeout error response (PRIME DIRECTIVE format)
     pub fn timeout_error(
-        commandId: String,
-        channelId: String,
+        request_id: String,
         timeout_seconds: f64,
     ) -> Self {
-        use crate::error::jsonrpc_error::{JSONRPCError};
         use std::collections::HashMap;
         
         let context = HashMap::from([
-            ("commandId".to_string(), serde_json::Value::String(commandId.clone())),
+            ("requestId".to_string(), serde_json::Value::String(request_id.clone())),
             ("timeoutSeconds".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(timeout_seconds).unwrap())),
         ]);
         
         let jsonrpc_error = JSONRPCError::with_context(
             JSONRPCErrorCode::HandlerTimeout,
-            Some(format!("Handler {} timed out after {} seconds", commandId, timeout_seconds)),
+            Some(format!("Handler {} timed out after {} seconds", request_id, timeout_seconds)),
             context,
         );
         
-        Self::error(commandId, channelId, jsonrpc_error)
+        Self::error(request_id, jsonrpc_error)
     }
     
-    /// Validate response structure
+    /// Validate response structure (PRIME DIRECTIVE format)
     pub fn validate(&self) -> Result<(), JSONRPCError> {
-        if self.commandId.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Command ID cannot be empty".to_string())));
+        if self.request_id.is_empty() {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request ID cannot be empty".to_string())));
         }
         
-        if self.channelId.is_empty() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Channel ID cannot be empty".to_string())));
+        if self.id.is_empty() {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Response ID cannot be empty".to_string())));
         }
         
         // If success is true, should not have error
@@ -235,7 +226,7 @@ impl JanusResponse {
 /// Message type enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessageType {
-    Command,
+    Request,
     Response,
 }
 
@@ -254,33 +245,27 @@ pub struct SocketMessage {
 #[derive(Debug, Clone)]
 pub struct RequestHandle {
     internal_id: String,
-    command: String,
-    channel: String,
+    request: String,
     timestamp: SystemTime,
     cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl RequestHandle {
     /// Create a new request handle from internal UUID
-    pub fn new(internal_id: String, command: String, channel: String) -> Self {
+    pub fn new(internal_id: String, request: String) -> Self {
         Self {
             internal_id,
-            command,
-            channel,
+            request,
             timestamp: SystemTime::now(),
             cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
     
-    /// Get the command name for this request
-    pub fn get_command(&self) -> &str {
-        &self.command
+    /// Get the request name for this request
+    pub fn get_request(&self) -> &str {
+        &self.request
     }
     
-    /// Get the channel ID for this request
-    pub fn get_channel(&self) -> &str {
-        &self.channel
-    }
     
     /// Get when this request was created
     pub fn get_timestamp(&self) -> SystemTime {
@@ -314,11 +299,11 @@ pub enum RequestStatus {
 }
 
 impl SocketMessage {
-    /// Create command message
-    pub fn command(command: JanusCommand) -> Result<Self, serde_json::Error> {
-        let payload = serde_json::to_vec(&command)?;
+    /// Create request message
+    pub fn request(request: JanusRequest) -> Result<Self, serde_json::Error> {
+        let payload = serde_json::to_vec(&request)?;
         Ok(Self {
-            message_type: MessageType::Command,
+            message_type: MessageType::Request,
             payload,
         })
     }
@@ -332,12 +317,12 @@ impl SocketMessage {
         })
     }
     
-    /// Decode command from payload
-    pub fn decode_command(&self) -> Result<JanusCommand, serde_json::Error> {
-        if self.message_type != MessageType::Command {
+    /// Decode request from payload
+    pub fn decode_request(&self) -> Result<JanusRequest, serde_json::Error> {
+        if self.message_type != MessageType::Request {
             return Err(serde_json::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "Message is not a command"
+                "Message is not a request"
             )));
         }
         serde_json::from_slice(&self.payload)
@@ -367,10 +352,10 @@ impl SocketMessage {
         
         // Try to decode based on type to ensure payload is valid
         match self.message_type {
-            MessageType::Command => {
-                let command = self.decode_command()
-                    .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Invalid command payload: {}", e))))?;
-                command.validate()?;
+            MessageType::Request => {
+                let request = self.decode_request()
+                    .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Invalid request payload: {}", e))))?;
+                request.validate()?;
             },
             MessageType::Response => {
                 let response = self.decode_response()
@@ -385,30 +370,28 @@ impl SocketMessage {
 
 /// Utility functions for creating messages
 impl SocketMessage {
-    /// Create a simple text command
-    pub fn text_command(channel_id: &str, command: &str, text: &str) -> Result<Self, serde_json::Error> {
+    /// Create a simple text request
+    pub fn text_request(request: &str, text: &str) -> Result<Self, serde_json::Error> {
         let mut args = HashMap::new();
         args.insert("text".to_string(), serde_json::Value::String(text.to_string()));
         
-        let command = JanusCommand::new(
-            channel_id.to_string(),
-            command.to_string(),
+        let request = JanusRequest::new(
+            request.to_string(),
             Some(args),
             None,
         );
         
-        Self::command(command)
+        Self::request(request)
     }
     
     /// Create a simple success response
-    pub fn simple_success(command_id: &str, channel_id: &str, message: &str) -> Result<Self, serde_json::Error> {
+    pub fn simple_success(request_id: &str, message: &str) -> Result<Self, serde_json::Error> {
         let result = serde_json::json!({
             "message": message
         });
         
         let response = JanusResponse::success(
-            command_id.to_string(),
-            channel_id.to_string(),
+            request_id.to_string(),
             Some(result),
         );
         
@@ -416,13 +399,12 @@ impl SocketMessage {
     }
     
     /// Create a simple error response
-    pub fn simple_error(command_id: &str, channel_id: &str, error_message: &str) -> Result<Self, serde_json::Error> {
+    pub fn simple_error(request_id: &str, error_message: &str) -> Result<Self, serde_json::Error> {
         use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode};
         
         let jsonrpc_error = JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(error_message.to_string()));
         let response = JanusResponse::error(
-            command_id.to_string(),
-            channel_id.to_string(),
+            request_id.to_string(),
             jsonrpc_error,
         );
         
@@ -435,23 +417,21 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_socket_command_creation() {
+    fn test_socket_request_creation() {
         let mut args = HashMap::new();
         args.insert("test".to_string(), serde_json::Value::String("value".to_string()));
         
-        let command = JanusCommand::new(
-            "test-channel".to_string(),
-            "test-command".to_string(),
+        let request = JanusRequest::new(
+            "test-request".to_string(),
             Some(args),
             Some(30.0),
         );
         
-        assert!(!command.id.is_empty());
-        assert_eq!(command.channelId, "test-channel");
-        assert_eq!(command.command, "test-command");
-        assert!(command.args.is_some());
-        assert_eq!(command.timeout, Some(30.0));
-        assert!(command.validate().is_ok());
+        assert!(!request.id.is_empty());
+        assert_eq!(request.request, "test-request");
+        assert!(request.args.is_some());
+        assert_eq!(request.timeout, Some(30.0));
+        assert!(request.validate().is_ok());
     }
     
     #[test]
@@ -460,12 +440,10 @@ mod tests {
         
         let response = JanusResponse::success(
             "test-id".to_string(),
-            "test-channel".to_string(),
             Some(result),
         );
         
-        assert_eq!(response.commandId, "test-id");
-        assert_eq!(response.channelId, "test-channel");
+        assert_eq!(response.request_id, "test-id");
         assert!(response.success);
         assert!(response.result.is_some());
         assert!(response.error.is_none());
@@ -473,29 +451,28 @@ mod tests {
     }
     
     #[test]
-    fn test_socket_message_command() {
-        let command = JanusCommand::new(
+    fn test_socket_message_request() {
+        let request = JanusRequest::new(
             "test-channel".to_string(),
-            "test-command".to_string(),
+            "test-request".to_string(),
             None,
             None,
         );
         
-        let message = SocketMessage::command(command.clone()).unwrap();
+        let message = SocketMessage::request(request.clone()).unwrap();
         
-        assert_eq!(message.message_type, MessageType::Command);
+        assert_eq!(message.message_type, MessageType::Request);
         assert!(!message.payload.is_empty());
         
-        let decoded_command = message.decode_command().unwrap();
-        assert_eq!(decoded_command.channelId, command.channelId);
-        assert_eq!(decoded_command.command, command.command);
+        let decoded_request = message.decode_request().unwrap();
+        assert_eq!(decoded_request.channelId, request.channelId);
+        assert_eq!(decoded_request.request, request.request);
     }
     
     #[test]
     fn test_socket_message_response() {
         let response = JanusResponse::success(
             "test-id".to_string(),
-            "test-channel".to_string(),
             None,
         );
         
@@ -505,25 +482,25 @@ mod tests {
         assert!(!message.payload.is_empty());
         
         let decoded_response = message.decode_response().unwrap();
-        assert_eq!(decoded_response.commandId, response.commandId);
+        assert_eq!(decoded_response.request_id, response.request_id);
         assert_eq!(decoded_response.success, response.success);
     }
     
     #[test]
     fn test_message_validation() {
-        let command = JanusCommand::new(
+        let request = JanusRequest::new(
             "test-channel".to_string(),
-            "test-command".to_string(),
+            "test-request".to_string(),
             None,
             None,
         );
         
-        let message = SocketMessage::command(command).unwrap();
+        let message = SocketMessage::request(request).unwrap();
         assert!(message.validate().is_ok());
         
         // Test invalid message
         let invalid_message = SocketMessage {
-            message_type: MessageType::Command,
+            message_type: MessageType::Request,
             payload: Vec::new(), // Empty payload
         };
         
@@ -532,23 +509,23 @@ mod tests {
     
     #[test]
     fn test_timeout_duration_conversion() {
-        let command = JanusCommand::new(
+        let request = JanusRequest::new(
             "test-channel".to_string(),
-            "test-command".to_string(),
+            "test-request".to_string(),
             None,
             Some(30.5),
         );
         
-        let duration = command.timeout_duration().unwrap();
+        let duration = request.timeout_duration().unwrap();
         assert_eq!(duration, std::time::Duration::from_secs_f64(30.5));
         
-        let command_no_timeout = JanusCommand::new(
+        let request_no_timeout = JanusRequest::new(
             "test-channel".to_string(),
-            "test-command".to_string(),
+            "test-request".to_string(),
             None,
             None,
         );
         
-        assert!(command_no_timeout.timeout_duration().is_none());
+        assert!(request_no_timeout.timeout_duration().is_none());
     }
 }

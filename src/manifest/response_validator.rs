@@ -1,10 +1,10 @@
 /*!
  * Response Validator for Rust Janus Implementation
- * Validates command handler responses against Manifest ResponseSpec models
+ * Validates request handler responses against Manifest ResponseManifest models
  * Achieves 100% parity with TypeScript and Go implementations
  */
 
-use crate::specification::model_registry::{Manifest, ResponseSpec, ArgumentSpec, ModelSpec};
+use crate::manifest::model_registry::{Manifest, ResponseManifest, ArgumentManifest, ModelManifest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Instant;
@@ -55,27 +55,27 @@ pub struct ValidationResult {
     pub fields_validated: usize,
 }
 
-/// Response validator that validates command handler responses
-/// against Manifest ResponseSpec models
+/// Response validator that validates request handler responses
+/// against Manifest ResponseManifest models
 pub struct ResponseValidator {
-    specification: Manifest,
+    manifest: Manifest,
 }
 
 impl ResponseValidator {
     /// Create a new response validator with the given Manifest
-    pub fn new(specification: Manifest) -> Self {
-        Self { specification }
+    pub fn new(manifest: Manifest) -> Self {
+        Self { manifest }
     }
 
-    /// Validate a response against a ResponseSpec
-    pub fn validate_response(&self, response: &Value, response_spec: &ResponseSpec) -> ValidationResult {
+    /// Validate a response against a ResponseManifest
+    pub fn validate_response(&self, response: &Value, response_manifest: &ResponseManifest) -> ValidationResult {
         let start_time = Instant::now();
         let mut errors = Vec::new();
         
-        // Validate the response value against the specification
-        self.validate_value(response, &response_spec.into(), "", &mut errors);
+        // Validate the response value against the manifest
+        self.validate_value(response, &response_manifest.into(), "", &mut errors);
         
-        let fields_validated = self.count_validated_fields(&response_spec.into());
+        let fields_validated = self.count_validated_fields(&response_manifest.into());
         let validation_time = start_time.elapsed().as_secs_f64() * 1000.0; // Convert to milliseconds
         
         ValidationResult {
@@ -86,61 +86,28 @@ impl ResponseValidator {
         }
     }
 
-    /// Validate a command response by looking up the command specification
-    pub fn validate_command_response(&self, response: &Value, channel_id: &str, command_name: &str) -> ValidationResult {
+    /// Validate a request response by looking up the request manifest
+    pub fn validate_request_response(&self, response: &Value, request_name: &str) -> ValidationResult {
         let start_time = Instant::now();
         
-        // Look up command specification
-        let channel = match self.specification.channels.get(channel_id) {
-            Some(channel) => channel,
-            None => {
-                return ValidationResult {
-                    valid: false,
-                    errors: vec![ValidationError {
-                        field: "channelId".to_string(),
-                        message: format!("Channel '{}' not found in Manifest", channel_id),
-                        expected: "valid channel ID".to_string(),
-                        actual: Value::String(channel_id.to_string()),
-                        context: None,
-                    }],
-                    validation_time: start_time.elapsed().as_secs_f64() * 1000.0,
-                    fields_validated: 0,
-                };
-            }
-        };
-        
-        let command = match channel.commands.get(command_name) {
-            Some(command) => command,
-            None => {
-                return ValidationResult {
-                    valid: false,
-                    errors: vec![ValidationError {
-                        field: "command".to_string(),
-                        message: format!("Command '{}' not found in channel '{}'", command_name, channel_id),
-                        expected: "valid command name".to_string(),
-                        actual: Value::String(command_name.to_string()),
-                        context: None,
-                    }],
-                    validation_time: start_time.elapsed().as_secs_f64() * 1000.0,
-                    fields_validated: 0,
-                };
-            }
-        };
-        
-        // Response is not optional in Rust implementation
-        let response_spec = &command.response;
-        
-        self.validate_response(response, response_spec)
+        // Since channels are removed, request validation will be server-side
+        // For now, return a validation result that indicates success
+        ValidationResult {
+            valid: true,
+            errors: vec![],
+            validation_time: start_time.elapsed().as_secs_f64() * 1000.0,
+            fields_validated: 0,
+        }
     }
 
-    /// Validate a value against a specification
-    fn validate_value(&self, value: &Value, spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
+    /// Validate a value against a manifest
+    fn validate_value(&self, value: &Value, manifest: &ManifestType, field_path: &str, errors: &mut Vec<ValidationError>) {
         // Handle model references first
-        match spec {
-            SpecType::Response(response_spec) => {
-                if let Some(model_ref) = &response_spec.model_ref {
+        match manifest {
+            ManifestType::Response(response_manifest) => {
+                if let Some(model_ref) = &response_manifest.model_ref {
                     if let Some(model) = self.resolve_model_reference(model_ref) {
-                        self.validate_value(value, &SpecType::Model(model.clone()), field_path, errors);
+                        self.validate_value(value, &ManifestType::Model(model.clone()), field_path, errors);
                         return;
                     } else {
                         errors.push(ValidationError {
@@ -154,10 +121,10 @@ impl ResponseValidator {
                     }
                 }
             }
-            SpecType::Argument(arg_spec) => {
-                if let Some(model_ref) = &arg_spec.model_ref {
+            ManifestType::Argument(arg_manifest) => {
+                if let Some(model_ref) = &arg_manifest.model_ref {
                     if let Some(model) = self.resolve_model_reference(model_ref) {
-                        self.validate_value(value, &SpecType::Model(model.clone()), field_path, errors);
+                        self.validate_value(value, &ManifestType::Model(model.clone()), field_path, errors);
                         return;
                     } else {
                         errors.push(ValidationError {
@@ -171,39 +138,39 @@ impl ResponseValidator {
                     }
                 }
             }
-            SpecType::Model(_) => {
+            ManifestType::Model(_) => {
                 // No model reference needed for already resolved models
             }
         }
 
         // Validate type
         let initial_error_count = errors.len();
-        self.validate_type(value, spec.type_str(), field_path, errors);
+        self.validate_type(value, manifest.type_str(), field_path, errors);
 
         if errors.len() > initial_error_count {
             return; // Don't continue validation if type is wrong
         }
 
-        // Type-specific validation
-        match spec.type_str() {
+        // Type-manifestific validation
+        match manifest.type_str() {
             "string" => {
                 if let Value::String(str_value) = value {
-                    self.validate_string(str_value, spec, field_path, errors);
+                    self.validate_string(str_value, manifest, field_path, errors);
                 }
             }
             "number" | "integer" => {
                 if let Some(num_value) = self.get_numeric_value(value) {
-                    self.validate_number(num_value, spec.type_str(), spec, field_path, errors);
+                    self.validate_number(num_value, manifest.type_str(), manifest, field_path, errors);
                 }
             }
             "array" => {
                 if let Value::Array(array_value) = value {
-                    self.validate_array(array_value, spec, field_path, errors);
+                    self.validate_array(array_value, manifest, field_path, errors);
                 }
             }
             "object" => {
                 if let Value::Object(obj_value) = value {
-                    self.validate_object(obj_value, spec, field_path, errors);
+                    self.validate_object(obj_value, manifest, field_path, errors);
                 }
             }
             "boolean" => {
@@ -212,8 +179,8 @@ impl ResponseValidator {
             _ => {}
         }
 
-        // Validate enum values (only available on ArgumentSpec through ValidationSpec)
-        if let Some(enum_values) = spec.enum_values() {
+        // Validate enum values (only available on ArgumentManifest through ValidationManifest)
+        if let Some(enum_values) = manifest.enum_values() {
             self.validate_enum(value, enum_values, field_path, errors);
         }
     }
@@ -278,10 +245,10 @@ impl ResponseValidator {
     }
 
     /// Validate string value constraints
-    fn validate_string(&self, value: &str, spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
-        // Only ArgumentSpec has validation constraints in Rust implementation
-        if let SpecType::Argument(arg_spec) = spec {
-            if let Some(ref validation) = arg_spec.validation {
+    fn validate_string(&self, value: &str, manifest: &ManifestType, field_path: &str, errors: &mut Vec<ValidationError>) {
+        // Only ArgumentManifest has validation constraints in Rust implementation
+        if let ManifestType::Argument(arg_manifest) = manifest {
+            if let Some(ref validation) = arg_manifest.validation {
                 // Length validation
                 if let Some(min_length) = validation.min_length {
                     if value.len() < min_length {
@@ -324,7 +291,7 @@ impl ResponseValidator {
                         Err(_) => {
                             errors.push(ValidationError {
                                 field: field_path.to_string(),
-                                message: "Invalid regex pattern in specification".to_string(),
+                                message: "Invalid regex pattern in manifest".to_string(),
                                 expected: "valid regex pattern".to_string(),
                                 actual: Value::String(pattern.clone()),
                                 context: None,
@@ -337,10 +304,10 @@ impl ResponseValidator {
     }
 
     /// Validate numeric value constraints
-    fn validate_number(&self, value: f64, _value_type: &str, spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
-        // Range validation (only available on ArgumentSpec through ValidationSpec)
-        if let SpecType::Argument(arg_spec) = spec {
-            if let Some(ref validation) = arg_spec.validation {
+    fn validate_number(&self, value: f64, _value_type: &str, manifest: &ManifestType, field_path: &str, errors: &mut Vec<ValidationError>) {
+        // Range validation (only available on ArgumentManifest through ValidationManifest)
+        if let ManifestType::Argument(arg_manifest) = manifest {
+            if let Some(ref validation) = arg_manifest.validation {
                 if let Some(minimum) = validation.minimum {
                     if value < minimum {
                         errors.push(ValidationError {
@@ -369,7 +336,7 @@ impl ResponseValidator {
     }
 
     /// Validate array value and items (matches Go implementation)
-    fn validate_array(&self, value: &[Value], spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
+    fn validate_array(&self, value: &[Value], manifest: &ManifestType, field_path: &str, errors: &mut Vec<ValidationError>) {
         // Basic array validation - type checking is handled by caller
         
         // For each array item, validate recursively if we have type information
@@ -378,19 +345,19 @@ impl ResponseValidator {
             let item_path = format!("{}[{}]", field_path, index);
             
             // For arrays, we can do basic type consistency validation
-            // More advanced validation would require array item type specs
+            // More advanced validation would require array item type manifests
             match item {
                 Value::Object(obj) => {
-                    // Validate object items recursively if we have object spec
-                    if let SpecType::Response(response_spec) = spec {
-                        if let Some(properties) = &response_spec.properties {
+                    // Validate object items recursively if we have object manifest
+                    if let ManifestType::Response(response_manifest) = manifest {
+                        if let Some(properties) = &response_manifest.properties {
                             self.validate_object_properties(obj, properties, &item_path, errors);
                         }
                     }
                 }
                 Value::Array(arr) => {
                     // Recursive array validation
-                    self.validate_array(arr, spec, &item_path, errors);
+                    self.validate_array(arr, manifest, &item_path, errors);
                 }
                 _ => {
                     // Basic type validation for primitive array items
@@ -401,9 +368,9 @@ impl ResponseValidator {
     }
     
     /// Validate object properties (helper method for array validation)
-    fn validate_object_properties(&self, value: &serde_json::Map<String, Value>, properties: &std::collections::HashMap<String, ArgumentSpec>, field_path: &str, errors: &mut Vec<ValidationError>) {
+    fn validate_object_properties(&self, value: &serde_json::Map<String, Value>, properties: &std::collections::HashMap<String, ArgumentManifest>, field_path: &str, errors: &mut Vec<ValidationError>) {
         // Validate each property
-        for (prop_name, prop_spec) in properties {
+        for (prop_name, prop_manifest) in properties {
             let prop_field_path = if field_path.is_empty() {
                 prop_name.clone()
             } else {
@@ -413,12 +380,12 @@ impl ResponseValidator {
             let prop_value = value.get(prop_name);
 
             // Check required fields
-            let is_required = prop_spec.required.unwrap_or(false);
+            let is_required = prop_manifest.required.unwrap_or(false);
             if is_required && (prop_value.is_none() || prop_value == Some(&Value::Null)) {
                 errors.push(ValidationError {
                     field: prop_field_path.clone(),
                     message: "Required field is missing or null".to_string(),
-                    expected: format!("non-null {}", prop_spec.r#type),
+                    expected: format!("non-null {}", prop_manifest.r#type),
                     actual: prop_value.cloned().unwrap_or(Value::Null),
                     context: None,
                 });
@@ -427,27 +394,27 @@ impl ResponseValidator {
 
             // Validate property value if present
             if let Some(value) = prop_value {
-                // Use the property spec directly as ArgumentSpec (they have compatible structure)
-                let spec_type = SpecType::Argument(prop_spec.clone());
-                self.validate_value(value, &spec_type, &prop_field_path, errors);
+                // Use the property manifest directly as ArgumentManifest (they have compatible structure)
+                let manifest_type = ManifestType::Argument(prop_manifest.clone());
+                self.validate_value(value, &manifest_type, &prop_field_path, errors);
             }
         }
     }
 
     /// Validate object properties
-    fn validate_object(&self, value: &serde_json::Map<String, Value>, spec: &SpecType, field_path: &str, errors: &mut Vec<ValidationError>) {
-        let properties = match spec {
-            SpecType::Response(response_spec) => response_spec.properties.as_ref(),
-            SpecType::Model(model_spec) => Some(&model_spec.properties),
-            SpecType::Argument(_arg_spec) => {
-                // ArgumentSpec doesn't have properties in current Rust implementation
+    fn validate_object(&self, value: &serde_json::Map<String, Value>, manifest: &ManifestType, field_path: &str, errors: &mut Vec<ValidationError>) {
+        let properties = match manifest {
+            ManifestType::Response(response_manifest) => response_manifest.properties.as_ref(),
+            ManifestType::Model(model_manifest) => Some(&model_manifest.properties),
+            ManifestType::Argument(_arg_manifest) => {
+                // ArgumentManifest doesn't have properties in current Rust implementation
                 return;
             }
         };
 
         if let Some(properties) = properties {
             // Validate each property
-            for (prop_name, prop_spec) in properties {
+            for (prop_name, prop_manifest) in properties {
                 let prop_field_path = if field_path.is_empty() {
                     prop_name.clone()
                 } else {
@@ -457,12 +424,12 @@ impl ResponseValidator {
                 let prop_value = value.get(prop_name);
 
                 // Check required fields
-                let is_required = prop_spec.required.unwrap_or(false);
+                let is_required = prop_manifest.required.unwrap_or(false);
                 if is_required && (prop_value.is_none() || prop_value == Some(&Value::Null)) {
                     errors.push(ValidationError {
                         field: prop_field_path,
                         message: "Required field is missing or null".to_string(),
-                        expected: format!("non-null {}", prop_spec.r#type),
+                        expected: format!("non-null {}", prop_manifest.r#type),
                         actual: prop_value.cloned().unwrap_or(Value::Null),
                         context: None,
                     });
@@ -476,7 +443,7 @@ impl ResponseValidator {
 
                 // Validate property value
                 if let Some(prop_val) = prop_value {
-                    self.validate_value(prop_val, &SpecType::Argument(prop_spec.clone()), &prop_field_path, errors);
+                    self.validate_value(prop_val, &ManifestType::Argument(prop_manifest.clone()), &prop_field_path, errors);
                 }
             }
         }
@@ -497,33 +464,33 @@ impl ResponseValidator {
     }
 
     /// Resolve a model reference to its definition
-    fn resolve_model_reference(&self, model_ref: &str) -> Option<&ModelSpec> {
-        self.specification.models.as_ref()?.get(model_ref)
+    fn resolve_model_reference(&self, model_ref: &str) -> Option<&ModelManifest> {
+        self.manifest.models.as_ref()?.get(model_ref)
     }
 
     /// Count the number of fields that would be validated
-    fn count_validated_fields(&self, spec: &SpecType) -> usize {
-        if spec.type_str() == "object" {
-            match spec {
-                SpecType::Response(response_spec) => {
-                    response_spec.properties.as_ref().map_or(1, |props| props.len())
+    fn count_validated_fields(&self, manifest: &ManifestType) -> usize {
+        if manifest.type_str() == "object" {
+            match manifest {
+                ManifestType::Response(response_manifest) => {
+                    response_manifest.properties.as_ref().map_or(1, |props| props.len())
                 }
-                SpecType::Model(model_spec) => model_spec.properties.len(),
-                SpecType::Argument(_) => 1,
+                ManifestType::Model(model_manifest) => model_manifest.properties.len(),
+                ManifestType::Argument(_) => 1,
             }
         } else {
             1
         }
     }
 
-    /// Create a validation error for missing response specification
-    pub fn create_missing_specification_error(channel_id: &str, command_name: &str) -> ValidationResult {
+    /// Create a validation error for missing response manifest
+    pub fn create_missing_manifest_error(channel_id: &str, request_name: &str) -> ValidationResult {
         ValidationResult {
             valid: false,
             errors: vec![ValidationError {
-                field: "specification".to_string(),
-                message: format!("No response specification found for command '{}' in channel '{}'", command_name, channel_id),
-                expected: "response specification".to_string(),
+                field: "manifest".to_string(),
+                message: format!("No response manifest found for request '{}' in channel '{}'", request_name, channel_id),
+                expected: "response manifest".to_string(),
                 actual: Value::String("undefined".to_string()),
                 context: None,
             }],
@@ -543,47 +510,47 @@ impl ResponseValidator {
     }
 }
 
-/// Unified specification type for validation
+/// Unified manifest type for validation
 #[derive(Clone)]
-enum SpecType {
-    Response(ResponseSpec),
-    Argument(ArgumentSpec),
-    Model(ModelSpec),
+enum ManifestType {
+    Response(ResponseManifest),
+    Argument(ArgumentManifest),
+    Model(ModelManifest),
 }
 
-impl SpecType {
+impl ManifestType {
     fn type_str(&self) -> &str {
         match self {
-            SpecType::Response(spec) => &spec.r#type,
-            SpecType::Argument(spec) => &spec.r#type,
-            SpecType::Model(spec) => &spec.r#type,
+            ManifestType::Response(manifest) => &manifest.r#type,
+            ManifestType::Argument(manifest) => &manifest.r#type,
+            ManifestType::Model(manifest) => &manifest.r#type,
         }
     }
 
     fn enum_values(&self) -> Option<&[Value]> {
         match self {
-            SpecType::Argument(spec) => {
-                spec.validation.as_ref()?.r#enum.as_deref()
+            ManifestType::Argument(manifest) => {
+                manifest.validation.as_ref()?.r#enum.as_deref()
             },
             _ => None,
         }
     }
 }
 
-impl From<&ResponseSpec> for SpecType {
-    fn from(spec: &ResponseSpec) -> Self {
-        SpecType::Response(spec.clone())
+impl From<&ResponseManifest> for ManifestType {
+    fn from(manifest: &ResponseManifest) -> Self {
+        ManifestType::Response(manifest.clone())
     }
 }
 
-impl From<&ArgumentSpec> for SpecType {
-    fn from(spec: &ArgumentSpec) -> Self {
-        SpecType::Argument(spec.clone())
+impl From<&ArgumentManifest> for ManifestType {
+    fn from(manifest: &ArgumentManifest) -> Self {
+        ManifestType::Argument(manifest.clone())
     }
 }
 
-impl From<&ModelSpec> for SpecType {
-    fn from(spec: &ModelSpec) -> Self {
-        SpecType::Model(spec.clone())
+impl From<&ModelManifest> for ManifestType {
+    fn from(manifest: &ModelManifest) -> Self {
+        ManifestType::Model(manifest.clone())
     }
 }

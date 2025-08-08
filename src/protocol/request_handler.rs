@@ -1,5 +1,5 @@
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
-use crate::protocol::message_types::JanusCommand;
+use crate::protocol::message_types::JanusRequest;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,18 +30,18 @@ impl<T> HandlerResult<T> {
     }
 }
 
-/// Enhanced command handler trait for direct value responses
+/// Enhanced request handler trait for direct value responses
 #[async_trait]
-pub trait CommandHandler: Send + Sync {
+pub trait RequestHandler: Send + Sync {
     type Output: Serialize + Send;
     
-    async fn handle(&self, command: &JanusCommand) -> HandlerResult<Self::Output>;
+    async fn handle(&self, request: &JanusRequest) -> HandlerResult<Self::Output>;
 }
 
 /// Synchronous handler wrapper
 pub struct SyncHandler<F, T>
 where
-    F: Fn(&JanusCommand) -> HandlerResult<T> + Send + Sync,
+    F: Fn(&JanusRequest) -> HandlerResult<T> + Send + Sync,
     T: Serialize + Send,
 {
     handler: F,
@@ -49,7 +49,7 @@ where
 
 impl<F, T> SyncHandler<F, T>
 where
-    F: Fn(&JanusCommand) -> HandlerResult<T> + Send + Sync,
+    F: Fn(&JanusRequest) -> HandlerResult<T> + Send + Sync,
     T: Serialize + Send,
 {
     pub fn new(handler: F) -> Self {
@@ -58,15 +58,15 @@ where
 }
 
 #[async_trait]
-impl<F, T> CommandHandler for SyncHandler<F, T>
+impl<F, T> RequestHandler for SyncHandler<F, T>
 where
-    F: Fn(&JanusCommand) -> HandlerResult<T> + Send + Sync,
+    F: Fn(&JanusRequest) -> HandlerResult<T> + Send + Sync,
     T: Serialize + Send,
 {
     type Output = T;
     
-    async fn handle(&self, command: &JanusCommand) -> HandlerResult<Self::Output> {
-        (self.handler)(command)
+    async fn handle(&self, request: &JanusRequest) -> HandlerResult<Self::Output> {
+        (self.handler)(request)
     }
 }
 
@@ -75,7 +75,7 @@ pub struct AsyncHandler<T>
 where
     T: Serialize + Send,
 {
-    handler: Box<dyn Fn(&JanusCommand) -> std::pin::Pin<Box<dyn std::future::Future<Output = HandlerResult<T>> + Send>> + Send + Sync>,
+    handler: Box<dyn Fn(&JanusRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = HandlerResult<T>> + Send>> + Send + Sync>,
 }
 
 impl<T> AsyncHandler<T>
@@ -84,7 +84,7 @@ where
 {
     pub fn new<F, Fut>(handler: F) -> Self
     where
-        F: Fn(&JanusCommand) -> Fut + Send + Sync + 'static,
+        F: Fn(&JanusRequest) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = HandlerResult<T>> + Send + 'static,
     {
         Self {
@@ -94,64 +94,64 @@ where
 }
 
 #[async_trait]
-impl<T> CommandHandler for AsyncHandler<T>
+impl<T> RequestHandler for AsyncHandler<T>
 where
     T: Serialize + Send,
 {
     type Output = T;
     
-    async fn handle(&self, command: &JanusCommand) -> HandlerResult<Self::Output> {
-        (self.handler)(command).await
+    async fn handle(&self, request: &JanusRequest) -> HandlerResult<Self::Output> {
+        (self.handler)(request).await
     }
 }
 
 /// Direct value handler constructors for common types
 
 // Boolean handler
-pub fn bool_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusCommand) -> HandlerResult<bool> + Send + Sync, bool>
+pub fn bool_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusRequest) -> HandlerResult<bool> + Send + Sync, bool>
 where
-    F: Fn(&JanusCommand) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+    F: Fn(&JanusRequest) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
 {
     SyncHandler::new(move |cmd| HandlerResult::from_result(handler(cmd)))
 }
 
 // String handler
-pub fn string_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusCommand) -> HandlerResult<String> + Send + Sync, String>
+pub fn string_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusRequest) -> HandlerResult<String> + Send + Sync, String>
 where
-    F: Fn(&JanusCommand) -> Result<String, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+    F: Fn(&JanusRequest) -> Result<String, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
 {
     SyncHandler::new(move |cmd| HandlerResult::from_result(handler(cmd)))
 }
 
 // Integer handler
-pub fn int_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusCommand) -> HandlerResult<i64> + Send + Sync, i64>
+pub fn int_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusRequest) -> HandlerResult<i64> + Send + Sync, i64>
 where
-    F: Fn(&JanusCommand) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+    F: Fn(&JanusRequest) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
 {
     SyncHandler::new(move |cmd| HandlerResult::from_result(handler(cmd)))
 }
 
 // Float handler
-pub fn float_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusCommand) -> HandlerResult<f64> + Send + Sync, f64>
+pub fn float_handler<F>(handler: F) -> SyncHandler<impl Fn(&JanusRequest) -> HandlerResult<f64> + Send + Sync, f64>
 where
-    F: Fn(&JanusCommand) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+    F: Fn(&JanusRequest) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
 {
     SyncHandler::new(move |cmd| HandlerResult::from_result(handler(cmd)))
 }
 
 // Array handler
-pub fn array_handler<F, T>(handler: F) -> SyncHandler<impl Fn(&JanusCommand) -> HandlerResult<Vec<T>> + Send + Sync, Vec<T>>
+pub fn array_handler<F, T>(handler: F) -> SyncHandler<impl Fn(&JanusRequest) -> HandlerResult<Vec<T>> + Send + Sync, Vec<T>>
 where
-    F: Fn(&JanusCommand) -> Result<Vec<T>, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+    F: Fn(&JanusRequest) -> Result<Vec<T>, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
     T: Serialize + Send,
 {
     SyncHandler::new(move |cmd| HandlerResult::from_result(handler(cmd)))
 }
 
 // Object handler
-pub fn object_handler<F, T>(handler: F) -> SyncHandler<impl Fn(&JanusCommand) -> HandlerResult<T> + Send + Sync, T>
+pub fn object_handler<F, T>(handler: F) -> SyncHandler<impl Fn(&JanusRequest) -> HandlerResult<T> + Send + Sync, T>
 where
-    F: Fn(&JanusCommand) -> Result<T, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+    F: Fn(&JanusRequest) -> Result<T, Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
     T: Serialize + Send,
 {
     SyncHandler::new(move |cmd| HandlerResult::from_result(handler(cmd)))
@@ -160,7 +160,7 @@ where
 // Async boolean handler
 pub fn async_bool_handler<F, Fut>(handler: F) -> AsyncHandler<bool>
 where
-    F: Fn(&JanusCommand) -> Fut + Send + Sync + 'static,
+    F: Fn(&JanusRequest) -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = Result<bool, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
 {
     let handler = Arc::new(handler);
@@ -176,7 +176,7 @@ where
 // Async string handler
 pub fn async_string_handler<F, Fut>(handler: F) -> AsyncHandler<String>
 where
-    F: Fn(&JanusCommand) -> Fut + Send + Sync + 'static,
+    F: Fn(&JanusRequest) -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = Result<String, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
 {
     let handler = Arc::new(handler);
@@ -192,7 +192,7 @@ where
 // Async custom handler
 pub fn async_custom_handler<F, Fut, T>(handler: F) -> AsyncHandler<T>
 where
-    F: Fn(&JanusCommand) -> Fut + Send + Sync + 'static,
+    F: Fn(&JanusRequest) -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
     T: Serialize + Send + 'static,
 {
@@ -209,16 +209,16 @@ where
 /// Type-erased handler for registry storage
 #[async_trait]
 pub trait BoxedHandler: Send + Sync {
-    async fn handle_boxed(&self, command: &JanusCommand) -> Result<serde_json::Value, JSONRPCError>;
+    async fn handle_boxed(&self, request: &JanusRequest) -> Result<serde_json::Value, JSONRPCError>;
 }
 
 #[async_trait]
 impl<H> BoxedHandler for H
 where
-    H: CommandHandler + Send + Sync,
+    H: RequestHandler + Send + Sync,
 {
-    async fn handle_boxed(&self, command: &JanusCommand) -> Result<serde_json::Value, JSONRPCError> {
-        match self.handle(command).await {
+    async fn handle_boxed(&self, request: &JanusRequest) -> Result<serde_json::Value, JSONRPCError> {
+        match self.handle(request).await {
             HandlerResult::Success(value) => {
                 serde_json::to_value(value)
                     .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(e.to_string())))
@@ -242,9 +242,9 @@ impl HandlerRegistry {
         }
     }
     
-    pub async fn register_handler<H>(&self, command: String, handler: H) -> Result<(), JSONRPCError>
+    pub async fn register_handler<H>(&self, request: String, handler: H) -> Result<(), JSONRPCError>
     where
-        H: CommandHandler + 'static,
+        H: RequestHandler + 'static,
     {
         let mut handlers = self.handlers.write().await;
         
@@ -252,30 +252,30 @@ impl HandlerRegistry {
             return Err(JSONRPCError::new(JSONRPCErrorCode::ResourceLimitExceeded, Some(format!("Maximum handlers ({}) exceeded", self.max_handlers))));
         }
         
-        handlers.insert(command, Box::new(handler));
+        handlers.insert(request, Box::new(handler));
         Ok(())
     }
     
-    pub async fn unregister_handler(&self, command: &str) -> bool {
+    pub async fn unregister_handler(&self, request: &str) -> bool {
         let mut handlers = self.handlers.write().await;
-        handlers.remove(command).is_some()
+        handlers.remove(request).is_some()
     }
     
-    pub async fn execute_handler(&self, command: &str, cmd: &JanusCommand) -> Result<serde_json::Value, JSONRPCError> {
+    pub async fn execute_handler(&self, request: &str, cmd: &JanusRequest) -> Result<serde_json::Value, JSONRPCError> {
         let handlers = self.handlers.read().await;
         
-        match handlers.get(command) {
+        match handlers.get(request) {
             Some(handler) => handler.handle_boxed(cmd).await,
             None => Err(JSONRPCError::new(
                 JSONRPCErrorCode::MethodNotFound,
-                Some(format!("Command not found: {}", command))
+                Some(format!("Request not found: {}", request))
             )),
         }
     }
     
-    pub async fn has_handler(&self, command: &str) -> bool {
+    pub async fn has_handler(&self, request: &str) -> bool {
         let handlers = self.handlers.read().await;
-        handlers.contains_key(command)
+        handlers.contains_key(request)
     }
     
     pub async fn handler_count(&self) -> usize {
@@ -287,12 +287,12 @@ impl HandlerRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::message_types::JanusCommand;
+    use crate::protocol::message_types::JanusRequest;
     
     #[tokio::test]
     async fn test_bool_handler() {
         let handler = bool_handler(|_cmd| Ok(true));
-        let cmd = JanusCommand::default();
+        let cmd = JanusRequest::default();
         
         match handler.handle(&cmd).await {
             HandlerResult::Success(value) => assert_eq!(value, true),
@@ -303,7 +303,7 @@ mod tests {
     #[tokio::test]
     async fn test_string_handler() {
         let handler = string_handler(|_cmd| Ok("Hello, World!".to_string()));
-        let cmd = JanusCommand::default();
+        let cmd = JanusRequest::default();
         
         match handler.handle(&cmd).await {
             HandlerResult::Success(value) => assert_eq!(value, "Hello, World!"),
@@ -321,7 +321,7 @@ mod tests {
         assert!(registry.has_handler("test").await);
         assert_eq!(registry.handler_count().await, 1);
         
-        let cmd = JanusCommand::default();
+        let cmd = JanusRequest::default();
         let result = registry.execute_handler("test", &cmd).await.unwrap();
         assert_eq!(result, serde_json::Value::Bool(true));
     }

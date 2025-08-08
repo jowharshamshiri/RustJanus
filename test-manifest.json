@@ -4,9 +4,9 @@
     "channels": {
         "test": {
             "description": "Test channel for cross-platform communication",
-            "commands": {
-                "test_command": {
-                    "description": "Test command for validation",
+            "requests": {
+                "test_request": {
+                    "description": "Test request for validation",
                     "args": {
                         "message": {
                             "type": "string",

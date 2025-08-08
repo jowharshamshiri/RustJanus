@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 /// Tests high concurrency, race conditions, thread safety, deadlock prevention
 
 #[tokio::test]
-async fn test_high_concurrency_command_execution() {
+async fn test_high_concurrency_request_execution() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
@@ -25,7 +25,7 @@ async fn test_high_concurrency_command_execution() {
     let success_count = Arc::new(AtomicUsize::new(0));
     let error_count = Arc::new(AtomicUsize::new(0));
     
-    // Execute 100 concurrent commands
+    // Execute 100 concurrent requests
     let mut tasks = Vec::new();
     for i in 0..100 {
         let client_clone = client.clone();
@@ -36,7 +36,7 @@ async fn test_high_concurrency_command_execution() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
             
-            match client_clone.lock().await.send_command(
+            match client_clone.lock().await.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -121,7 +121,7 @@ async fn test_concurrent_handler_registration() {
         tasks.push(tokio::spawn(async move {
             let mut args = HashMap::new();
             args.insert("handler_id".to_string(), serde_json::Value::String(format!("handler-{}", i)));
-            client_clone.lock().await.send_command(
+            client_clone.lock().await.send_request(
                 "echo-test",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -168,7 +168,7 @@ async fn test_concurrent_connection_pool_usage() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("pool_test_{}", i)));
             
-            client_clone.lock().await.send_command(
+            client_clone.lock().await.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -221,7 +221,7 @@ async fn test_concurrent_state_modification() {
         tasks.push(tokio::spawn(async move {
             // Access client configuration concurrently
             let _config = client_clone.lock().await.configuration();
-            let _spec = client_clone.lock().await.specification();
+            let _manifest = client_clone.lock().await.manifest();
             
             counter_clone.fetch_add(1, Ordering::SeqCst);
         }));
@@ -255,7 +255,7 @@ async fn test_concurrent_connection_management() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("test_{}", i)));
             
-            client.send_command(
+            client.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -316,20 +316,20 @@ async fn test_thread_safety_of_manifest_access() {
         config,
     ).await.unwrap()));
     
-    // 100 concurrent specification accesses
+    // 100 concurrent manifest accesses
     let mut tasks = Vec::new();
     for _ in 0..100 {
         let client_clone = client.clone();
         
         tasks.push(tokio::spawn(async move {
             let binding = client_clone.lock().await;
-            // With Dynamic Specification Architecture, spec might not be loaded until needed
-            if let Some(spec) = binding.specification() {
-                assert_eq!(spec.version, "1.0.0");
-                assert!(!spec.channels.is_empty());
+            // With Dynamic Manifest Architecture, manifest might not be loaded until needed
+            if let Some(manifest) = binding.manifest() {
+                assert_eq!(manifest.version, "1.0.0");
+                assert!(!manifest.channels.is_empty());
             } else {
-                // Specification not loaded yet, which is expected in Dynamic Specification Architecture
-                println!("Specification not loaded yet (expected with Dynamic Architecture)");
+                // Manifest not loaded yet, which is expected in Dynamic Manifest Architecture
+                println!("Manifest not loaded yet (expected with Dynamic Architecture)");
             }
         }));
     }
@@ -361,7 +361,7 @@ async fn test_no_deadlock_under_load() {
                     let mut args = HashMap::new();
                     args.insert("test_arg".to_string(), serde_json::Value::String(format!("deadlock_test_{}", i)));
                     
-                    client_clone.lock().await.send_command(
+                    client_clone.lock().await.send_request(
                         "echo",
                         Some(args),
                         Some(std::time::Duration::from_millis(100)),
@@ -401,14 +401,14 @@ async fn test_no_deadlock_with_mixed_operations() {
     
     let mut tasks = Vec::new();
     
-    // 20 command operations
+    // 20 request operations
     for i in 0..20 {
         let client_clone = client.clone();
         tasks.push(tokio::spawn(async move {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("mixed_test_{}", i)));
             
-            client_clone.lock().await.send_command(
+            client_clone.lock().await.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -422,7 +422,7 @@ async fn test_no_deadlock_with_mixed_operations() {
         tasks.push(tokio::spawn(async move {
             let mut args = HashMap::new();
             args.insert("handler_id".to_string(), serde_json::Value::String(format!("mixed_handler_{}", i)));
-            client_clone.lock().await.send_command(
+            client_clone.lock().await.send_request(
                 "echo-test",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),
@@ -435,7 +435,7 @@ async fn test_no_deadlock_with_mixed_operations() {
         let client_clone = client.clone();
         tasks.push(tokio::spawn(async move {
             let _config = client_clone.lock().await.configuration();
-            let _spec = client_clone.lock().await.specification();
+            let _manifest = client_clone.lock().await.manifest();
             // Convert to JanusResponse for consistency
             Ok(JanusResponse::success("config_access".to_string(), "test".to_string(), Some(serde_json::json!({}))))
         }));
@@ -475,7 +475,7 @@ async fn test_memory_safety_under_concurrent_access() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("{}_{}_{}", large_data_clone, i, i)));
             
-            client_clone.lock().await.send_command(
+            client_clone.lock().await.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -521,7 +521,7 @@ async fn test_concurrent_resource_cleanup() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("cleanup_test_{}", i)));
             
-            let _result = client.send_command(
+            let _result = client.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(50)),
@@ -568,7 +568,7 @@ async fn test_connection_pool_thread_safety() {
             let mut args = HashMap::new();
             args.insert("test_arg".to_string(), serde_json::Value::String(format!("pool_safety_{}", i)));
             
-            client_clone.lock().await.send_command(
+            client_clone.lock().await.send_request(
                 "echo",
                 Some(args),
                 Some(std::time::Duration::from_millis(100)),

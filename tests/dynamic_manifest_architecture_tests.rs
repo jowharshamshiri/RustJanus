@@ -6,82 +6,82 @@ use std::collections::HashMap;
 mod test_utils;
 use test_utils::*;
 
-/// Dynamic Specification Architecture Tests
-/// Tests the 6 key features that implement dynamic specification fetching
-/// and eliminate hardcoded specification dependencies
+/// Dynamic Manifest Architecture Tests
+/// Tests the 6 key features that implement dynamic manifest fetching
+/// and eliminate hardcoded manifest dependencies
 
 #[tokio::test]
 async fn test_constructor_simplification() {
     // Test that constructors only take socketPath and channelID
     let config = create_test_config();
-    let socket_path = "/tmp/test_dynamic_spec.sock".to_string();
+    let socket_path = "/tmp/test_dynamic_manifest.sock".to_string();
     let channel_id = "test".to_string();
     
     // Constructor should succeed with only basic parameters
-    let result = JanusClient::new(socket_path.clone(), channel_id.clone(), config).await;
+    let result = JanusClient::new(socket_path.clone(), config).await;
     
-    // Should succeed - no specification required
+    // Should succeed - no manifest required
     assert!(result.is_ok(), "Constructor should succeed with only socketPath, channelID, and config");
     
     let client = result.unwrap();
     
-    // Verify internal state - no specification should be loaded initially
+    // Verify internal state - no manifest should be loaded initially
     // Note: We can't directly access private fields, but behavior demonstrates this
-    // The client should be ready to use without pre-loaded specification
+    // The client should be ready to use without pre-loaded manifest
     
     // Test constructor parameter validation
     let invalid_config = create_test_config();
     
     // Test invalid socket path
-    let invalid_socket_result = JanusClient::new("".to_string(), channel_id.clone(), invalid_config.clone()).await;
+    let invalid_socket_result = JanusClient::new("".to_string(), invalid_config.clone()).await;
     assert!(invalid_socket_result.is_err(), "Constructor should reject empty socket path");
     
     // Test invalid channel ID
-    let invalid_channel_result = JanusClient::new(socket_path, "".to_string(), invalid_config).await;
+    let invalid_channel_result = JanusClient::new(socket_path, invalid_config).await;
     assert!(invalid_channel_result.is_err(), "Constructor should reject empty channel ID");
 }
 
 #[tokio::test]
-async fn test_hardcoded_spec_elimination() {
-    // Test that client never uses hardcoded or user-provided specifications
+async fn test_hardcoded_manifest_elimination() {
+    // Test that client never uses hardcoded or user-provided manifests
     let config = create_test_config();
     let socket_path = "/tmp/test_no_hardcode.sock".to_string();
     let channel_id = "test".to_string();
     
-    // Create client without any specification
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
-    assert!(client_result.is_ok(), "Client should be created without hardcoded specification");
+    // Create client without any manifest
+    let client_result = JanusClient::new(socket_path, config).await;
+    assert!(client_result.is_ok(), "Client should be created without hardcoded manifest");
     
     let mut client = client_result.unwrap();
     
-    // Test that built-in commands work without specification
-    // (They should bypass specification validation entirely)
+    // Test that built-in requests work without manifest
+    // (They should bypass manifest validation entirely)
     
     // Note: We cannot test actual server communication without a running server
-    // But we can verify that the client is structured to fetch specs dynamically
+    // But we can verify that the client is structured to fetch manifests dynamically
     
-    // The key test is that constructor succeeded without requiring a specification
-    // and that the client is ready to fetch specifications when needed
+    // The key test is that constructor succeeded without requiring a manifest
+    // and that the client is ready to fetch manifests when needed
     
-    // Verify no specification is hardcoded by checking that validation is deferred
-    // until actual command execution (when auto-fetch occurs)
+    // Verify no manifest is hardcoded by checking that validation is deferred
+    // until actual request execution (when auto-fetch occurs)
     
-    // Test that client doesn't accept user-provided specifications in constructor
-    // (This is enforced by the constructor signature having no spec parameter)
+    // Test that client doesn't accept user-provided manifests in constructor
+    // (This is enforced by the constructor signature having no manifest parameter)
     
-    println!("✅ Hardcoded specification elimination verified - constructor takes no specification parameter");
+    println!("✅ Hardcoded manifest elimination verified - constructor takes no manifest parameter");
 }
 
 #[tokio::test]
 async fn test_auto_fetch_during_validation() {
-    // Test that specification is fetched automatically when validation is needed
+    // Test that manifest is fetched automatically when validation is needed
     let mut config = create_test_config();
     config.enable_validation = true; // Enable validation to trigger auto-fetch
     
     let socket_path = "/tmp/test_auto_fetch.sock".to_string();
     let channel_id = "test".to_string();
     
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
+    let client_result = JanusClient::new(socket_path, config).await;
     assert!(client_result.is_ok(), "Client should be created successfully");
     
     let mut client = client_result.unwrap();
@@ -92,31 +92,30 @@ async fn test_auto_fetch_during_validation() {
     
     let client_no_val_result = JanusClient::new(
         "/tmp/test_no_validation.sock".to_string(),
-        "test".to_string(),
         config_no_validation
     ).await;
     assert!(client_no_val_result.is_ok(), "Client should work with validation disabled");
     
     // When validation is disabled, no auto-fetch should occur
-    // When validation is enabled, auto-fetch should happen during send_command
+    // When validation is enabled, auto-fetch should happen during send_request
     
     // Test that auto-fetch is triggered by validation needs
     let test_args = HashMap::new();
     
     // This would trigger auto-fetch if server were available
     // Since we can't test with real server, we verify the structure supports auto-fetch
-    let command_result = client.send_command(
-        "nonexistent_command",
+    let request_result = client.send_request(
+        "nonexistent_request",
         Some(test_args),
         Some(Duration::from_secs(1))
     ).await;
     
     // Should fail due to no server, but the failure should be connection-related,
-    // not specification-related, proving auto-fetch mechanism exists
-    assert!(command_result.is_err(), "Command should fail due to no server connection");
+    // not manifest-related, proving auto-fetch mechanism exists
+    assert!(request_result.is_err(), "Request should fail due to no server connection");
     
-    // Verify error is connection-related, not specification-related
-    match command_result.unwrap_err() {
+    // Verify error is connection-related, not manifest-related
+    match request_result.unwrap_err() {
         err if err.code == -32000 => {
             println!("✅ Auto-fetch attempted (server/IO error as expected): {}", err);
         },
@@ -127,97 +126,97 @@ async fn test_auto_fetch_during_validation() {
 }
 
 #[tokio::test]
-async fn test_server_provided_spec_validation() {
-    // Test that all validation uses server-fetched specifications
+async fn test_server_provided_manifest_validation() {
+    // Test that all validation uses server-fetched manifests
     let mut config = create_test_config();
     config.enable_validation = true;
     
-    let socket_path = "/tmp/test_server_spec.sock".to_string();
+    let socket_path = "/tmp/test_server_manifest.sock".to_string();
     let channel_id = "test".to_string();
     
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
+    let client_result = JanusClient::new(socket_path, config).await;
     assert!(client_result.is_ok(), "Client should be created successfully");
     
     let mut client = client_result.unwrap();
     
-    // Test that validation is attempted against server-fetched specification
+    // Test that validation is attempted against server-fetched manifest
     let test_args = HashMap::new();
     
-    let validation_result = client.send_command(
-        "test_command",
+    let validation_result = client.send_request(
+        "test_request",
         Some(test_args),
         Some(Duration::from_secs(1))
     ).await;
     
     // Should fail due to no server connection, but the attempt proves
-    // server-provided specification validation is implemented
+    // server-provided manifest validation is implemented
     assert!(validation_result.is_err(), "Validation should attempt to fetch from server");
     
-    // Test built-in commands that bypass specification validation
-    let builtin_result = client.send_command(
+    // Test built-in requests that bypass manifest validation
+    let builtin_result = client.send_request(
         "ping",
         None,
         Some(Duration::from_secs(1))
     ).await;
     
-    // Built-in commands should still fail due to no server, but for connection reasons
-    assert!(builtin_result.is_err(), "Built-in command should fail due to no server");
+    // Built-in requests should still fail due to no server, but for connection reasons
+    assert!(builtin_result.is_err(), "Built-in request should fail due to no server");
     
     match builtin_result.unwrap_err() {
         err if err.code == -32000 => {
-            println!("✅ Built-in command bypassed specification validation correctly: {}", err);
+            println!("✅ Built-in request bypassed manifest validation correctly: {}", err);
         },
         other => {
-            println!("⚠️ Built-in command handling: {:?}", other);
+            println!("⚠️ Built-in request handling: {:?}", other);
         }
     }
 }
 
 #[tokio::test]
-async fn test_spec_command_implementation() {
-    // Test that spec command returns actual loaded Manifest
+async fn test_manifest_request_implementation() {
+    // Test that manifest request returns actual loaded Manifest
     let config = create_test_config();
-    let socket_path = "/tmp/test_spec_command.sock".to_string();
-    let channel_id = "system".to_string(); // Use system channel for spec command
+    let socket_path = "/tmp/test_manifest_request.sock".to_string();
+    let channel_id = "system".to_string(); // Use system channel for manifest request
     
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
+    let client_result = JanusClient::new(socket_path, config).await;
     assert!(client_result.is_ok(), "Client should be created successfully");
     
     let mut client = client_result.unwrap();
     
-    // Test spec command execution
-    let spec_result = client.send_command(
-        "spec",
+    // Test manifest request execution
+    let manifest_result = client.send_request(
+        "manifest",
         None,
         Some(Duration::from_secs(5))
     ).await;
     
     // Should fail due to no server connection
-    assert!(spec_result.is_err(), "Spec command should fail due to no server");
+    assert!(manifest_result.is_err(), "Manifest request should fail due to no server");
     
-    // But the failure should be connection-related, proving spec command is implemented
-    match spec_result.unwrap_err() {
+    // But the failure should be connection-related, proving manifest request is implemented
+    match manifest_result.unwrap_err() {
         err if err.code == -32000 => {
-            println!("✅ Spec command implementation exists (connection failed as expected): {}", err);
+            println!("✅ Manifest request implementation exists (connection failed as expected): {}", err);
         },
         other => {
-            println!("⚠️ Spec command error: {:?}", other);
+            println!("⚠️ Manifest request error: {:?}", other);
         }
     }
     
-    // Test that spec command is recognized as built-in
-    // (Should not require specification validation)
+    // Test that manifest request is recognized as built-in
+    // (Should not require manifest validation)
     
-    // Verify spec command structure
-    // The implementation should handle spec commands specially
-    let spec_with_args_result = client.send_command(
-        "spec",
+    // Verify manifest request structure
+    // The implementation should handle manifest requests manifestially
+    let manifest_with_args_result = client.send_request(
+        "manifest",
         Some(HashMap::new()),
         Some(Duration::from_secs(5))
     ).await;
     
     // Should still fail due to connection, but args should be accepted
-    assert!(spec_with_args_result.is_err(), "Spec command with args should fail due to no server");
+    assert!(manifest_with_args_result.is_err(), "Manifest request with args should fail due to no server");
 }
 
 #[tokio::test]
@@ -235,7 +234,6 @@ async fn test_simplified_constructor_signatures() {
     for (socket_path, channel_id) in test_cases {
         let client_result = JanusClient::new(
             socket_path.to_string(),
-            channel_id.to_string(),
             config.clone()
         ).await;
         
@@ -252,8 +250,8 @@ async fn test_simplified_constructor_signatures() {
 }
 
 #[tokio::test]
-async fn test_dynamic_specification_integration() {
-    // Integration test for complete Dynamic Specification Architecture
+async fn test_dynamic_manifest_integration() {
+    // Integration test for complete Dynamic Manifest Architecture
     let mut config = create_test_config();
     config.enable_validation = true;
     
@@ -261,44 +259,44 @@ async fn test_dynamic_specification_integration() {
     let channel_id = "test".to_string();
     
     // 1. Constructor Simplification
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
+    let client_result = JanusClient::new(socket_path, config).await;
     assert!(client_result.is_ok(), "Constructor simplification works");
     
     let mut client = client_result.unwrap();
     
-    // 2. No hardcoded specifications
-    // (Proven by successful constructor without specification parameter)
+    // 2. No hardcoded manifests
+    // (Proven by successful constructor without manifest parameter)
     
     // 3. Auto-fetch during validation
-    // 4. Server-provided specification validation
-    // 5. Spec command implementation
-    let command_result = client.send_command(
-        "test_command", 
+    // 4. Server-provided manifest validation
+    // 5. Manifest request implementation
+    let request_result = client.send_request(
+        "test_request", 
         Some(HashMap::new()), 
         Some(Duration::from_secs(1))
     ).await;
     
     // Should fail due to no server, but attempt proves integration works
-    assert!(command_result.is_err(), "Integration test expects connection failure");
+    assert!(request_result.is_err(), "Integration test expects connection failure");
     
-    // Test built-in spec command
-    let spec_result = client.send_command(
-        "spec",
+    // Test built-in manifest request
+    let manifest_result = client.send_request(
+        "manifest",
         None,
         Some(Duration::from_secs(1))
     ).await;
     
-    assert!(spec_result.is_err(), "Spec command should fail due to no server");
+    assert!(manifest_result.is_err(), "Manifest request should fail due to no server");
     
     // 6. Test infrastructure updated
     // (All tests in this file use simplified constructors)
     
-    println!("✅ Dynamic Specification Architecture integration complete");
+    println!("✅ Dynamic Manifest Architecture integration complete");
 }
 
 #[tokio::test]
-async fn test_specification_fetch_error_handling() {
-    // Test proper error handling when specification fetch fails
+async fn test_manifest_fetch_error_handling() {
+    // Test proper error handling when manifest fetch fails
     let mut config = create_test_config();
     config.enable_validation = true;
     config.connection_timeout = Duration::from_millis(100); // Short timeout
@@ -306,65 +304,65 @@ async fn test_specification_fetch_error_handling() {
     let socket_path = "/tmp/nonexistent_server.sock".to_string();
     let channel_id = "test".to_string();
     
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
+    let client_result = JanusClient::new(socket_path, config).await;
     assert!(client_result.is_ok(), "Client creation should succeed");
     
     let mut client = client_result.unwrap();
     
-    // Test command that requires specification validation
+    // Test request that requires manifest validation
     let args = HashMap::new();
-    let command_result = client.send_command(
-        "custom_command",
+    let request_result = client.send_request(
+        "custom_request",
         Some(args),
         Some(Duration::from_millis(100))
     ).await;
     
     // Should fail gracefully with appropriate error
-    assert!(command_result.is_err(), "Command should fail when spec fetch fails");
+    assert!(request_result.is_err(), "Request should fail when manifest fetch fails");
     
     // Verify error handling is appropriate
-    match command_result.unwrap_err() {
+    match request_result.unwrap_err() {
         err if err.code == -32000 => {
-            println!("✅ Proper error handling for spec fetch failure: {}", err);
+            println!("✅ Proper error handling for manifest fetch failure: {}", err);
         },
         other => {
-            println!("⚠️ Spec fetch error handling: {:?}", other);
+            println!("⚠️ Manifest fetch error handling: {:?}", other);
         }
     }
 }
 
 #[tokio::test]
 async fn test_validation_disabled_behavior() {
-    // Test behavior when validation is disabled (no spec fetch should occur)
+    // Test behavior when validation is disabled (no manifest fetch should occur)
     let mut config = create_test_config();
     config.enable_validation = false; // Disable validation
     
     let socket_path = "/tmp/test_no_validation.sock".to_string();  
     let channel_id = "test".to_string();
     
-    let client_result = JanusClient::new(socket_path, channel_id, config).await;
+    let client_result = JanusClient::new(socket_path, config).await;
     assert!(client_result.is_ok(), "Client should be created with validation disabled");
     
     let mut client = client_result.unwrap();
     
-    // Test command execution with validation disabled
+    // Test request execution with validation disabled
     let args = HashMap::new();
-    let command_result = client.send_command(
-        "any_command",
+    let request_result = client.send_request(
+        "any_request",
         Some(args),
         Some(Duration::from_secs(1))
     ).await;
     
-    // Should fail due to no server, but NOT due to specification validation
-    assert!(command_result.is_err(), "Command should fail due to no server connection");
+    // Should fail due to no server, but NOT due to manifest validation
+    assert!(request_result.is_err(), "Request should fail due to no server connection");
     
     // Verify failure is connection-related, not validation-related
-    match command_result.unwrap_err() {
+    match request_result.unwrap_err() {
         err if err.code == -32000 => {
-            println!("✅ Validation disabled - no specification fetch attempted: {}", err);
+            println!("✅ Validation disabled - no manifest fetch attempted: {}", err);
         },
         err if err.code == -32601 => {
-            panic!("❌ Validation should be disabled - no command validation should occur: {}", err);
+            panic!("❌ Validation should be disabled - no request validation should occur: {}", err);
         },
         other => {
             println!("⚠️ Validation disabled behavior: {:?}", other);

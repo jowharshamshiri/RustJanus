@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 /// Tests bilateral timeout handling, cleanup, recovery, and error propagation
 
 #[tokio::test]
-async fn test_command_with_timeout() {
+async fn test_request_with_timeout() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
@@ -26,7 +26,7 @@ async fn test_command_with_timeout() {
     let args = create_test_args();
     
     // 0.1 second timeout (100ms) - should timeout since no server is running
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(args),
         Some(std::time::Duration::from_millis(100)),
@@ -37,7 +37,7 @@ async fn test_command_with_timeout() {
     
     match result.unwrap_err() {
         err if err.code == -32000 => {
-            // ServerError covers CommandTimeout and ConnectionError
+            // ServerError covers RequestTimeout and ConnectionError
             println!("Expected timeout or connection error: {}", err);
         },
         err if err.code == -32005 => {
@@ -57,7 +57,7 @@ async fn test_command_with_timeout() {
 }
 
 #[tokio::test]
-async fn test_command_timeout_error_message() {
+async fn test_request_timeout_error_message() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
@@ -70,7 +70,7 @@ async fn test_command_timeout_error_message() {
     
     let args = create_test_args();
     
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(args),
         Some(std::time::Duration::from_millis(50)),
@@ -103,11 +103,11 @@ async fn test_uuid_generation() {
     
     let args = create_test_args();
     
-    // Generate multiple commands to check UUID uniqueness
-    let mut command_ids: Vec<String> = Vec::new();
+    // Generate multiple requests to check UUID uniqueness
+    let mut request_ids: Vec<String> = Vec::new();
     
     for _ in 0..10 {
-        match client.send_command(
+        match client.send_request(
             "echo",
             Some(args.clone()),
             Some(std::time::Duration::from_millis(10)),
@@ -116,9 +116,9 @@ async fn test_uuid_generation() {
                 // Server errors (timeout/connection) - validate if timeout with ID info
                 if let Some(data) = &err.data {
                     if let Some(details) = &data.details {
-                        if details.contains("command_id") {
+                        if details.contains("request_id") {
                             // Extract and validate UUID from error details if present
-                            println!("Timeout with command ID details: {}", details);
+                            println!("Timeout with request ID details: {}", details);
                         }
                     }
                 }
@@ -130,11 +130,11 @@ async fn test_uuid_generation() {
         }
     }
     
-    println!("Generated {} unique command IDs", command_ids.len());
+    println!("Generated {} unique request IDs", request_ids.len());
 }
 
 #[tokio::test]
-async fn test_multiple_commands_with_different_timeouts() {
+async fn test_multiple_requests_with_different_timeouts() {
     let _manifest = load_test_manifest();
     let config = create_test_config();
     let socket_path = create_valid_socket_path();
@@ -156,7 +156,7 @@ async fn test_multiple_commands_with_different_timeouts() {
     
     for (i, timeout) in timeouts.iter().enumerate() {
         let (result, elapsed_time) = measure_time(
-            client.send_command(
+            client.send_request(
                 "echo",
                 Some(args.clone()),
                 Some(*timeout),
@@ -181,8 +181,8 @@ async fn test_multiple_commands_with_different_timeouts() {
 }
 
 #[tokio::test]
-async fn test_socket_command_timeout_field() {
-    let command_with_timeout = JanusCommand::new(
+async fn test_socket_request_timeout_field() {
+    let request_with_timeout = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some(create_test_args()),
@@ -190,11 +190,11 @@ async fn test_socket_command_timeout_field() {
     );
     
     // Serialize and verify timeout field
-    let json = serde_json::to_string(&command_with_timeout).unwrap();
+    let json = serde_json::to_string(&request_with_timeout).unwrap();
     assert!(json.contains("\"timeout\":30.5"), "JSON should contain timeout field");
     
     // Deserialize and verify
-    let deserialized: JanusCommand = serde_json::from_str(&json).unwrap();
+    let deserialized: JanusRequest = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.timeout, Some(30.5));
     
     // Test timeout duration conversion
@@ -203,8 +203,8 @@ async fn test_socket_command_timeout_field() {
 }
 
 #[tokio::test]
-async fn test_socket_command_without_timeout() {
-    let command_without_timeout = JanusCommand::new(
+async fn test_socket_request_without_timeout() {
+    let request_without_timeout = JanusRequest::new(
         "test".to_string(),
         "echo".to_string(),
         Some(create_test_args()),
@@ -212,11 +212,11 @@ async fn test_socket_command_without_timeout() {
     );
     
     // Serialize and verify no timeout field
-    let json = serde_json::to_string(&command_without_timeout).unwrap();
+    let json = serde_json::to_string(&request_without_timeout).unwrap();
     assert!(json.contains("\"timeout\":null") || !json.contains("\"timeout\""));
     
     // Deserialize and verify
-    let deserialized: JanusCommand = serde_json::from_str(&json).unwrap();
+    let deserialized: JanusRequest = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.timeout, None);
     
     // Test timeout duration conversion
@@ -241,7 +241,7 @@ async fn test_default_timeout() {
     // Test with default 30-second timeout (should be longer than our test)
     let start_time = std::time::Instant::now();
     
-    let result = client.send_command(
+    let result = client.send_request(
         "echo",
         Some(args),
         Some(std::time::Duration::from_secs(30)), // Default timeout
@@ -291,7 +291,7 @@ async fn test_concurrent_timeouts() {
             
             let result = {
                 let mut client = client_clone.lock().await;
-                client.send_command(
+                client.send_request(
                     "echo",
                     Some(args),
                     Some(std::time::Duration::from_millis(100)),
@@ -321,13 +321,13 @@ async fn test_concurrent_timeouts() {
 }
 
 #[tokio::test]
-async fn test_command_handler_timeout_error() {
+async fn test_request_handler_timeout_error() {
     // Test JSONRPCError::HandlerTimeout structure
     use crate::error::jsonrpc_error::{JSONRPCError, JSONRPCErrorCode, JSONRPCErrorData};
     use std::collections::HashMap;
     
     let mut data = HashMap::new();
-    data.insert("command_id".to_string(), serde_json::Value::String("echo-123".to_string()));
+    data.insert("request_id".to_string(), serde_json::Value::String("echo-123".to_string()));
     data.insert("timeout_seconds".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(5.0).unwrap()));
     
     let handler_timeout_error = JSONRPCError::with_context(

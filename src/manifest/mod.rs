@@ -7,8 +7,8 @@ pub mod response_validator;
 pub use manifest_parser::ManifestParser;
 pub use validation_engine::ValidationEngine;
 pub use model_registry::{
-    Manifest, ChannelSpec, CommandSpec, ArgumentSpec, 
-    ValidationSpec, ResponseSpec, ErrorCodeSpec, ModelSpec
+    Manifest, RequestManifest, ArgumentManifest, 
+    ValidationManifest, ResponseManifest, ErrorCodeManifest, ModelManifest
 };
 pub use argument_validator::ArgumentValidator;
 pub use response_validator::{ResponseValidator, ValidationResult, ValidationError};

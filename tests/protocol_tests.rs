@@ -8,27 +8,25 @@ use test_utils::*;
 
 #[tokio::test]
 async fn test_datagram_message_structure() {
-    // Test JanusCommand serialization for SOCK_DGRAM
-    let socket_command = JanusCommand {
-        id: "test-id".to_string(),
-        channelId: "test".to_string(),
-        command: "echo".to_string(),
-        reply_to: Some("/tmp/response.sock".to_string()),
-        args: Some(create_test_args()),
-        timeout: Some(30.0),
-        timestamp: 1672531200.0, // 2023-01-01 00:00:00 UTC
-    };
+    // Test JanusRequest serialization for SOCK_DGRAM (PRIME DIRECTIVE format)
+    let socket_request = JanusRequest::new(
+        "echo".to_string(),
+        Some(create_test_args()),
+        Some(30.0),
+    ).with_reply_to("/tmp/response.sock".to_string());
     
     // Test JSON serialization
-    let json_str = serde_json::to_string(&socket_command).unwrap();
-    assert!(json_str.contains("test-id"));
-    assert!(json_str.contains("test"));
+    let json_str = serde_json::to_string(&socket_request).unwrap();
+    assert!(json_str.contains(&socket_request.id)); // Use actual generated id
+    assert!(json_str.contains("\"request\":\"echo\""));
+    assert!(json_str.contains("\"method\":\"echo\""));  // PRIME DIRECTIVE: method field
     assert!(json_str.contains("reply_to"));
     
     // Test deserialization
-    let deserialized: JanusCommand = serde_json::from_str(&json_str).unwrap();
-    assert_eq!(deserialized.id, "test-id");
-    assert_eq!(deserialized.channelId, "test");
+    let deserialized: JanusRequest = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(deserialized.id, socket_request.id);
+    assert_eq!(deserialized.method, "echo");  // PRIME DIRECTIVE: method field
+    assert_eq!(deserialized.request, "echo");
     assert_eq!(deserialized.reply_to, Some("/tmp/response.sock".to_string()));
 }
 
@@ -44,17 +42,13 @@ async fn test_datagram_size_validation() {
     ];
     
     for (name, args) in test_cases {
-        let socket_command = JanusCommand {
-            id: "test-id".to_string(),
-            channelId: "test".to_string(),
-            command: "echo".to_string(),
-            reply_to: Some("/tmp/response.sock".to_string()),
-            args: Some(args),
-            timeout: Some(30.0),
-            timestamp: 1672531200.0, // 2023-01-01 00:00:00 UTC
-        };
+        let socket_request = JanusRequest::new(
+            "echo".to_string(),
+            Some(args),
+            Some(30.0),
+        ).with_reply_to("/tmp/response.sock".to_string());
         
-        let json_str = serde_json::to_string(&socket_command).unwrap();
+        let json_str = serde_json::to_string(&socket_request).unwrap();
         let datagram_size = json_str.len();
         
         // SOCK_DGRAM has practical size limits (typically 64KB for Unix domain sockets)
@@ -68,11 +62,11 @@ async fn test_datagram_size_validation() {
 
 #[tokio::test]
 async fn test_datagram_json_validation() {
-    // Test valid SOCK_DGRAM command
-    let valid_command = JanusCommand {
+    // Test valid SOCK_DGRAM request
+    let valid_request = JanusRequest {
         id: "test-id".to_string(),
         channelId: "test".to_string(),
-        command: "echo".to_string(),
+        request: "echo".to_string(),
         reply_to: Some("/tmp/response.sock".to_string()),
         args: Some(create_test_args()),
         timeout: Some(30.0),
@@ -80,10 +74,10 @@ async fn test_datagram_json_validation() {
     };
     
     // Test JSON serialization/deserialization
-    let json_str = serde_json::to_string(&valid_command).unwrap();
-    let deserialized: JanusCommand = serde_json::from_str(&json_str).unwrap();
-    assert_eq!(deserialized.id, valid_command.id);
-    assert_eq!(deserialized.channelId, valid_command.channelId);
+    let json_str = serde_json::to_string(&valid_request).unwrap();
+    let deserialized: JanusRequest = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(deserialized.id, valid_request.id);
+    assert_eq!(deserialized.channelId, valid_request.channelId);
     
     // Test malformed JSON patterns
     let malformed_json_patterns = vec![
@@ -93,7 +87,7 @@ async fn test_datagram_json_validation() {
     ];
     
     for (i, malformed_json) in malformed_json_patterns.iter().enumerate() {
-        let result: std::result::Result<JanusCommand, _> = serde_json::from_str(malformed_json);
+        let result: std::result::Result<JanusRequest, _> = serde_json::from_str(malformed_json);
         assert!(result.is_err(), "Malformed JSON {} should fail deserialization", i);
     }
 }
@@ -102,7 +96,7 @@ async fn test_datagram_json_validation() {
 async fn test_socket_response_structure() {
     // Test JanusResponse for SOCK_DGRAM
     let socket_response = JanusResponse {
-        commandId: "cmd-123".to_string(),
+        requestId: "cmd-123".to_string(),
         channelId: "test".to_string(),
         success: true,
         result: Some(serde_json::Value::Object({
@@ -122,7 +116,7 @@ async fn test_socket_response_structure() {
     
     // Test deserialization
     let deserialized: JanusResponse = serde_json::from_str(&json_str).unwrap();
-    assert_eq!(deserialized.commandId, "cmd-123");
+    assert_eq!(deserialized.requestId, "cmd-123");
     assert_eq!(deserialized.channelId, "test");
     assert_eq!(deserialized.success, true);
 }
@@ -137,10 +131,10 @@ async fn test_timestamp_values() {
     ];
     
     for timestamp in timestamps {
-        let command = JanusCommand {
+        let request = JanusRequest {
             id: "test-id".to_string(),
             channelId: "test".to_string(),
-            command: "echo".to_string(),
+            request: "echo".to_string(),
             reply_to: None,
             args: None,
             timeout: Some(30.0),
@@ -148,8 +142,8 @@ async fn test_timestamp_values() {
         };
         
         // Should serialize and deserialize successfully
-        let json_str = serde_json::to_string(&command).unwrap();
-        let deserialized: JanusCommand = serde_json::from_str(&json_str).unwrap();
+        let json_str = serde_json::to_string(&request).unwrap();
+        let deserialized: JanusRequest = serde_json::from_str(&json_str).unwrap();
         assert_eq!(deserialized.timestamp, timestamp);
     }
 }

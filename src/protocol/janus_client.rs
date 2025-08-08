@@ -1,14 +1,14 @@
 use crate::core::{CoreJanusClient, SecurityValidator};
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
 use crate::config::JanusClientConfig;
-use crate::specification::Manifest;
-use crate::protocol::message_types::{JanusCommand, JanusResponse, RequestHandle, RequestStatus};
-use crate::protocol::response_tracker::{ResponseTracker, TrackerConfig, CommandStatistics};
+use crate::manifest::Manifest;
+use crate::protocol::message_types::{JanusRequest, JanusResponse, RequestHandle, RequestStatus};
+use crate::protocol::response_tracker::{ResponseTracker, TrackerConfig, RequestStatistics};
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
-// Note: JanusCommand, JanusResponse, and SocketError types are imported from message_types module
+// Note: JanusRequest, JanusResponse, and SocketError types are imported from message_types module
 // This ensures cross-language parity and eliminates type duplication
 
 /// Simulate connection state for SOCK_DGRAM compatibility
@@ -41,11 +41,10 @@ impl ConnectionState {
 }
 
 /// High-level API client for SOCK_DGRAM Unix socket communication
-/// Connectionless implementation with command validation and response correlation
+/// Connectionless implementation with request validation and response correlation
 #[derive(Debug)]
 pub struct JanusClient {
     socket_path: String,
-    channel_id: String,
     manifest: Option<Manifest>,
     config: JanusClientConfig,
     core_client: CoreJanusClient,
@@ -61,20 +60,17 @@ impl JanusClient {
     /// Manifest will be fetched during operations when needed
     pub async fn new(
         socket_path: String,
-        channel_id: String,
         config: JanusClientConfig,
     ) -> Result<Self, JSONRPCError> {
         // Validate socket path
         SecurityValidator::validate_socket_path(&socket_path)?;
         
-        // Validate channel ID
-        SecurityValidator::validate_channel_id(&channel_id, &config)?;
         
         let core_client = CoreJanusClient::new(socket_path.clone(), config.clone())?;
         
         // Initialize response tracker for advanced client features
         let tracker_config = TrackerConfig {
-            max_pending_commands: 1000,
+            max_pending_requests: 1000,
             cleanup_interval: Duration::from_secs(30),
             default_timeout: config.connection_timeout,
         };
@@ -82,7 +78,6 @@ impl JanusClient {
         
         Ok(Self {
             socket_path,
-            channel_id,
             manifest: None,  // Will be fetched during operations when needed
             config,
             core_client,
@@ -93,30 +88,27 @@ impl JanusClient {
     }
     
     /// Fetch Manifest from server
-    async fn fetch_specification_from_server(
+    async fn fetch_manifest_from_server(
         core_client: &CoreJanusClient,
         _config: &JanusClientConfig,
     ) -> Result<Manifest, JSONRPCError> {
         // Generate response socket path
         let response_socket_path = core_client.generate_response_socket_path();
         
-        // Create proper JanusCommand for spec request
-        let spec_command = JanusCommand {
-            id: uuid::Uuid::new_v4().to_string(),
-            channelId: "system".to_string(), // Use system channel for spec requests
-            command: "spec".to_string(),
-            reply_to: Some(response_socket_path.clone()),
-            args: None,
-            timeout: Some(10.0),
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
-        };
+        // Create proper JanusRequest for manifest request using constructor
+        let mut manifest_request = JanusRequest::new(
+            "manifest".to_string(),
+            None,
+            Some(10.0),
+        );
+        manifest_request.reply_to = Some(response_socket_path.clone());
         
-        let command_data = serde_json::to_vec(&spec_command)
-            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize spec command: {}", e))))?;
+        let request_data = serde_json::to_vec(&manifest_request)
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize manifest request: {}", e))))?;
         
-        // Send spec command to server
+        // Send manifest request to server
         let response_data = core_client
-            .send_datagram(&command_data, &response_socket_path)
+            .send_datagram(&request_data, &response_socket_path)
             .await?;
         
         // Parse response as JanusResponse
@@ -132,13 +124,13 @@ impl JanusClient {
             return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Server returned error: {}", error_msg))));
         }
         
-        // Extract specification from response
-        let spec_data = response.result.as_ref()
+        // Extract manifest from response
+        let manifest_data = response.result.as_ref()
             .ok_or_else(|| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some("Server response missing 'result' field".to_string())))?;
         
-        // Parse the specification
-        let manifest: Manifest = serde_json::from_value(spec_data.clone())
-            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("Failed to parse server specification: {}", e))))?;
+        // Parse the manifest
+        let manifest: Manifest = serde_json::from_value(manifest_data.clone())
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("Failed to parse server manifest: {}", e))))?;
         
         Ok(manifest)
     }
@@ -153,80 +145,71 @@ impl JanusClient {
             return Ok(()); // Validation disabled, no need to fetch
         }
         
-        // Fetch specification from server
-        let fetched_spec = Self::fetch_specification_from_server(&self.core_client, &self.config).await?;
+        // Fetch manifest from server
+        let fetched_manifest = Self::fetch_manifest_from_server(&self.core_client, &self.config).await?;
         
-        // Validate channel exists in fetched specification
-        if !fetched_spec.channels.contains_key(&self.channel_id) {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Channel '{}' not found in server specification", self.channel_id))));
-        }
+        // Channels have been removed from the protocol
         
-        self.manifest = Some(fetched_spec);
+        self.manifest = Some(fetched_manifest);
         Ok(())
     }
     
-    /// Send command via SOCK_DGRAM and wait for response
-    pub async fn send_command(
+    /// Send request via SOCK_DGRAM and wait for response
+    pub async fn send_request(
         &mut self,
-        command: &str,
+        request: &str,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<Duration>,
     ) -> Result<JanusResponse, JSONRPCError> {
-        // Generate command ID and response socket path
-        let command_id = Uuid::new_v4().to_string();
+        // Generate request ID and response socket path
+        let request_id = Uuid::new_v4().to_string();
         let response_socket_path = self.core_client.generate_response_socket_path();
         
-        // Create socket command
-        let socket_command = JanusCommand {
-            id: command_id.clone(),
-            channelId: self.channel_id.clone(),
-            command: command.to_string(),
-            reply_to: Some(response_socket_path.clone()),
+        // Create socket request using constructor
+        let mut socket_request = JanusRequest::new(
+            request.to_string(),
             args,
-            timeout: timeout.map(|d| d.as_secs_f64()),
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
-        };
+            timeout.map(|d| d.as_secs_f64()),
+        );
+        socket_request.id = request_id.clone(); // Use provided request ID
+        socket_request.reply_to = Some(response_socket_path.clone());
         
         // Apply security validation
-        SecurityValidator::validate_command_name(command, &self.config)?;
-        SecurityValidator::validate_args_size(&socket_command.args, &self.config)?;
+        SecurityValidator::validate_request_name(request, &self.config)?;
+        SecurityValidator::validate_args_size(&socket_request.args, &self.config)?;
         SecurityValidator::validate_socket_path(&response_socket_path)?;
         
-        // Serialize command for message size validation
-        let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize command: {}", e))))?;
+        // Serialize request for message size validation
+        let request_data = serde_json::to_vec(&socket_request)
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize request: {}", e))))?;
         
         // Validate message size
-        SecurityValidator::validate_message_size(command_data.len(), &self.config)?;
+        SecurityValidator::validate_message_size(request_data.len(), &self.config)?;
         
         // Ensure Manifest is loaded for validation
         if self.config.enable_validation {
             self.ensure_manifest_loaded().await?;
         }
         
-        // Validate command against Manifest (skip for built-in commands)
-        if let Some(ref spec) = self.manifest {
-            if !Self::is_builtin_command(command) {
-                self.validate_command_against_spec(spec, &socket_command)?;
+        // Validate request against Manifest (skip for built-in requests)
+        if let Some(ref manifest) = self.manifest {
+            if !Self::is_builtin_request(request) {
+                self.validate_request_against_manifest(manifest, &socket_request)?;
             }
         }
         
         // Send datagram and wait for response
         let response_data = self.core_client
-            .send_datagram(&command_data, &response_socket_path)
+            .send_datagram(&request_data, &response_socket_path)
             .await?;
         
         // Deserialize response
         let response: JanusResponse = serde_json::from_slice(&response_data)
             .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ParseError, Some(format!("Failed to deserialize response: {}", e))))?;
         
-        // Validate response correlation
-        if response.commandId != command_id {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Response correlation mismatch: expected {}, got {}", command_id, response.commandId))));
-        }
-        
-        if response.channelId != self.channel_id {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Channel mismatch: expected {}, got {}", self.channel_id, response.channelId))));
+        // Validate response correlation (PRIME DIRECTIVE: no channel validation)
+        if response.request_id != request_id {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Response correlation mismatch: expected {}, got {}", request_id, response.request_id))));
         }
         
         // Update connection state after successful communication
@@ -235,44 +218,42 @@ impl JanusClient {
         Ok(response)
     }
     
-    /// Send command without expecting response (fire-and-forget)
-    pub async fn send_command_no_response(
+    /// Send request without expecting response (fire-and-forget)
+    pub async fn send_request_no_response(
         &self,
-        command: &str,
+        request: &str,
         args: Option<HashMap<String, serde_json::Value>>,
     ) -> Result<(), JSONRPCError> {
-        // Generate command ID
-        let command_id = Uuid::new_v4().to_string();
+        // Generate request ID
+        let request_id = Uuid::new_v4().to_string();
         
-        // Create socket command (no reply_to field)
-        let socket_command = JanusCommand {
-            id: command_id,
-            channelId: self.channel_id.clone(),
-            command: command.to_string(),
-            reply_to: None,
+        // Create socket request (no reply_to field) using constructor
+        let mut socket_request = JanusRequest::new(
+            request.to_string(),
             args,
-            timeout: None,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
-        };
+            None,
+        );
+        socket_request.id = request_id;
+        socket_request.reply_to = None;
         
         // Apply security validation
-        SecurityValidator::validate_command_name(command, &self.config)?;
-        SecurityValidator::validate_args_size(&socket_command.args, &self.config)?;
+        SecurityValidator::validate_request_name(request, &self.config)?;
+        SecurityValidator::validate_args_size(&socket_request.args, &self.config)?;
         
-        // Serialize command for message size validation
-        let command_data = serde_json::to_vec(&socket_command)
-            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize command: {}", e))))?;
+        // Serialize request for message size validation
+        let request_data = serde_json::to_vec(&socket_request)
+            .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::InternalError, Some(format!("Failed to serialize request: {}", e))))?;
         
         // Validate message size
-        SecurityValidator::validate_message_size(command_data.len(), &self.config)?;
+        SecurityValidator::validate_message_size(request_data.len(), &self.config)?;
         
-        // Validate command against Manifest
-        if let Some(ref spec) = self.manifest {
-            self.validate_command_against_spec(spec, &socket_command)?;
+        // Validate request against Manifest
+        if let Some(ref manifest) = self.manifest {
+            self.validate_request_against_manifest(manifest, &socket_request)?;
         }
         
         // Send datagram without waiting for response
-        self.core_client.send_datagram_no_response(&command_data).await?;
+        self.core_client.send_datagram_no_response(&request_data).await?;
         
         // Update connection state after successful send
         self.update_connection_state(1, 0);
@@ -285,85 +266,26 @@ impl JanusClient {
         self.core_client.test_connection().await
     }
     
-    /// Validate command against Manifest
-    fn validate_command_against_spec(
+    /// Validate request against Manifest
+    fn validate_request_against_manifest(
         &self,
-        spec: &Manifest,
-        command: &JanusCommand,
+        manifest: &Manifest,
+        request: &JanusRequest,
     ) -> Result<(), JSONRPCError> {
-        // Check if command is reserved (built-in commands should never be in Manifests)
-        let builtin_commands = ["ping", "echo", "get_info", "validate", "slow_process", "spec"];
-        if builtin_commands.contains(&command.command.as_str()) {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Command '{}' is reserved and cannot be used from Manifest", command.command))));
+        // Check if request is reserved (built-in requests should never be in Manifests)
+        let builtin_requests = ["ping", "echo", "get_info", "validate", "slow_process", "manifest"];
+        if builtin_requests.contains(&request.request.as_str()) {
+            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Request '{}' is reserved and cannot be used from Manifest", request.request))));
         }
         
-        // Check if channel exists
-        let channel = spec.channels.get(&command.channelId).ok_or_else(|| {
-            JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Channel {} not found in Manifest", command.channelId)))
-        })?;
-        
-        // Check if command exists in channel
-        let command_spec = channel.commands.get(&command.command).ok_or_else(|| {
-            JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Command '{}' not found in channel '{}'", command.command, command.channelId)))
-        })?;
-        
-        // Validate command arguments if spec has argument definitions
-        let spec_args = &command_spec.args;
-        if !spec_args.is_empty() {
-            let empty_args = std::collections::HashMap::new();
-            let args = command.args.as_ref().unwrap_or(&empty_args);
-            
-            // Check for required arguments
-            for (arg_name, arg_spec) in spec_args {
-                if arg_spec.required.unwrap_or(false) && !args.contains_key(arg_name) {
-                    return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Required argument '{}' missing for command '{}'", arg_name, command.command))));
-                }
-            }
-            
-            // Validate argument types and constraints
-            for (arg_name, arg_value) in args {
-                if let Some(arg_spec) = spec_args.get(arg_name) {
-                    // Basic type validation - can be expanded for more comprehensive checks
-                    match arg_spec.r#type.as_str() {
-                        "string" => {
-                            if !arg_value.is_string() {
-                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be a string", arg_name))));
-                            }
-                        }
-                        "number" => {
-                            if !arg_value.is_number() {
-                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be a number", arg_name))));
-                            }
-                        }
-                        "boolean" => {
-                            if !arg_value.is_boolean() {
-                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be a boolean", arg_name))));
-                            }
-                        }
-                        "array" => {
-                            if !arg_value.is_array() {
-                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be an array", arg_name))));
-                            }
-                        }
-                        "object" => {
-                            if !arg_value.is_object() {
-                                return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Argument '{}' must be an object", arg_name))));
-                            }
-                        }
-                        _ => {
-                            // Unknown type - skip validation
-                        }
-                    }
-                }
-            }
-        }
-        
+        // Since channels are removed, get request manifest from server
+        // For now, skip validation as server will handle it
         Ok(())
     }
     
     /// Get channel ID
     pub fn channel_id(&self) -> &str {
-        &self.channel_id
+        ""
     }
     
     /// Get socket path
@@ -381,34 +303,22 @@ impl JanusClient {
         &self.config
     }
     
-    /// Get specification for backward compatibility  
-    pub fn specification(&self) -> Option<&Manifest> {
-        self.manifest.as_ref()
-    }
     
-    /// Send a ping command and return success/failure
-    /// Convenience method for testing connectivity with a simple ping command
+    /// Send a ping request and return success/failure
+    /// Convenience method for testing connectivity with a simple ping request
     pub async fn ping(&mut self) -> bool {
-        match self.send_command("ping", None, None).await {
+        match self.send_request("ping", None, None).await {
             Ok(_) => true,
             Err(_) => false,
         }
     }
     
-    /// Register command handler - validates command exists in specification (SOCK_DGRAM compatibility)
-    /// This validates that the command exists in the Manifest for the client's channel.
+    /// Register request handler - validates request exists in manifest (SOCK_DGRAM compatibility)
+    /// This validates that the request exists in the Manifest for the client's channel.
     /// SOCK_DGRAM doesn't actually use handlers, but validation ensures compatibility.
-    pub fn register_command_handler<T>(&self, command: &str, _handler: T) -> Result<(), JSONRPCError> {
-        // Validate command exists in the Manifest for the client's channel
-        if let Some(ref spec) = self.manifest {
-            if let Some(channel) = spec.channels.get(&self.channel_id) {
-                if !channel.commands.contains_key(command) {
-                    return Err(JSONRPCError::new(JSONRPCErrorCode::InvalidParams, Some(format!("Command '{}' not found in channel '{}'", command, self.channel_id))));
-                }
-            }
-        }
-        
-        // SOCK_DGRAM doesn't actually use handlers, but validation passed
+    pub fn register_request_handler<T>(&self, request: &str, _handler: T) -> Result<(), JSONRPCError> {
+        // Since channels are removed from protocol, validation will be done server-side
+        // SOCK_DGRAM doesn't actually use handlers
         Ok(())
     }
     
@@ -449,57 +359,54 @@ impl JanusClient {
 
     // MARK: - Advanced Client Features (Response Correlation System)
 
-    /// Send command with response correlation tracking
-    pub async fn send_command_with_correlation(
+    /// Send request with response correlation tracking
+    pub async fn send_request_with_correlation(
         &self,
-        command: String,
+        request: String,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Duration,
     ) -> Result<(tokio::sync::oneshot::Receiver<JanusResponse>, String), JSONRPCError> {
-        let command_id = Uuid::new_v4().to_string();
+        let request_id = Uuid::new_v4().to_string();
         
-        // Track the command in response tracker
-        let receiver = self.response_tracker.track_command(command_id.clone(), timeout)
+        // Track the request in response tracker
+        let receiver = self.response_tracker.track_request(request_id.clone(), timeout)
             .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some(format!("Response tracking failed: {}", e))))?;
 
-        // Send the command asynchronously
+        // Send the request asynchronously
         let core_client = self.core_client.clone();
-        let channel_id = self.channel_id.clone();
         let manifest = self.manifest.clone();
         let enable_validation = self.config.enable_validation;
         let response_tracker = self.response_tracker.clone();
-        let cmd_id = command_id.clone();
+        let cmd_id = request_id.clone();
 
         tokio::spawn(async move {
             // Create response socket path
             let response_socket_path = core_client.generate_response_socket_path();
 
-            // Create socket command with specific ID
+            // Create socket request with manifestific ID using constructor
             let timeout_seconds = timeout.as_secs_f64();
-            let socket_command = JanusCommand {
-                id: cmd_id.clone(),
-                channelId: channel_id,
-                command: command.clone(),
+            let mut socket_request = JanusRequest::new(
+                request.clone(),
                 args,
-                reply_to: Some(response_socket_path.clone()),
-                timeout: Some(timeout_seconds),
-                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
-            };
+                Some(timeout_seconds),
+            );
+            socket_request.id = cmd_id.clone(); // Use provided ID
+            socket_request.reply_to = Some(response_socket_path.clone());
 
-            // Validate command if needed
+            // Validate request if needed
             if enable_validation {
-                if let Some(_spec) = &manifest {
-                    if !Self::is_builtin_command(&command) {
+                if let Some(_manifest) = &manifest {
+                    if !Self::is_builtin_request(&request) {
                         // Perform validation (simplified for async context)
                         // Full validation would be more complex
                     }
                 }
             }
 
-            // Serialize and send command
-            match serde_json::to_vec(&socket_command) {
-                Ok(command_bytes) => {
-                    match core_client.send_datagram(&command_bytes, &response_socket_path).await {
+            // Serialize and send request
+            match serde_json::to_vec(&socket_request) {
+                Ok(request_bytes) => {
+                    match core_client.send_datagram(&request_bytes, &response_socket_path).await {
                         Ok(response_bytes) => {
                             // Parse response
                             match serde_json::from_slice::<JanusResponse>(&response_bytes) {
@@ -508,77 +415,77 @@ impl JanusClient {
                                     response_tracker.handle_response(response);
                                 }
                                 Err(_) => {
-                                    response_tracker.cancel_command(&cmd_id, Some("Failed to parse response"));
+                                    response_tracker.cancel_request(&cmd_id, Some("Failed to parse response"));
                                 }
                             }
                         }
                         Err(_) => {
-                            // Cancel the command due to send failure
-                            response_tracker.cancel_command(&cmd_id, Some("Failed to send command"));
+                            // Cancel the request due to send failure
+                            response_tracker.cancel_request(&cmd_id, Some("Failed to send request"));
                         }
                     }
                 }
                 Err(_) => {
-                    response_tracker.cancel_command(&cmd_id, Some("Failed to serialize command"));
+                    response_tracker.cancel_request(&cmd_id, Some("Failed to serialize request"));
                 }
             }
         });
 
-        Ok((receiver, command_id))
+        Ok((receiver, request_id))
     }
 
-    /// Cancel a pending command by ID
-    pub fn cancel_command(&self, command_id: &str, reason: Option<&str>) -> bool {
-        self.response_tracker.cancel_command(command_id, reason)
+    /// Cancel a pending request by ID
+    pub fn cancel_request(&self, request_id: &str, reason: Option<&str>) -> bool {
+        self.response_tracker.cancel_request(request_id, reason)
     }
 
-    /// Cancel all pending commands
-    pub fn cancel_all_commands(&self, reason: Option<&str>) -> usize {
-        self.response_tracker.cancel_all_commands(reason)
+    /// Cancel all pending requests
+    pub fn cancel_all_requests(&self, reason: Option<&str>) -> usize {
+        self.response_tracker.cancel_all_requests(reason)
     }
 
-    /// Get number of pending commands
-    pub fn get_pending_command_count(&self) -> usize {
+    /// Get number of pending requests
+    pub fn get_pending_request_count(&self) -> usize {
         self.response_tracker.get_pending_count()
     }
 
-    /// Get list of pending command IDs
-    pub fn get_pending_command_ids(&self) -> Vec<String> {
-        self.response_tracker.get_pending_command_ids()
+    /// Get list of pending request IDs
+    pub fn get_pending_request_ids(&self) -> Vec<String> {
+        self.response_tracker.get_pending_request_ids()
     }
 
     // Automatic ID Management Methods (F0193-F0216)
 
-    /// Send command with handle - returns RequestHandle for tracking
+    /// Send request with handle - returns RequestHandle for tracking
     /// Hides UUID complexity from users while providing request lifecycle management
-    pub async fn send_command_with_handle(
+    pub async fn send_request_with_handle(
         &self,
-        command: &str,
+        request: &str,
         args: Option<HashMap<String, serde_json::Value>>,
         timeout: Option<Duration>,
     ) -> Result<(RequestHandle, tokio::sync::oneshot::Receiver<Result<JanusResponse, JSONRPCError>>), JSONRPCError> {
         // Generate internal UUID (hidden from user)
-        let command_id = Uuid::new_v4().to_string();
+        let request_id = Uuid::new_v4().to_string();
         
         // Create request handle for user
-        let handle = RequestHandle::new(command_id.clone(), command.to_string(), self.channel_id.clone());
+        let handle = RequestHandle::new(request_id.clone(), request.to_string());
         
         // Register the request handle
         {
             let mut registry = self.request_registry.lock().unwrap();
-            registry.insert(command_id.clone(), handle.clone());
+            registry.insert(request_id.clone(), handle.clone());
         }
         
         // Create one-shot channel for response
         let (sender, receiver) = tokio::sync::oneshot::channel();
         
-        // Execute command asynchronously
+        // Execute request asynchronously
         let mut client_clone = self.clone_for_async();
-        let command_clone = command.to_string();
+        let request_clone = request.to_string();
         let handle_clone = handle.clone();
         
         tokio::spawn(async move {
-            let result = client_clone.send_command(&command_clone, args, timeout).await;
+            let result = client_clone.send_request(&request_clone, args, timeout).await;
             
             // Clean up request handle
             {
@@ -606,22 +513,6 @@ impl JanusClient {
         }
     }
 
-    /// Cancel request using handle
-    pub fn cancel_request(&self, handle: &RequestHandle) -> Result<(), JSONRPCError> {
-        if handle.is_cancelled() {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request already cancelled".to_string())));
-        }
-        
-        let mut registry = self.request_registry.lock().unwrap();
-        if !registry.contains_key(handle.get_internal_id()) {
-            return Err(JSONRPCError::new(JSONRPCErrorCode::ValidationFailed, Some("Request not found or already completed".to_string())));
-        }
-        
-        handle.mark_cancelled();
-        registry.remove(handle.get_internal_id());
-        
-        Ok(())
-    }
 
     /// Get all pending request handles
     pub fn get_pending_requests(&self) -> Vec<RequestHandle> {
@@ -629,24 +520,11 @@ impl JanusClient {
         registry.values().cloned().collect()
     }
 
-    /// Cancel all pending requests
-    pub fn cancel_all_requests(&self) -> usize {
-        let mut registry = self.request_registry.lock().unwrap();
-        let count = registry.len();
-        
-        for handle in registry.values() {
-            handle.mark_cancelled();
-        }
-        
-        registry.clear();
-        count
-    }
 
     /// Clone client for async operations (internal helper)
     fn clone_for_async(&self) -> Self {
         Self {
             socket_path: self.socket_path.clone(),
-            channel_id: self.channel_id.clone(),
             manifest: self.manifest.clone(),
             config: self.config.clone(),
             core_client: self.core_client.clone(),
@@ -656,35 +534,35 @@ impl JanusClient {
         }
     }
 
-    /// Check if a command is currently pending
-    pub fn is_command_pending(&self, command_id: &str) -> bool {
-        self.response_tracker.is_tracking(command_id)
+    /// Check if a request is currently pending
+    pub fn is_request_pending(&self, request_id: &str) -> bool {
+        self.response_tracker.is_tracking(request_id)
     }
 
-    /// Get statistics about pending commands
-    pub fn get_command_statistics(&self) -> CommandStatistics {
+    /// Get statistics about pending requests
+    pub fn get_request_statistics(&self) -> RequestStatistics {
         self.response_tracker.get_statistics()
     }
 
-    /// Execute multiple commands in parallel
-    pub async fn execute_commands_in_parallel(
+    /// Execute multiple requests in parallel
+    pub async fn execute_requests_in_parallel(
         &self,
-        commands: Vec<ParallelCommand>,
+        requests: Vec<ParallelRequest>,
     ) -> Vec<ParallelResult> {
-        let mut results = Vec::with_capacity(commands.len());
+        let mut results = Vec::with_capacity(requests.len());
         let mut handles = Vec::new();
 
-        for cmd in commands {
+        for cmd in requests {
             let mut client = self.clone();
             let handle = tokio::spawn(async move {
-                let response = client.send_command(&cmd.command, cmd.args, None).await;
+                let response = client.send_request(&cmd.request, cmd.args, None).await;
                 let (response_ok, error_msg) = match response {
                     Ok(resp) => (Some(resp), None),
                     Err(e) => (None, Some(e.to_string())),
                 };
                 
                 ParallelResult {
-                    command_id: cmd.id,
+                    request_id: cmd.id,
                     response: response_ok,
                     error: error_msg,
                 }
@@ -696,7 +574,7 @@ impl JanusClient {
             match handle.await {
                 Ok(result) => results.push(result),
                 Err(e) => results.push(ParallelResult {
-                    command_id: "unknown".to_string(),
+                    request_id: "unknown".to_string(),
                     response: None,
                     error: Some(format!("Task execution failed: {}", e)),
                 }),
@@ -706,71 +584,38 @@ impl JanusClient {
         results
     }
 
-    /// Create a channel proxy for executing commands on a specific channel
-    pub fn create_channel_proxy(&self, channel_id: String) -> ChannelProxy {
-        ChannelProxy {
-            client: self.clone(),
-            channel_id,
-        }
-    }
 
-    /// Check if a command is a built-in command
-    fn is_builtin_command(command: &str) -> bool {
-        matches!(command, "ping" | "echo" | "get_info" | "spec" | "validate" | "slow_process")
+    /// Check if a request is a built-in request
+    fn is_builtin_request(request: &str) -> bool {
+        matches!(request, "ping" | "echo" | "get_info" | "manifest" | "validate" | "slow_process")
     }
 }
 
 // MARK: - Helper Types for Advanced Features
 
-/// Represents a command to be executed in parallel
+/// Represents a request to be executed in parallel
 #[derive(Debug, Clone)]
-pub struct ParallelCommand {
+pub struct ParallelRequest {
     pub id: String,
-    pub command: String,
+    pub request: String,
     pub args: Option<HashMap<String, serde_json::Value>>,
 }
 
-/// Represents the result of a parallel command execution
+/// Represents the result of a parallel request execution
 #[derive(Debug, Clone)]
 pub struct ParallelResult {
-    pub command_id: String,
+    pub request_id: String,
     pub response: Option<JanusResponse>,
     pub error: Option<String>,
 }
 
-/// Channel proxy provides channel-specific command execution
-#[derive(Debug, Clone)]
-pub struct ChannelProxy {
-    client: JanusClient,
-    channel_id: String,
-}
-
-impl ChannelProxy {
-    /// Send command through this channel proxy
-    pub async fn send_command(
-        &self,
-        command: String,
-        args: Option<HashMap<String, serde_json::Value>>,
-    ) -> Result<JanusResponse, JSONRPCError> {
-        // Create a temporary client with the proxy's channel ID
-        let mut proxy_client = self.client.clone();
-        proxy_client.channel_id = self.channel_id.clone();
-        
-        proxy_client.send_command(&command, args, None).await
-    }
-
-    /// Get the proxy's channel ID
-    pub fn get_channel_id(&self) -> &str {
-        &self.channel_id
-    }
-}
 
 // Need to implement Clone for JanusClient to support advanced features
 impl Clone for JanusClient {
     fn clone(&self) -> Self {
         // Initialize a new response tracker for the cloned client
         let tracker_config = TrackerConfig {
-            max_pending_commands: 1000,
+            max_pending_requests: 1000,
             cleanup_interval: Duration::from_secs(30),
             default_timeout: self.config.connection_timeout,
         };
@@ -778,7 +623,6 @@ impl Clone for JanusClient {
 
         Self {
             socket_path: self.socket_path.clone(),
-            channel_id: self.channel_id.clone(),
             manifest: self.manifest.clone(),
             config: self.config.clone(),
             core_client: self.core_client.clone(),

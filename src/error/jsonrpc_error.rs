@@ -26,7 +26,7 @@ pub enum JSONRPCErrorCode {
     SecurityViolation = -32009,
     ResourceLimitExceeded = -32010,
 
-    // Janus Protocol-Specific Error Codes (-32011 to -32013)
+    // Janus Protocol-Manifestific Error Codes (-32011 to -32013)
     MessageFramingError = -32011,
     ResponseTrackingError = -32012,
     ManifestValidationError = -32013,
@@ -177,7 +177,7 @@ pub struct JSONRPCError {
 }
 
 impl JSONRPCError {
-    /// Creates a new JSON-RPC error with the specified code
+    /// Creates a new JSON-RPC error with the manifestified code
     pub fn new(code: JSONRPCErrorCode, details: Option<String>) -> Self {
         let data = details.map(JSONRPCErrorData::with_details);
         
@@ -206,7 +206,7 @@ impl JSONRPCError {
         }
     }
 
-    /// Creates a validation-specific JSON-RPC error
+    /// Creates a validation-manifestific JSON-RPC error
     pub fn validation_error<S: Into<String>>(
         field: S,
         value: serde_json::Value,
@@ -290,12 +290,12 @@ mod tests {
 
     #[test]
     fn test_jsonrpc_error_creation() {
-        let error = JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some("Command not found".to_string()));
+        let error = JSONRPCError::new(JSONRPCErrorCode::MethodNotFound, Some("Request not found".to_string()));
         
         assert_eq!(error.code, -32601);
         assert_eq!(error.message, "Method not found");
         assert!(error.data.is_some());
-        assert_eq!(error.data.unwrap().details, Some("Command not found".to_string()));
+        assert_eq!(error.data.unwrap().details, Some("Request not found".to_string()));
     }
 
     #[test]
@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_json_deserialization() {
-        let json = r#"{"code":-32601,"message":"Method not found","data":{"details":"Command 'test' not found"}}"#;
+        let json = r#"{"code":-32601,"message":"Method not found","data":{"details":"Request 'test' not found"}}"#;
         let error: JSONRPCError = serde_json::from_str(json).unwrap();
         
         assert_eq!(error.code, -32601);
@@ -342,6 +342,6 @@ mod tests {
         assert_eq!(error.error_code(), Some(JSONRPCErrorCode::MethodNotFound));
         
         let data = error.data.unwrap();
-        assert_eq!(data.details, Some("Command 'test' not found".to_string()));
+        assert_eq!(data.details, Some("Request 'test' not found".to_string()));
     }
 }

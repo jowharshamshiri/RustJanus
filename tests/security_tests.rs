@@ -125,10 +125,10 @@ async fn test_path_character_validation() {
     let invalid_char_paths = vec![
         "/tmp/test<script>.sock",
         "/tmp/test|pipe.sock", 
-        "/tmp/test;command.sock",
+        "/tmp/test;request.sock",
         "/tmp/test`backtick.sock",
         "/tmp/test$injection.sock",
-        "/tmp/test&command.sock",
+        "/tmp/test&request.sock",
     ];
     
     for invalid_path in invalid_char_paths {
@@ -206,10 +206,10 @@ async fn test_channel_id_pattern_validation() {
     let invalid_channels = vec![
         "channel<script>",
         "channel|pipe", 
-        "channel;command",
+        "channel;request",
         "channel`backtick",
         "channel$injection",
-        "channel&command",
+        "channel&request",
         "channel with spaces", // Spaces might be invalid
         "channel\ttab",
         "channel\nnewline",
@@ -222,10 +222,10 @@ async fn test_channel_id_pattern_validation() {
             JanusClientConfig::default(),
         ).await;
         
-        // Channel validation might be implementation-specific
+        // Channel validation might be implementation-manifestific
         if result.is_err() {
             let error_msg = result.unwrap_err().to_string();
-            // Just log the error, don't assert specific content as channel validation varies
+            // Just log the error, don't assert manifestific content as channel validation varies
             println!("Channel '{}' rejected with: {}", invalid_channel, error_msg);
         }
     }
@@ -257,9 +257,9 @@ async fn test_channel_id_utf8_validation() {
 }
 
 #[tokio::test]
-async fn test_command_name_length_limits() {
-    // Test with a client that we can send commands to
-    let test_socket = "/tmp/rust-security-command-test.sock";
+async fn test_request_name_length_limits() {
+    // Test with a client that we can send requests to
+    let test_socket = "/tmp/rust-security-request-test.sock";
     std::fs::remove_file(test_socket).ok(); // Clean up any existing socket
     
     let client_result = JanusClient::new(
@@ -269,27 +269,27 @@ async fn test_command_name_length_limits() {
     ).await;
     
     if let Ok(mut client) = client_result {
-        // Test very long command name
-        let long_command = "a".repeat(500);
+        // Test very long request name
+        let long_request = "a".repeat(500);
         let args = HashMap::new();
         
-        let result = client.send_command(&long_command, Some(args), None).await;
+        let result = client.send_request(&long_request, Some(args), None).await;
         
-        // Should reject long command names
-        assert!(result.is_err(), "Expected command length validation error");
+        // Should reject long request names
+        assert!(result.is_err(), "Expected request length validation error");
         
         let error_msg = result.unwrap_err().to_string();
         assert!(
             error_msg.contains("length") || error_msg.contains("too long") || 
-            error_msg.contains("command") || error_msg.contains("limit"),
-            "Expected command length error, got: {}", error_msg
+            error_msg.contains("request") || error_msg.contains("limit"),
+            "Expected request length error, got: {}", error_msg
         );
     }
 }
 
 #[tokio::test]
-async fn test_command_name_null_byte_detection() {
-    let test_socket = "/tmp/rust-security-null-command-test.sock";
+async fn test_request_name_null_byte_detection() {
+    let test_socket = "/tmp/rust-security-null-request-test.sock";
     std::fs::remove_file(test_socket).ok();
     
     let client_result = JanusClient::new(
@@ -299,32 +299,32 @@ async fn test_command_name_null_byte_detection() {
     ).await;
     
     if let Ok(mut client) = client_result {
-        let null_commands = vec![
-            "command\0hidden",
+        let null_requests = vec![
+            "request\0hidden",
             "inject\0\0attack", 
             "\0start_null",
             "end_null\0",
         ];
         
-        for null_command in null_commands {
+        for null_request in null_requests {
             let args = HashMap::new();
-            let result = client.send_command(null_command, Some(args), None).await;
+            let result = client.send_request(null_request, Some(args), None).await;
             
-            assert!(result.is_err(), "Expected null byte detection in command: {}", null_command);
+            assert!(result.is_err(), "Expected null byte detection in request: {}", null_request);
             
             let error_msg = result.unwrap_err().to_string();
             assert!(
                 error_msg.contains("null") || error_msg.contains("invalid") || 
-                error_msg.contains("byte") || error_msg.contains("command") ||
+                error_msg.contains("byte") || error_msg.contains("request") ||
                 error_msg.contains("alphanumeric characters, hyphens, and underscores"),
-                "Expected null byte error for command {}, got: {}", null_command, error_msg
+                "Expected null byte error for request {}, got: {}", null_request, error_msg
             );
         }
     }
 }
 
 #[tokio::test]
-async fn test_command_name_pattern_validation() {
+async fn test_request_name_pattern_validation() {
     let test_socket = "/tmp/rust-security-pattern-test.sock";
     std::fs::remove_file(test_socket).ok();
     
@@ -335,30 +335,30 @@ async fn test_command_name_pattern_validation() {
     ).await;
     
     if let Ok(mut client) = client_result {
-        let invalid_commands = vec![
-            "command<script>",
-            "command|pipe",
-            "command;injection",
-            "command`backtick",
-            "command$var",
-            "command with spaces",
+        let invalid_requests = vec![
+            "request<script>",
+            "request|pipe",
+            "request;injection",
+            "request`backtick",
+            "request$var",
+            "request with spaces",
         ];
         
-        for invalid_command in invalid_commands {
+        for invalid_request in invalid_requests {
             let args = HashMap::new();
-            let result = client.send_command(invalid_command, Some(args), None).await;
+            let result = client.send_request(invalid_request, Some(args), None).await;
             
-            // Command validation might vary by implementation
+            // Request validation might vary by implementation
             if result.is_err() {
                 let error_msg = result.unwrap_err().to_string();
-                println!("Command '{}' validation: {}", invalid_command, error_msg);
+                println!("Request '{}' validation: {}", invalid_request, error_msg);
             }
         }
     }
 }
 
 #[tokio::test]
-async fn test_command_name_utf8_validation() {
+async fn test_request_name_utf8_validation() {
     let test_socket = "/tmp/rust-security-utf8-test.sock";
     std::fs::remove_file(test_socket).ok();
     
@@ -369,21 +369,21 @@ async fn test_command_name_utf8_validation() {
     ).await;
     
     if let Ok(mut client) = client_result {
-        let utf8_commands = vec![
-            "café_command",
+        let utf8_requests = vec![
+            "café_request",
             "测试命令",
             "команда",
-            "🚀_rocket_command",
+            "🚀_rocket_request",
         ];
         
-        for utf8_command in utf8_commands {
+        for utf8_request in utf8_requests {
             let args = HashMap::new();
-            let result = client.send_command(utf8_command, Some(args), None).await;
+            let result = client.send_request(utf8_request, Some(args), None).await;
             
-            // UTF-8 commands might be accepted or rejected depending on implementation
+            // UTF-8 requests might be accepted or rejected depending on implementation
             if result.is_err() {
                 let error_msg = result.unwrap_err().to_string();
-                println!("UTF-8 command '{}' handling: {}", utf8_command, error_msg);
+                println!("UTF-8 request '{}' handling: {}", utf8_request, error_msg);
             }
         }
     }
@@ -406,7 +406,7 @@ async fn test_message_size_validation() {
         let mut args = HashMap::new();
         args.insert("large_data".to_string(), serde_json::Value::String(large_data));
         
-        let result = client.send_command("test_command", Some(args), None).await;
+        let result = client.send_request("test_request", Some(args), None).await;
         
         // Should reject oversized messages
         assert!(result.is_err(), "Expected message size validation error");
@@ -435,7 +435,7 @@ async fn test_message_content_null_byte_detection() {
         let mut args = HashMap::new();
         args.insert("null_content".to_string(), serde_json::Value::String("data\0hidden".to_string()));
         
-        let result = client.send_command("test_command", Some(args), None).await;
+        let result = client.send_request("test_request", Some(args), None).await;
         
         // Null bytes in content should be detected
         if result.is_err() {
@@ -464,7 +464,7 @@ async fn test_message_utf8_validation() {
         let mut args = HashMap::new();
         args.insert("utf8_content".to_string(), serde_json::Value::String("café 🚀 测试".to_string()));
         
-        let result = client.send_command("test_command", Some(args), None).await;
+        let result = client.send_request("test_request", Some(args), None).await;
         
         // UTF-8 content should generally be accepted
         if result.is_err() {
@@ -500,7 +500,7 @@ async fn test_json_structure_validation() {
         let mut args = HashMap::new();
         args.insert("deep_structure".to_string(), deep_json);
         
-        let result = client.send_command("test_command", Some(args), None).await;
+        let result = client.send_request("test_request", Some(args), None).await;
         
         // Should handle deep nesting appropriately (might reject or handle safely)
         if result.is_err() {
@@ -628,7 +628,7 @@ async fn test_reserved_channel_protection() {
             JanusClientConfig::default(),
         ).await;
         
-        // Reserved channels might be rejected or handled specially
+        // Reserved channels might be rejected or handled manifestially
         if result.is_err() {
             let error_msg = result.unwrap_err().to_string();
             if error_msg.contains("reserved") || error_msg.contains("forbidden") || error_msg.contains("system") {
@@ -639,7 +639,7 @@ async fn test_reserved_channel_protection() {
 }
 
 #[tokio::test]
-async fn test_dangerous_command_detection() {
+async fn test_dangerous_request_detection() {
     let test_socket = "/tmp/rust-security-dangerous-test.sock";
     std::fs::remove_file(test_socket).ok();
     
@@ -650,25 +650,25 @@ async fn test_dangerous_command_detection() {
     ).await;
     
     if let Ok(mut client) = client_result {
-        let dangerous_commands = vec![
+        let dangerous_requests = vec![
             "exec",
             "system", 
             "eval",
             "shell",
             "execute",
-            "run_command",
+            "run_request",
             "subprocess",
         ];
         
-        for dangerous_command in dangerous_commands {
+        for dangerous_request in dangerous_requests {
             let args = HashMap::new();
-            let result = client.send_command(dangerous_command, Some(args), None).await;
+            let result = client.send_request(dangerous_request, Some(args), None).await;
             
-            // Dangerous commands might be rejected by some implementations
+            // Dangerous requests might be rejected by some implementations
             if result.is_err() {
                 let error_msg = result.unwrap_err().to_string();
                 if error_msg.contains("dangerous") || error_msg.contains("forbidden") || error_msg.contains("security") {
-                    println!("Dangerous command '{}' properly blocked: {}", dangerous_command, error_msg);
+                    println!("Dangerous request '{}' properly blocked: {}", dangerous_request, error_msg);
                 }
             }
         }
@@ -693,7 +693,7 @@ async fn test_argument_security_validation() {
         args.insert("constructor".to_string(), serde_json::Value::String("attack".to_string()));
         args.insert("prototype".to_string(), serde_json::Value::String("exploit".to_string()));
         
-        let result = client.send_command("test_command", Some(args), None).await;
+        let result = client.send_request("test_request", Some(args), None).await;
         
         // Dangerous argument names might be rejected
         if result.is_err() {
@@ -729,7 +729,7 @@ async fn test_sql_injection_prevention() {
             let mut args = HashMap::new();
             args.insert("query".to_string(), serde_json::Value::String(sql_pattern.to_string()));
             
-            let result = client.send_command("database_query", Some(args), None).await;
+            let result = client.send_request("database_query", Some(args), None).await;
             
             // SQL injection patterns might be detected and blocked
             if result.is_err() {
@@ -766,7 +766,7 @@ async fn test_script_injection_prevention() {
             let mut args = HashMap::new();
             args.insert("content".to_string(), serde_json::Value::String(script_pattern.to_string()));
             
-            let result = client.send_command("process_content", Some(args), None).await;
+            let result = client.send_request("process_content", Some(args), None).await;
             
             // Script injection patterns might be detected
             if result.is_err() {
