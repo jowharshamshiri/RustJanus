@@ -87,7 +87,7 @@ impl ResponseValidator {
     }
 
     /// Validate a request response by looking up the request manifest
-    pub fn validate_request_response(&self, response: &Value, request_name: &str) -> ValidationResult {
+    pub fn validate_request_response(&self, _response: &Value, _request_name: &str) -> ValidationResult {
         let start_time = Instant::now();
         
         // Since channels are removed, request validation will be server-side

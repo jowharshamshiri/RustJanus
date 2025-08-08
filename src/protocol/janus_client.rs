@@ -269,7 +269,7 @@ impl JanusClient {
     /// Validate request against Manifest
     fn validate_request_against_manifest(
         &self,
-        manifest: &Manifest,
+        _manifest: &Manifest,
         request: &JanusRequest,
     ) -> Result<(), JSONRPCError> {
         // Check if request is reserved (built-in requests should never be in Manifests)
@@ -316,7 +316,7 @@ impl JanusClient {
     /// Register request handler - validates request exists in manifest (SOCK_DGRAM compatibility)
     /// This validates that the request exists in the Manifest for the client's channel.
     /// SOCK_DGRAM doesn't actually use handlers, but validation ensures compatibility.
-    pub fn register_request_handler<T>(&self, request: &str, _handler: T) -> Result<(), JSONRPCError> {
+    pub fn register_request_handler<T>(&self, _request: &str, _handler: T) -> Result<(), JSONRPCError> {
         // Since channels are removed from protocol, validation will be done server-side
         // SOCK_DGRAM doesn't actually use handlers
         Ok(())

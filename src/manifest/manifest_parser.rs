@@ -574,6 +574,7 @@ impl ManifestParser {
     } */
 
     /// Validate request manifest
+    #[allow(dead_code)]
     fn validate_request_manifest(
         channel_name: &str,
         request_name: &str,
@@ -706,6 +707,7 @@ impl ManifestParser {
     }
 
     /// Validate response manifest
+    #[allow(dead_code)]
     fn validate_response_manifest(
         response_manifest: &crate::manifest::ResponseManifest,
         file_path: Option<&str>,
@@ -735,6 +737,7 @@ impl ManifestParser {
     }
 
     /// Validate error code manifest
+    #[allow(dead_code)]
     fn validate_error_code_manifest(
         error_name: &str,
         error_manifest: &crate::manifest::ErrorCodeManifest,

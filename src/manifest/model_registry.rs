@@ -39,14 +39,14 @@ impl Manifest {
     }
     
     /// Check if request exists (channels removed from protocol)
-    pub fn has_request(&self, request_name: &str) -> bool {
+    pub fn has_request(&self, _request_name: &str) -> bool {
         // Since channels are removed, this always returns false for now
         // The server will handle request validation
         false
     }
     
     /// Get request manifest (channels removed from protocol)
-    pub fn get_request_manifest(&self, request_name: &str) -> Option<&RequestManifest> {
+    pub fn get_request_manifest(&self, _request_name: &str) -> Option<&RequestManifest> {
         // Since channels are removed, this always returns None
         // The server will handle request validation
         None
