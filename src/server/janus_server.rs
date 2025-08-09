@@ -10,6 +10,7 @@ use std::fs;
 
 use crate::protocol::message_types::{JanusRequest, JanusResponse};
 use crate::error::{JSONRPCError, JSONRPCErrorCode};
+use log::{debug, info, warn, error};
 
 /// Server configuration structure matching other implementations
 #[derive(Debug, Clone)]
@@ -166,7 +167,7 @@ impl JanusServer {
         _async_handlers: Arc<Mutex<HashMap<String, JanusAsyncRequestHandler>>>,
         is_running: Arc<AtomicBool>,
     ) -> Result<(), JSONRPCError> {
-        println!("DEBUG: listen_loop starting for socket: {}", socket_path);
+        debug!("listen_loop starting for socket: {}", socket_path);
         
         // Remove existing socket
         let _ = fs::remove_file(&socket_path);
@@ -178,27 +179,17 @@ impl JanusServer {
         socket.set_nonblocking(true)
             .map_err(|e| JSONRPCError::new(JSONRPCErrorCode::SocketError, Some(format!("Failed to set non-blocking: {}", e))))?;
         
-        println!("DEBUG: Socket bound successfully in non-blocking mode");
+        debug!("Socket bound successfully in non-blocking mode");
 
-        println!("SOCK_DGRAM server listening on: {}", socket_path);
+        info!("SOCK_DGRAM server listening on: {}", socket_path);
 
-        let mut poll_count = 0;
+        let mut _poll_count = 0;
         let mut data_received = false;
-        println!("DEBUG: Server loop starting, is_running={}", is_running.load(Ordering::SeqCst));
+        debug!("Server loop starting, is_running={}", is_running.load(Ordering::SeqCst));
         
         while is_running.load(Ordering::SeqCst) {
-            poll_count += 1;
-            if poll_count == 1 {
-                println!("DEBUG: First loop iteration, is_running={}", is_running.load(Ordering::SeqCst));
-            }
-            if poll_count % 50 == 0 {
-                println!("DEBUG: Server poll count: {}, still running, data_received={}", poll_count, data_received);
-            }
+            _poll_count += 1;
             let mut buffer = vec![0u8; 64 * 1024];
-            
-            if poll_count <= 5 || poll_count % 100 == 0 {
-                println!("DEBUG: About to call recv_from, poll_count={}", poll_count);
-            }
             
             // Try to receive in non-blocking mode
             match socket.recv_from(&mut buffer) {
@@ -213,40 +204,36 @@ impl JanusServer {
                         .and_then(|p| p.to_str())
                         .unwrap_or("<unknown>")
                         .to_string();
-                    println!("DEBUG: Received datagram of {} bytes from {} at timestamp {:.3}", size, sender_path, receive_time);
+                    debug!("Received datagram of {} bytes from {} at timestamp {:.3}", size, sender_path, receive_time);
                     
                     // Process with custom handlers support
                     match serde_json::from_slice::<JanusRequest>(data) {
                         Ok(cmd) => {
-                            println!("DEBUG: Received SOCK_DGRAM request: {} (ID: {})", cmd.request, cmd.id);
-                            println!("DEBUG: Request reply_to field: {:?}", cmd.reply_to);
+                            debug!("Received SOCK_DGRAM request: {} (ID: {})", cmd.request, cmd.id);
+                            debug!("Request reply_to field: {:?}", cmd.reply_to);
                             
                             if let Some(reply_to) = cmd.reply_to.clone() {
-                                println!("DEBUG: Processing request and sending response to: {}", reply_to);
+                                debug!("Processing request and sending response to: {}", reply_to);
                                 
                                 let start_time = std::time::Instant::now();
                                 let response = Self::process_request(&cmd, &_handlers, &_async_handlers).await;
-                                println!("DEBUG: Generated response: success={}, has_result={}", response.success, response.result.is_some());
+                                debug!("Generated response: success={}, has_result={}", response.success, response.result.is_some());
                                 Self::send_response_sync(response, &reply_to);
-                                println!("DEBUG: Response processing took: {:?}", start_time.elapsed());
+                                debug!("Response processing took: {:?}", start_time.elapsed());
                             }
                         },
                         Err(e) => {
-                            println!("DEBUG: Failed to parse datagram: {}", e);
+                            warn!("Failed to parse datagram: {}", e);
                         }
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // Non-blocking socket, no data available
-                    if poll_count % 1000 == 0 {
-                        println!("DEBUG: No data available, continuing poll (count {})", poll_count);
-                    }
-                    // Small sleep to avoid busy-waiting
+                    // Non-blocking socket, no data available - small sleep to avoid busy-waiting
                     tokio::time::sleep(Duration::from_millis(10)).await;
                     continue;
                 }
                 Err(e) => {
-                    eprintln!("Error receiving datagram: {}", e);
+                    error!("Error receiving datagram: {}", e);
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             }
@@ -254,7 +241,7 @@ impl JanusServer {
 
         // Cleanup
         let _ = fs::remove_file(&socket_path);
-        println!("SOCK_DGRAM server stopped");
+        info!("SOCK_DGRAM server stopped");
         Ok(())
     }
 
@@ -302,7 +289,7 @@ impl JanusServer {
                             }))
                         ),
                         "manifest" => {
-                            println!("DEBUG: Processing manifest request");
+                            debug!("Processing manifest request");
                             // Return a minimal manifest
                             let manifest = serde_json::json!({
                                 "version": "1.0.0",
@@ -310,7 +297,7 @@ impl JanusServer {
                                 "description": "Rust implementation of Janus SOCK_DGRAM server"
                             });
                             let response = JanusResponse::success(cmd.id.clone(), Some(manifest));
-                            println!("DEBUG: Created manifest response: success={}, has_result={}", response.success, response.result.is_some());
+                            debug!("Created manifest response: success={}, has_result={}", response.success, response.result.is_some());
                             response
                         },
                         "validate" => {
@@ -495,7 +482,7 @@ impl JanusServer {
                     )
                 }
                 "manifest" => {
-                    println!("DEBUG: Processing manifest request");
+                    debug!("Processing manifest request");
                     // Return a minimal manifest (matching sync handler)
                     let manifest = serde_json::json!({
                         "version": "1.0.0",
@@ -503,7 +490,7 @@ impl JanusServer {
                         "description": "Rust implementation of Janus SOCK_DGRAM server"
                     });
                     let response = JanusResponse::success(cmd.id.clone(), Some(manifest));
-                    println!("DEBUG: Created manifest response: success={}, has_result={}", response.success, response.result.is_some());
+                    debug!("Created manifest response: success={}, has_result={}", response.success, response.result.is_some());
                     response
                 }
                 "test_echo" => {
@@ -534,53 +521,53 @@ impl JanusServer {
     }
 
     fn send_response_sync(response: JanusResponse, reply_to: &str) {
-        println!("[RUST-SERVER] send_response_sync START - Target: {}", reply_to);
-        println!("[RUST-SERVER] Response success: {}, has_result: {}", response.success, response.result.is_some());
+        debug!("send_response_sync START - Target: {}", reply_to);
+        debug!("Response success: {}, has_result: {}", response.success, response.result.is_some());
         
         let serialize_start = std::time::Instant::now();
         match serde_json::to_vec(&response) {
             Ok(response_data) => {
-                println!("[RUST-SERVER] Response serialized - {} bytes in {:?}", response_data.len(), serialize_start.elapsed());
+                debug!("Response serialized - {} bytes in {:?}", response_data.len(), serialize_start.elapsed());
                 
                 let socket_start = std::time::Instant::now();
                 match std::os::unix::net::UnixDatagram::unbound() {
                     Ok(client_sock) => {
-                        println!("[RUST-SERVER] Unbound socket created in {:?}", socket_start.elapsed());
+                        debug!("Unbound socket created in {:?}", socket_start.elapsed());
                         
                         // Check if target socket exists with detailed info
                         let socket_path = std::path::Path::new(reply_to);
                         if socket_path.exists() {
-                            println!("[RUST-SERVER] SUCCESS: Target socket file exists: {}", reply_to);
+                            debug!("SUCCESS: Target socket file exists: {}", reply_to);
                             // Get file metadata
                             match std::fs::metadata(reply_to) {
                                 Ok(metadata) => {
-                                    println!("[RUST-SERVER] Socket file type: {:?}, permissions: {:?}", metadata.file_type(), metadata.permissions());
+                                    debug!("Socket file type: {:?}, permissions: {:?}", metadata.file_type(), metadata.permissions());
                                 }
-                                Err(e) => println!("[RUST-SERVER] Cannot read socket metadata: {}", e),
+                                Err(e) => debug!("Cannot read socket metadata: {}", e),
                             }
                         } else {
-                            println!("[RUST-SERVER] WARNING: Target socket file does NOT exist: {}", reply_to);
+                            debug!("WARNING: Target socket file does NOT exist: {}", reply_to);
                             // Check if directory exists
                             if let Some(parent) = socket_path.parent() {
                                 if parent.exists() {
-                                    println!("[RUST-SERVER] Parent directory exists: {:?}", parent);
+                                    debug!("Parent directory exists: {:?}", parent);
                                     // List files in directory
                                     match std::fs::read_dir(parent) {
                                         Ok(entries) => {
-                                            println!("[RUST-SERVER] Files in /tmp:");
+                                            debug!("Files in /tmp:");
                                             for entry in entries {
                                                 if let Ok(entry) = entry {
                                                     let name = entry.file_name();
                                                     if name.to_string_lossy().contains("janus_manifest") {
-                                                        println!("[RUST-SERVER]   Found janus_manifest file: {:?}", name);
+                                                        debug!("  Found janus_manifest file: {:?}", name);
                                                     }
                                                 }
                                             }
                                         }
-                                        Err(e) => println!("[RUST-SERVER] Cannot list directory: {}", e),
+                                        Err(e) => debug!("Cannot list directory: {}", e),
                                     }
                                 } else {
-                                    println!("[RUST-SERVER] Parent directory does NOT exist: {:?}", parent);
+                                    debug!("Parent directory does NOT exist: {:?}", parent);
                                 }
                             }
                         }
@@ -589,41 +576,41 @@ impl JanusServer {
                         // Try sending with a few quick retries to handle race conditions
                         let mut sent = false;
                         for attempt in 1..=5 {
-                            println!("[RUST-SERVER] Send attempt {} to {}", attempt, reply_to);
+                            debug!("Send attempt {} to {}", attempt, reply_to);
                             
                             // Check if target file exists before each attempt
                             let file_exists = std::path::Path::new(reply_to).exists();
-                            println!("[RUST-SERVER] Target file exists before attempt {}: {}", attempt, file_exists);
+                            debug!("Target file exists before attempt {}: {}", attempt, file_exists);
                             
                             match client_sock.send_to(&response_data, reply_to) {
                                 Ok(bytes_sent) => {
-                                    println!("[RUST-SERVER] SUCCESS: Sent {} bytes in {:?} (attempt {})", bytes_sent, send_start.elapsed(), attempt);
-                                    println!("[RUST-SERVER] Response successfully sent to: {}", reply_to);
+                                    debug!("SUCCESS: Sent {} bytes in {:?} (attempt {})", bytes_sent, send_start.elapsed(), attempt);
+                                    debug!("Response successfully sent to: {}", reply_to);
                                     
                                     // Check if file still exists after successful send
                                     let file_exists_after = std::path::Path::new(reply_to).exists();
-                                    println!("[RUST-SERVER] Target file exists after successful send: {}", file_exists_after);
+                                    debug!("Target file exists after successful send: {}", file_exists_after);
                                     
                                     sent = true;
                                     break;
                                 }
                                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                                    println!("[RUST-SERVER] WARNING: Socket not found on attempt {}: {} (error: {})", attempt, reply_to, e);
+                                    debug!("WARNING: Socket not found on attempt {}: {} (error: {})", attempt, reply_to, e);
                                     
                                     // Check file existence after NotFound error
                                     let file_exists_after_error = std::path::Path::new(reply_to).exists();
-                                    println!("[RUST-SERVER] Target file exists after NotFound error: {}", file_exists_after_error);
+                                    debug!("Target file exists after NotFound error: {}", file_exists_after_error);
                                     
                                     if attempt < 5 {
-                                        println!("[RUST-SERVER] Retrying after 1 millisecond...");
+                                        debug!("Retrying after 1 millisecond...");
                                         std::thread::sleep(std::time::Duration::from_millis(1));
                                     }
                                     continue;
                                 }
                                 Err(e) => {
-                                    println!("[RUST-SERVER] ERROR: Send failed on attempt {}: {} (error: {})", attempt, reply_to, e);
-                                    println!("[RUST-SERVER] Send took: {:?} (FAILED attempt {})", send_start.elapsed(), attempt);
-                                    eprintln!("Error sending response to {}: {}", reply_to, e);
+                                    debug!("ERROR: Send failed on attempt {}: {} (error: {})", attempt, reply_to, e);
+                                    debug!("Send took: {:?} (FAILED attempt {})", send_start.elapsed(), attempt);
+                                    warn!("Error sending response to {}: {}", reply_to, e);
                                     break;
                                 }
                             }
@@ -631,22 +618,22 @@ impl JanusServer {
                         
                         // Check final result
                         if !sent {
-                            println!("[RUST-SERVER] FINAL ERROR: Failed to send response after all attempts to: {}", reply_to);
+                            debug!("FINAL ERROR: Failed to send response after all attempts to: {}", reply_to);
                             let final_file_exists = std::path::Path::new(reply_to).exists();
-                            println!("[RUST-SERVER] Target file exists at final failure: {}", final_file_exists);
+                            debug!("Target file exists at final failure: {}", final_file_exists);
                         } else {
-                            println!("[RUST-SERVER] RESPONSE SEND COMPLETED SUCCESSFULLY to: {}", reply_to);
+                            debug!("RESPONSE SEND COMPLETED SUCCESSFULLY to: {}", reply_to);
                         }
                     }
                     Err(e) => {
-                        println!("DEBUG: Socket creation took: {:?} (FAILED)", socket_start.elapsed());
-                        eprintln!("Failed to create unbound socket for response: {} (kind: {:?})", e, e.kind());
+                        debug!("Socket creation took: {:?} (FAILED)", socket_start.elapsed());
+                        error!("Failed to create unbound socket for response: {} (kind: {:?})", e, e.kind());
                     }
                 }
             }
             Err(e) => {
-                println!("DEBUG: Serialization took: {:?} (FAILED)", serialize_start.elapsed());
-                eprintln!("Error serializing response: {}", e);
+                debug!("Serialization took: {:?} (FAILED)", serialize_start.elapsed());
+                error!("Error serializing response: {}", e);
             }
         }
     }
